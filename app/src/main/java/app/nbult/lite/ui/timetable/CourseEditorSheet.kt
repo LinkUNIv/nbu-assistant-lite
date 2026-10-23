@@ -1,6 +1,10 @@
 package app.nbult.lite.ui.timetable
 
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,12 +50,13 @@ private enum class EditMode { NORMAL, SUSPEND, MOVE }
 fun CourseEditorSheet(
     entry: TimetableEntry,
     week: Int,
+    totalWeeks: Int,
     periods: List<PeriodTime>,
     hasOverride: Boolean,
     onDismiss: () -> Unit,
     onSave: (String, String, Int, Int, Int, Int, String) -> Unit,
-    onSuspend: (OverrideScope) -> Unit,
-    onMove: (Int, Int, Int, String, OverrideScope) -> Unit,
+    onSuspend: (Int) -> Unit,
+    onMove: (Int, Int, Int, String, Int) -> Unit,
     onRestore: () -> Unit,
     onDeleteSlot: () -> Unit,
     onDeleteCourse: () -> Unit
@@ -77,7 +82,10 @@ fun CourseEditorSheet(
 
     // 停课 / 调课的临时编辑状态
     var mode by remember(entry.slot.id) { mutableStateOf(EditMode.NORMAL) }
-    var scope by remember(entry.slot.id) { mutableStateOf(OverrideScope.THIS_WEEK) }
+    // 生效周次：默认只勾当前这一周，其余靠手动勾选（原「仅本周 / 本周起每周」两档已移除）
+    var overrideMask by remember(entry.originSlot.id, week) {
+        mutableStateOf(WeekMask.bit(week))
+    }
     val originDay = entry.originSlot.dayOfWeek
     val originStart = entry.originSlot.startSection
     val originEnd = entry.originSlot.endSection
@@ -94,6 +102,8 @@ fun CourseEditorSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            // 周次选择器最多 30 个格子，矮屏上必须能滚，否则「保存」会被顶出屏幕
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
             .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -135,9 +145,14 @@ fun CourseEditorSheet(
             }
 
             EditMode.SUSPEND -> {
-                ScopeChips(scope = scope, onChange = { scope = it })
+                WeekSelector(
+                    mask = overrideMask,
+                    totalWeeks = totalWeeks,
+                    onChange = { overrideMask = it }
+                )
                 Button(
-                    onClick = { onSuspend(scope) },
+                    onClick = { onSuspend(overrideMask) },
+                    enabled = overrideMask != 0,
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("设为停课", fontWeight = FontWeight.Medium) }
             }
@@ -175,9 +190,19 @@ fun CourseEditorSheet(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                ScopeChips(scope = scope, onChange = { scope = it })
+                WeekSelector(
+                    mask = overrideMask,
+                    totalWeeks = totalWeeks,
+                    onChange = { overrideMask = it }
+                )
+                Text(
+                    text = "若目标时段已有其他课程，会先提示冲突，由你决定是否替换。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Button(
-                    onClick = { onMove(moveDay, moveStart, moveEnd, moveRoom, scope) },
+                    onClick = { onMove(moveDay, moveStart, moveEnd, moveRoom, overrideMask) },
+                    enabled = overrideMask != 0,
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("保存调课", fontWeight = FontWeight.Medium) }
             }
@@ -349,20 +374,57 @@ private fun WeekStepper(label: String, value: Int, onChange: (Int) -> Unit) {
     }
 }
 
-/** 生效范围：仅本周 / 本周起每周。 */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * 生效周次选择器。
+ *
+ * 取代原来的「仅本周 / 本周起每周」两档：用户要的是"这几周调课、那几周不调"，
+ * 而不是一个从某周开始无限延伸的区间。连续多周本质上是改课程本身（课程设置里的周次），
+ * 不该在这里用一条覆盖去近似。
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ScopeChips(scope: OverrideScope, onChange: (OverrideScope) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        FilterChip(
-            selected = scope == OverrideScope.THIS_WEEK,
-            onClick = { onChange(OverrideScope.THIS_WEEK) },
-            label = { Text("仅本周") }
-        )
-        FilterChip(
-            selected = scope == OverrideScope.FROM_NOW,
-            onClick = { onChange(OverrideScope.FROM_NOW) },
-            label = { Text("本周起每周") }
+private fun WeekSelector(
+    mask: Int,
+    totalWeeks: Int,
+    onChange: (Int) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("生效周次", style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.weight(1f))
+            TextButton(
+                onClick = { onChange(WeekMask.range(1, totalWeeks)) },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) { Text("全选", style = MaterialTheme.typography.labelMedium) }
+            TextButton(
+                onClick = { onChange(0) },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) { Text("清空", style = MaterialTheme.typography.labelMedium) }
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            for (w in 1..totalWeeks.coerceAtLeast(1)) {
+                FilterChip(
+                    selected = WeekMask.isOn(mask, w),
+                    onClick = { onChange(mask xor WeekMask.bit(w)) },
+                    label = { Text("$w", style = MaterialTheme.typography.labelMedium) }
+                )
+            }
+        }
+        Text(
+            text = if (mask == 0) {
+                "还没有选择周次"
+            } else {
+                "已选 ${WeekMask.count(mask)} 周 · ${WeekMask.label(mask)}"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = if (mask == 0) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.secondary
+            }
         )
     }
 }

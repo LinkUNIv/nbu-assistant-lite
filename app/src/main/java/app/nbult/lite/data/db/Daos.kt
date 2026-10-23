@@ -91,6 +91,9 @@ interface TimetableDao {
     @Query("DELETE FROM slot_override WHERE slotId = :slotId")
     suspend fun deleteOverridesOfSlot(slotId: Long)
 
+    @Query("UPDATE slot_override SET weekMask = :mask WHERE id = :id")
+    suspend fun updateOverrideMask(id: Long, mask: Int)
+
     @Query("DELETE FROM slot_override WHERE id = :id")
     suspend fun deleteOverrideById(id: Long)
 

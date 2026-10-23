@@ -61,10 +61,14 @@ data class PeriodTime(
 /**
  * 单次课的状态覆盖：停课 / 调课。
  *
- * 按「周区间」生效，而不是按「一次」：`fromWeek..toWeek` 覆盖连续多周，
- * 「仅本周」就是 fromWeek == toWeek，不需要为每周各插一行。
+ * 按「周次位图」生效（`weekMask`）：一条记录可以只作用于第 3、5、7 周这样的**任意组合**。
  *
- * 关键约束：覆盖只影响**某几周的上课安排**，不改 `course_slot` 本身 ——
+ * 早先用 `fromWeek..toWeek` 的连续区间表达，于是只能提供「仅本周 / 本周起每周」两个选项。
+ * 但「本周起每周」本质上是修改课程本身的排课，应当去改 `course_slot.weekMask`，
+ * 而不是在这里用一条区间覆盖去近似 —— 两套周次语义并存，必然对不上。
+ * 现改为直接选周次，语义只有一套。
+ *
+ * 关键约束：覆盖只影响**选中的那几周**，不改 `course_slot` 本身 ——
  * 所以「这周三停课」不会污染其他周，也不会动到原始课表数据。
  */
 @Entity(
@@ -84,8 +88,8 @@ data class SlotOverride(
     val slotId: Long,
     /** 见 [KIND_SUSPEND] / [KIND_MOVE] */
     val kind: String,
-    val fromWeek: Int,
-    val toWeek: Int,
+    /** 生效周次位图，位 (week-1) 为 1 表示该周生效。见 `domain.WeekMask`。 */
+    val weekMask: Int,
     /** 仅 KIND_MOVE 使用：调课后的星期与节次。 */
     val toDay: Int = 0,
     val toStart: Int = 0,

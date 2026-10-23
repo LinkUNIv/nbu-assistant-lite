@@ -78,16 +78,32 @@ fun CourseEditorSheet(
     var confirmDeleteCourse by remember { mutableStateOf(false) }
 
     // 停课 / 调课的临时编辑状态
-    var mode by remember(entry.slot.id) { mutableStateOf(EditMode.NORMAL) }
+    // 点开「调来的」那块时直接进调课面板 —— 它本身就是调课的结果，点它多半是想再改
+    var mode by remember(entry.slot.id) {
+        mutableStateOf(if (entry.movedIn) EditMode.MOVE else EditMode.NORMAL)
+    }
     // 调课的目标周：默认就是本周（本周内换天），也可以往后选，用于"这周的课挪到以后补"
     var targetWeek by remember(entry.originSlot.id, week) { mutableStateOf(week) }
     val originDay = entry.originSlot.dayOfWeek
     val originStart = entry.originSlot.startSection
     val originEnd = entry.originSlot.endSection
-    var moveDay by remember(entry.slot.id) { mutableStateOf(if (originDay == 7) 1 else originDay + 1) }
-    var moveStart by remember(entry.slot.id) { mutableStateOf(originStart) }
-    var moveEnd by remember(entry.slot.id) { mutableStateOf(originEnd) }
-    var moveRoom by remember(entry.slot.id) { mutableStateOf(entry.originSlot.room) }
+    // 调来的块要预填「现在的位置」，否则一打开就显示的是原时段，让人以为没生效
+    var moveDay by remember(entry.slot.id) {
+        mutableStateOf(
+            when {
+                entry.movedIn -> entry.slot.dayOfWeek
+                originDay == 7 -> 1
+                else -> originDay + 1
+            }
+        )
+    }
+    var moveStart by remember(entry.slot.id) {
+        mutableStateOf(if (entry.movedIn) entry.slot.startSection else originStart)
+    }
+    var moveEnd by remember(entry.slot.id) {
+        mutableStateOf(if (entry.movedIn) entry.slot.endSection else originEnd)
+    }
+    var moveRoom by remember(entry.slot.id) { mutableStateOf(entry.slot.room) }
 
     val mask = WeekMask.build(startWeek, endWeek, parity)
     val startTime = periods.firstOrNull { it.idx == start }?.startTime ?: "--:--"
@@ -111,7 +127,14 @@ fun CourseEditorSheet(
 
         // ---- 本次安排：停课 / 调课 ----
         // 语义上这是"第 N 周这一次怎么办"，与下面"课程本身怎么排"是两件事，所以放在最前面
-        Text("本次安排（第 $week 周）", style = MaterialTheme.typography.labelLarge)
+        Text(
+            text = when {
+                entry.movedIn -> "本次安排 · 从第 ${entry.sourceWeek} 周调来（现为第 $week 周）"
+                entry.overrideId != 0L -> "本次安排（第 $week 周，已调整）"
+                else -> "本次安排（第 $week 周）"
+            },
+            style = MaterialTheme.typography.labelLarge
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FilterChip(
                 selected = mode == EditMode.NORMAL,
@@ -132,6 +155,14 @@ fun CourseEditorSheet(
 
         when (mode) {
             EditMode.NORMAL -> {
+                if (entry.movedIn) {
+                    Text(
+                        text = "这一节是从第 ${entry.sourceWeek} 周调过来的。要改时间请切到「调整时间」；" +
+                            "要改课程名、教师或周次，请在那门课的其他时段上修改。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (hasOverride) {
                     OutlinedButton(onClick = onRestore, modifier = Modifier.fillMaxWidth()) {
                         Text("恢复原始安排")
@@ -202,8 +233,10 @@ fun CourseEditorSheet(
             }
         }
 
-        // ---- 课程本身的编辑（只在"正常上课"下展开，避免弹窗过长）----
-        if (mode == EditMode.NORMAL) {
+        // ---- 课程本身的编辑（只在"正常上课"且不是调来块时展开）----
+        // 调来的那一节属于"本节"，改课程名/教师会影响整门课的所有时段，
+        // 不该在调课块的入口上顺手改掉。
+        if (mode == EditMode.NORMAL && !entry.movedIn) {
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },

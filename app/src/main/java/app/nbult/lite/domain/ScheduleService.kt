@@ -19,7 +19,16 @@ data class TimetableEntry(
     /** 非空则右上角显示角标，如「停课」「调」。 */
     val badge: String = "",
     /** 该状态来自哪条 override，用于"恢复原样"。 */
-    val overrideId: Long = 0L
+    val overrideId: Long = 0L,
+    /**
+     * 所属 override 的**源周**（哪一周的课被改动了）。
+     *
+     * 之前没有这个字段，再次调课时只能拿"当前显示的周"当源周 ——
+     * 于是点开第 7 周那个「调」块再调课，改的其实是第 7 周原计划的那节课。
+     */
+    val sourceWeek: Int = 0,
+    /** 这一块是「从别的周调进来」的课，而不是本周原计划的课。 */
+    val movedIn: Boolean = false
 ) {
     val displayName: String
         get() = course.name.replace(Regex("""^[A-Za-z0-9]{4,14}\s*[-_]\s*(?=\S)"""), "")
@@ -66,14 +75,36 @@ object ScheduleService {
         if (overrides.isEmpty()) return base.sortedBy { it.slot.startSection }
 
         val bySlot = overrides.groupBy { it.slotId }
+
+        // 本周从别的周调进来的（源周不含本周）
+        val movedInHere = overrides.filter { ov ->
+            SlotOverride.isMove(ov.kind) &&
+                ov.toWeek > 0 &&
+                ov.toWeek == week &&
+                !WeekMask.isOn(ov.weekMask, week)
+        }
+        // 「替换型」：目标周原本那一节要让位，只显示调过来的那节
+        val replacedSlots = movedInHere
+            .filter { it.kind == SlotOverride.KIND_MOVE_REPLACE }
+            .mapTo(HashSet()) { it.slotId }
+
         val out = ArrayList<TimetableEntry>(base.size + 2)
+
         base.forEach { entry ->
             val ov = bySlot[entry.slot.id]?.lastOrNull { WeekMask.isOn(it.weekMask, week) }
             when {
-                ov == null -> out.add(entry)
+                ov == null -> {
+                    // 本周自身的课；若被"替换型"调课取代，就不再显示原块
+                    if (entry.slot.id !in replacedSlots) out.add(entry)
+                }
 
                 ov.kind == SlotOverride.KIND_SUSPEND -> out.add(
-                    entry.copy(suspended = true, badge = "停课", overrideId = ov.id)
+                    entry.copy(
+                        suspended = true,
+                        badge = "停课",
+                        overrideId = ov.id,
+                        sourceWeek = week
+                    )
                 )
 
                 else -> {
@@ -82,7 +113,7 @@ object ScheduleService {
                     val day = DateUtil.dayNames.getOrNull(ov.toDay - 1).orEmpty()
                     val targetWeek = if (ov.toWeek > 0) ov.toWeek else week
                     if (targetWeek == week) {
-                        // 本周内换天：目标时段时间出现「调」块，原位留灰块说明去向
+                        // 本周内换天：目标时段出现「调」块，原位留灰块说明去向
                         val target = entry.slot.copy(
                             dayOfWeek = ov.toDay.coerceIn(1, 7),
                             startSection = start,
@@ -94,7 +125,8 @@ object ScheduleService {
                                 slot = target,
                                 originSlot = entry.slot,
                                 badge = "调",
-                                overrideId = ov.id
+                                overrideId = ov.id,
+                                sourceWeek = week
                             )
                         )
                         out.add(
@@ -102,18 +134,19 @@ object ScheduleService {
                                 slot = entry.slot,
                                 originSlot = entry.slot,
                                 ghostLabel = "已调至 $day $start-$end 节",
-                                overrideId = ov.id
+                                overrideId = ov.id,
+                                sourceWeek = week
                             )
                         )
                     } else {
-                        // 调到之后的周：这一周这节课不上了，只在原位留一条去向说明。
-                        // 不能直接留空 —— 否则看起来像课程被删了。
+                        // 调到之后的周：这一周不上，原位留一条去向说明（不能留空，否则像被删了）
                         out.add(
                             entry.copy(
                                 slot = entry.slot,
                                 originSlot = entry.slot,
                                 ghostLabel = "已调至 第${targetWeek}周 $day $start-$end 节",
-                                overrideId = ov.id
+                                overrideId = ov.id,
+                                sourceWeek = week
                             )
                         )
                     }
@@ -121,13 +154,8 @@ object ScheduleService {
             }
         }
 
-        // 从**别的周**调进来的课。
-        // 只在源周做"已调走"是不够的：目标周必须真的多出这一节，否则课等于凭空消失。
-        // 同周换天（toWeek == 0 或与源周相同）已在上面处理，这里要排掉。
-        overrides.forEach { ov ->
-            if (ov.kind != SlotOverride.KIND_MOVE) return@forEach
-            if (ov.toWeek <= 0 || ov.toWeek != week) return@forEach
-            if (WeekMask.isOn(ov.weekMask, week)) return@forEach
+        // 从别处调进来的课：目标周必须真的多出这一节，否则课等于凭空消失
+        movedInHere.forEach { ov ->
             val source = entries.firstOrNull { it.slot.id == ov.slotId } ?: return@forEach
             val start = ov.toStart.coerceIn(1, 12)
             val end = ov.toEnd.coerceIn(start, 12)
@@ -141,7 +169,9 @@ object ScheduleService {
                     ),
                     originSlot = source.slot,
                     badge = "调",
-                    overrideId = ov.id
+                    overrideId = ov.id,
+                    sourceWeek = WeekMask.weeksOf(ov.weekMask).firstOrNull() ?: week,
+                    movedIn = true
                 )
             )
         }

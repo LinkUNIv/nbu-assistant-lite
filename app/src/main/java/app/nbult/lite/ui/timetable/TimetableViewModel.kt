@@ -37,7 +37,9 @@ data class TimetableUiState(
     val previewError: String? = null,
     val importing: Boolean = false,
     val message: String? = null,
-    val selected: TimetableEntry? = null
+    val selected: TimetableEntry? = null,
+    /** 非空表示有调课在等用户处理冲突。 */
+    val pendingMove: PendingMove? = null
 ) {
     val isEmpty: Boolean get() = entries.isEmpty()
     val totalSections: Int get() = ScheduleService.totalSections(entries)
@@ -45,8 +47,27 @@ data class TimetableUiState(
         get() = weeks.getOrElse(week - 1) { emptyList() }
 }
 
-/** 停课/调课的生效范围。 */
-enum class OverrideScope { THIS_WEEK, FROM_NOW }
+/** 调课冲突：某门课在哪些周的哪一段被占了。 */
+data class MoveConflict(
+    val slotId: Long,
+    val courseName: String,
+    val weeks: List<Int>
+)
+
+/**
+ * 一次等待用户裁决的调课。
+ *
+ * 只在检测到冲突时产生：先不落库，等用户选「替换原课程」或「取消更改」。
+ */
+data class PendingMove(
+    val slotId: Long,
+    val day: Int,
+    val start: Int,
+    val end: Int,
+    val room: String,
+    val weekMask: Int,
+    val conflicts: List<MoveConflict>
+)
 
 class TimetableViewModel(
     private val repository: TimetableRepository,
@@ -350,21 +371,91 @@ class TimetableViewModel(
         }
     }
 
-    /** 停课：默认仅本周，也可"本周起每周"。 */
-    fun suspendCurrent(scope: OverrideScope) {
-        applyOverride(kind = SlotOverride.KIND_SUSPEND, scope = scope)
+    /** 停课：对选中的周次生效。 */
+    fun suspendCurrent(weekMask: Int) {
+        if (weekMask == 0) {
+            _state.value = _state.value.copy(message = "请先选择要停课的周次")
+            return
+        }
+        applyOverride(kind = SlotOverride.KIND_SUSPEND, weekMask = weekMask)
     }
 
-    /** 调课到别的星期/节次。 */
-    fun moveCurrent(day: Int, start: Int, end: Int, room: String, scope: OverrideScope) {
+    /**
+     * 调课到别的星期 / 节次。
+     *
+     * 保存前先做冲突检测：目标时段若已有其他课程，**不落库**，先挂起等用户决定
+     * 「替换原课程」还是「取消更改」—— 静默覆盖会让人以为原课程凭空消失了。
+     */
+    fun moveCurrent(day: Int, start: Int, end: Int, room: String, weekMask: Int) {
+        val entry = _state.value.selected ?: return
+        if (weekMask == 0) {
+            _state.value = _state.value.copy(message = "请先选择要调整的周次")
+            return
+        }
+        val conflicts = detectMoveConflicts(entry, weekMask, day, start, end)
+        if (conflicts.isNotEmpty()) {
+            _state.value = _state.value.copy(
+                pendingMove = PendingMove(
+                    slotId = entry.originSlot.id,
+                    day = day,
+                    start = start,
+                    end = end,
+                    room = room.trim(),
+                    weekMask = weekMask,
+                    conflicts = conflicts
+                )
+            )
+            return
+        }
         applyOverride(
             kind = SlotOverride.KIND_MOVE,
-            scope = scope,
+            weekMask = weekMask,
             day = day,
             start = start,
             end = end,
             room = room
         )
+    }
+
+    /** 冲突时选「替换原课程」：先把冲突课程在冲突周次停掉，再写入本次调课。 */
+    fun confirmMoveWithReplace() {
+        val pending = _state.value.pendingMove ?: return
+        viewModelScope.launch {
+            pending.conflicts.forEach { conflict ->
+                val mask = conflict.weeks.fold(0) { acc, w -> acc or WeekMask.bit(w) }
+                if (mask == 0) return@forEach
+                repository.setOverride(
+                    SlotOverride(
+                        slotId = conflict.slotId,
+                        kind = SlotOverride.KIND_SUSPEND,
+                        weekMask = mask,
+                        createdAt = System.currentTimeMillis()
+                    )
+                )
+            }
+            repository.setOverride(
+                SlotOverride(
+                    slotId = pending.slotId,
+                    kind = SlotOverride.KIND_MOVE,
+                    weekMask = pending.weekMask,
+                    toDay = pending.day,
+                    toStart = pending.start,
+                    toEnd = pending.end,
+                    toRoom = pending.room,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+            _state.value = _state.value.copy(
+                pendingMove = null,
+                selected = null,
+                message = "已替换冲突课程并调整上课时间"
+            )
+        }
+    }
+
+    /** 冲突时选「取消更改」：一个字都不写。 */
+    fun cancelPendingMove() {
+        _state.value = _state.value.copy(pendingMove = null, message = "已取消更改")
     }
 
     /** 撤销当前这块的停课/调课，回到原始课表。 */
@@ -383,29 +474,21 @@ class TimetableViewModel(
 
     private fun applyOverride(
         kind: String,
-        scope: OverrideScope,
+        weekMask: Int,
         day: Int = 0,
         start: Int = 0,
         end: Int = 0,
         room: String = ""
     ) {
         val entry = _state.value.selected ?: return
-        val term = _state.value.term ?: return
-        val week = _state.value.week
         // 编辑永远针对原始时段：调课块被点开时 selected.slot 已经是目标时段了
         val slotId = entry.originSlot.id
-        val toWeek = if (scope == OverrideScope.THIS_WEEK) {
-            week
-        } else {
-            term.totalWeeks.coerceAtLeast(week)
-        }
         viewModelScope.launch {
             repository.setOverride(
                 SlotOverride(
                     slotId = slotId,
                     kind = kind,
-                    fromWeek = week,
-                    toWeek = toWeek,
+                    weekMask = weekMask,
                     toDay = day,
                     toStart = start,
                     toEnd = end,
@@ -415,12 +498,45 @@ class TimetableViewModel(
             )
             _state.value = _state.value.copy(
                 selected = null,
-                message = if (kind == SlotOverride.KIND_SUSPEND) {
-                    "已设为停课（第 $week 周）"
-                } else {
-                    "已调整上课时间（第 $week 周）"
+                message = buildString {
+                    append(if (kind == SlotOverride.KIND_SUSPEND) "已设为停课" else "已调整上课时间")
+                    append("（${WeekMask.label(weekMask)}）")
                 }
             )
+        }
+    }
+
+    /**
+     * 找出目标时段在选中周次里与哪些课程撞了。
+     *
+     * 直接复用 [ScheduleService.weekEntries]：它会叠加停课/调课，
+     * 所以"那门课这周已经被停掉或被调走"不会被误判成冲突。
+     */
+    private fun detectMoveConflicts(
+        entry: TimetableEntry,
+        weekMask: Int,
+        day: Int,
+        start: Int,
+        end: Int
+    ): List<MoveConflict> {
+        val st = _state.value
+        val ownSlotId = entry.originSlot.id
+        val hits = LinkedHashMap<Long, MutableSet<Int>>()
+        for (w in WeekMask.weeksOf(weekMask)) {
+            ScheduleService.weekEntries(st.entries, w, st.overrides).forEach { block ->
+                if (!block.isActive) return@forEach
+                if (block.originSlot.id == ownSlotId) return@forEach
+                val overlaps = block.slot.startSection <= end && block.slot.endSection >= start
+                if (block.slot.dayOfWeek == day && overlaps) {
+                    hits.getOrPut(block.originSlot.id) { linkedSetOf() }.add(w)
+                }
+            }
+        }
+        return hits.map { (slotId, weeks) ->
+            val name = st.entries.firstOrNull { it.originSlot.id == slotId }?.displayName
+                ?: st.entries.firstOrNull { it.slot.id == slotId }?.displayName
+                ?: "其他课程"
+            MoveConflict(slotId = slotId, courseName = name, weeks = weeks.sorted())
         }
     }
 

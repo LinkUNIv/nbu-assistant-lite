@@ -52,14 +52,30 @@ class TimetableRepository(
             }
 
     /**
-     * 写入/替换某节课在 [fromWeek]..[toWeek] 的覆盖。
+     * 写入某节课在指定周次的覆盖。
      *
      * 先清掉与该区间相交的旧覆盖，避免"停课"与"调课"叠加成两条互相打架的记录。
      */
+    /**
+     * 写入一条覆盖，并处理与同一条排课既有覆盖的重叠。
+     *
+     * 以前是「周区间有交集就整条删掉」——在区间模型下这没错，因为新记录总会盖住整段重叠。
+     * 换成位图后不能这么干：新记录可能只占旧记录里的**某几周**，
+     * 整条删会把用户在其他周设的停课/调课一起抹掉。
+     * 所以重叠部分按位减掉，只保留剩余周次；减空了才删记录。
+     */
     suspend fun setOverride(override: SlotOverride) {
         val existing = dao.overridesOfSlot(override.slotId)
-        existing.filter { it.fromWeek <= override.toWeek && it.toWeek >= override.fromWeek }
-            .forEach { dao.deleteOverrideById(it.id) }
+        existing.forEach { old ->
+            val overlap = old.weekMask and override.weekMask
+            if (overlap == 0) return@forEach
+            val remain = old.weekMask and override.weekMask.inv()
+            if (remain == 0) {
+                dao.deleteOverrideById(old.id)
+            } else {
+                dao.updateOverrideMask(old.id, remain)
+            }
+        }
         dao.insertOverride(override)
     }
 

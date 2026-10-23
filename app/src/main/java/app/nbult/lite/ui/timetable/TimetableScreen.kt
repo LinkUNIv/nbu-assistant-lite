@@ -38,6 +38,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import app.nbult.lite.domain.DateUtil
+import app.nbult.lite.domain.WeekMask
 import app.nbult.lite.domain.AppClock
 import app.nbult.lite.domain.ScheduleService
 import app.nbult.lite.ui.common.MotionSpecs
@@ -310,15 +315,16 @@ fun TimetableScreen(vm: TimetableViewModel) {
                 CourseEditorSheet(
                     entry = selected,
                     week = state.week,
+                    totalWeeks = state.term?.totalWeeks?.coerceAtLeast(1) ?: 20,
                     periods = state.periods,
                     hasOverride = selected.overrideId != 0L,
                     onDismiss = { vm.select(null) },
                     onSave = { name, teacher, day, start, end, mask, room ->
                         vm.saveSlot(name, teacher, day, start, end, mask, room)
                     },
-                    onSuspend = { scope -> vm.suspendCurrent(scope) },
-                    onMove = { day, start, end, room, scope ->
-                        vm.moveCurrent(day, start, end, room, scope)
+                    onSuspend = { weekMask -> vm.suspendCurrent(weekMask) },
+                    onMove = { day, start, end, room, weekMask ->
+                        vm.moveCurrent(day, start, end, room, weekMask)
                     },
                     onRestore = { vm.restoreCurrentOverride() },
                     onDeleteSlot = { vm.deleteSelectedSlot() },
@@ -326,5 +332,43 @@ fun TimetableScreen(vm: TimetableViewModel) {
                 )
             }
         }
+    }
+
+    // 调课撞课：先不落库，等用户明确选「替换」或「取消」
+    state.pendingMove?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { vm.cancelPendingMove() },
+            title = { Text("时间冲突") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "调整到 " +
+                            "${DateUtil.dayNames.getOrNull(pending.day - 1).orEmpty()} " +
+                            "${pending.start}-${pending.end} 节（${WeekMask.label(pending.weekMask)}）" +
+                            "后，与这些课程重叠："
+                    )
+                    pending.conflicts.forEach { conflict ->
+                        Text(
+                            text = "· ${conflict.courseName}" +
+                                "（第 ${conflict.weeks.joinToString("、")} 周）",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = "「替换原课程」会把这些课在冲突周次设为停课，再完成本次调整；" +
+                            "之后仍可在那门课上恢复。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.confirmMoveWithReplace() }) { Text("替换原课程") }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.cancelPendingMove() }) { Text("取消更改") }
+            }
+        )
     }
 }

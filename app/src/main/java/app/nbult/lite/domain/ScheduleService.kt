@@ -68,7 +68,7 @@ object ScheduleService {
         val bySlot = overrides.groupBy { it.slotId }
         val out = ArrayList<TimetableEntry>(base.size + 2)
         base.forEach { entry ->
-            val ov = bySlot[entry.slot.id]?.lastOrNull { week in it.fromWeek..it.toWeek }
+            val ov = bySlot[entry.slot.id]?.lastOrNull { WeekMask.isOn(it.weekMask, week) }
             when {
                 ov == null -> out.add(entry)
 

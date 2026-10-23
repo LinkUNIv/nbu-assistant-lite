@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NewsItem::class,
         SlotOverride::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -60,9 +60,78 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 3 → 4：`slot_override` 从「周区间」改为「周次位图」。
+         *
+         * 不能直接 `ALTER TABLE ... ADD COLUMN`：Room 要求实体字段与表列**完全一致**，
+         * 多留 `fromWeek`/`toWeek` 会让 schema 校验失败、启动即崩。
+         * 也不能 `DROP COLUMN`：minSdk 24 对应的 SQLite 还不支持该语法。
+         * 所以走「建新表 → 逐行转换 → 换名」，全程不动 `course_slot` 与 `course`。
+         */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `slot_override_new` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `slotId` INTEGER NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `weekMask` INTEGER NOT NULL,
+                        `toDay` INTEGER NOT NULL,
+                        `toStart` INTEGER NOT NULL,
+                        `toEnd` INTEGER NOT NULL,
+                        `toRoom` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        FOREIGN KEY(`slotId`) REFERENCES `course_slot`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+
+                // SQLite 没有现成的「区间转位图」聚合；override 通常只有个位数条，
+                // 用游标逐行算最直白，也最不容易写错位运算。
+                db.query(
+                    "SELECT id, slotId, kind, fromWeek, toWeek, toDay, toStart, toEnd, toRoom, createdAt " +
+                        "FROM `slot_override`"
+                ).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val from = cursor.getInt(3)
+                        val to = cursor.getInt(4)
+                        val lo = minOf(from, to).coerceIn(1, 30)
+                        val hi = maxOf(from, to).coerceIn(1, 30)
+                        var mask = 0
+                        for (w in lo..hi) mask = mask or (1 shl (w - 1))
+                        db.execSQL(
+                            "INSERT INTO `slot_override_new` " +
+                                "(id, slotId, kind, weekMask, toDay, toStart, toEnd, toRoom, createdAt) " +
+                                "VALUES (?,?,?,?,?,?,?,?,?)",
+                            arrayOf<Any>(
+                                cursor.getLong(0),
+                                cursor.getLong(1),
+                                cursor.getString(2) ?: "suspend",
+                                mask,
+                                cursor.getInt(5),
+                                cursor.getInt(6),
+                                cursor.getInt(7),
+                                cursor.getString(8) ?: "",
+                                cursor.getLong(9)
+                            )
+                        )
+                    }
+                }
+
+                db.execSQL("DROP TABLE `slot_override`")
+                db.execSQL("ALTER TABLE `slot_override_new` RENAME TO `slot_override`")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_slot_override_slotId` " +
+                        "ON `slot_override` (`slotId`)"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "nbu-lite.db")
-                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

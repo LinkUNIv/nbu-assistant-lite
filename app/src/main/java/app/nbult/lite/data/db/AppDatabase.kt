@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NewsItem::class,
         SlotOverride::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -129,9 +129,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 4 → 5：`slot_override` 增加 `toWeek`（调课的目标周）。
+         *
+         * 纯加列，不需要重建表：旧数据一律 0，语义正好是"与原周相同"，
+         * 也就是 0.16.x 里"本周内换天"的调课，行为完全不变。
+         */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `slot_override` " +
+                        "ADD COLUMN `toWeek` INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "nbu-lite.db")
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigration()
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

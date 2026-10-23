@@ -79,32 +79,73 @@ object ScheduleService {
                 else -> {
                     val start = ov.toStart.coerceIn(1, 12)
                     val end = ov.toEnd.coerceIn(start, 12)
-                    val target = entry.slot.copy(
-                        dayOfWeek = ov.toDay.coerceIn(1, 7),
-                        startSection = start,
-                        endSection = end,
-                        room = ov.toRoom.ifBlank { entry.slot.room }
-                    )
-                    out.add(
-                        entry.copy(
-                            slot = target,
-                            originSlot = entry.slot,
-                            badge = "调",
-                            overrideId = ov.id
-                        )
-                    )
                     val day = DateUtil.dayNames.getOrNull(ov.toDay - 1).orEmpty()
-                    out.add(
-                        entry.copy(
-                            slot = entry.slot,
-                            originSlot = entry.slot,
-                            ghostLabel = "已调至 $day $start-$end 节",
-                            overrideId = ov.id
+                    val targetWeek = if (ov.toWeek > 0) ov.toWeek else week
+                    if (targetWeek == week) {
+                        // 本周内换天：目标时段时间出现「调」块，原位留灰块说明去向
+                        val target = entry.slot.copy(
+                            dayOfWeek = ov.toDay.coerceIn(1, 7),
+                            startSection = start,
+                            endSection = end,
+                            room = ov.toRoom.ifBlank { entry.slot.room }
                         )
-                    )
+                        out.add(
+                            entry.copy(
+                                slot = target,
+                                originSlot = entry.slot,
+                                badge = "调",
+                                overrideId = ov.id
+                            )
+                        )
+                        out.add(
+                            entry.copy(
+                                slot = entry.slot,
+                                originSlot = entry.slot,
+                                ghostLabel = "已调至 $day $start-$end 节",
+                                overrideId = ov.id
+                            )
+                        )
+                    } else {
+                        // 调到之后的周：这一周这节课不上了，只在原位留一条去向说明。
+                        // 不能直接留空 —— 否则看起来像课程被删了。
+                        out.add(
+                            entry.copy(
+                                slot = entry.slot,
+                                originSlot = entry.slot,
+                                ghostLabel = "已调至 第${targetWeek}周 $day $start-$end 节",
+                                overrideId = ov.id
+                            )
+                        )
+                    }
                 }
             }
         }
+
+        // 从**别的周**调进来的课。
+        // 只在源周做"已调走"是不够的：目标周必须真的多出这一节，否则课等于凭空消失。
+        // 同周换天（toWeek == 0 或与源周相同）已在上面处理，这里要排掉。
+        overrides.forEach { ov ->
+            if (ov.kind != SlotOverride.KIND_MOVE) return@forEach
+            if (ov.toWeek <= 0 || ov.toWeek != week) return@forEach
+            if (WeekMask.isOn(ov.weekMask, week)) return@forEach
+            val source = entries.firstOrNull { it.slot.id == ov.slotId } ?: return@forEach
+            val start = ov.toStart.coerceIn(1, 12)
+            val end = ov.toEnd.coerceIn(start, 12)
+            out.add(
+                source.copy(
+                    slot = source.slot.copy(
+                        dayOfWeek = ov.toDay.coerceIn(1, 7),
+                        startSection = start,
+                        endSection = end,
+                        room = ov.toRoom.ifBlank { source.slot.room }
+                    ),
+                    originSlot = source.slot,
+                    badge = "调",
+                    overrideId = ov.id
+                )
+            )
+        }
+
         return out.sortedWith(compareBy({ it.slot.startSection }, { it.slot.dayOfWeek }))
     }
 

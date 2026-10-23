@@ -322,9 +322,9 @@ fun TimetableScreen(vm: TimetableViewModel) {
                     onSave = { name, teacher, day, start, end, mask, room ->
                         vm.saveSlot(name, teacher, day, start, end, mask, room)
                     },
-                    onSuspend = { weekMask -> vm.suspendCurrent(weekMask) },
-                    onMove = { day, start, end, room, weekMask ->
-                        vm.moveCurrent(day, start, end, room, weekMask)
+                    onSuspend = { vm.suspendCurrent() },
+                    onMove = { day, start, end, room, targetWeek ->
+                        vm.moveCurrent(day, start, end, room, targetWeek)
                     },
                     onRestore = { vm.restoreCurrentOverride() },
                     onDeleteSlot = { vm.deleteSelectedSlot() },
@@ -342,22 +342,30 @@ fun TimetableScreen(vm: TimetableViewModel) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "调整到 " +
-                            "${DateUtil.dayNames.getOrNull(pending.day - 1).orEmpty()} " +
-                            "${pending.start}-${pending.end} 节（${WeekMask.label(pending.weekMask)}）" +
-                            "后，与这些课程重叠："
+                        text = buildString {
+                            append("把第 ${pending.sourceWeek} 周这一节调到")
+                            append(
+                                if (pending.toWeek == pending.sourceWeek) {
+                                    "本周 "
+                                } else {
+                                    "第 ${pending.toWeek} 周 "
+                                }
+                            )
+                            append(DateUtil.dayNames.getOrNull(pending.day - 1).orEmpty())
+                            append(" ${pending.start}-${pending.end} 节后，与这些课程重叠：")
+                        }
                     )
                     pending.conflicts.forEach { conflict ->
                         Text(
-                            text = "· ${conflict.courseName}" +
-                                "（第 ${conflict.weeks.joinToString("、")} 周）",
+                            text = "· ${conflict.courseName}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Text(
-                        text = "「替换原课程」会把这些课在冲突周次设为停课，再完成本次调整；" +
-                            "之后仍可在那门课上恢复。",
+                        text = "「替换原课程」会把这些课在" +
+                            (if (pending.toWeek == pending.sourceWeek) "本周" else "第 ${pending.toWeek} 周") +
+                            "设为停课，再完成本次调课；之后仍可在那门课上恢复。",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

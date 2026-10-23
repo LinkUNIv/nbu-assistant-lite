@@ -110,7 +110,14 @@ data class SlotOverride(
 ) {
     companion object {
         const val KIND_SUSPEND = "suspend"
+
+        /** 调到别的周，目标周**照常上那周原本的课**，本节的课是额外加的一次（补课）。 */
         const val KIND_MOVE = "move"
+
+        /** 调到别的周，并**取代目标周原本那一节**（目标周只上一次，时间用调过去的）。 */
+        const val KIND_MOVE_REPLACE = "move_replace"
+
+        fun isMove(kind: String) = kind == KIND_MOVE || kind == KIND_MOVE_REPLACE
     }
 }
 

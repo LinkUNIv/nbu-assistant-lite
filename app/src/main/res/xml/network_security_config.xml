@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  默认禁止明文；仅对 nbu.edu.cn 放行。
+
+  说明：应用内的 WebView 抓取已下线，当前所有请求（资讯、校历、校时）均为 https，
+  这一段是为将来可能接入的校内 HTTP 资讯源留的口子，不影响现有安全边界。
+  跳转浏览器不受本文件约束（那是浏览器自己的策略）。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">nbu.edu.cn</domain>
+    </domain-config>
+</network-security-config>

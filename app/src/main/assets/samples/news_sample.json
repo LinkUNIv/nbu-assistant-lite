@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "generatedAt": "2026-10-22T19:30:00+08:00",
+  "items": [
+    {
+      "id": 119301,
+      "columnId": 1003,
+      "columnName": "宁大要闻",
+      "title": "宁波大学举行“毛伟芳教育基金”捐赠签约仪式",
+      "url": "https://news.nbu.edu.cn/info/1003/119301.htm",
+      "publishedAt": "2026-10-22",
+      "summary": "值此建校40周年暨三校合并30周年校庆之际，校友毛奇峰捐资设立教育基金，将实业担当化作育人活水。",
+      "source": "宁波大学新闻网"
+    },
+    {
+      "id": 119241,
+      "columnId": 1003,
+      "columnName": "宁大要闻",
+      "title": "宁波大学主办2026东海论坛",
+      "url": "https://news.nbu.edu.cn/info/1003/119241.htm",
+      "publishedAt": "2026-10-21",
+      "summary": "论坛围绕海洋经济与区域发展展开研讨，来自多所高校与科研机构的学者参会。",
+      "source": "宁波大学新闻网"
+    },
+    {
+      "id": 119291,
+      "columnId": 1004,
+      "columnName": "校园动态",
+      "title": "海洋学院科普团队亮相第3届上海国际蟹产业博览会",
+      "url": "https://news.nbu.edu.cn/info/1004/119291.htm",
+      "publishedAt": "2026-10-20",
+      "summary": "团队展示了水产养殖与蟹类加工领域的最新成果，并与企业达成初步合作意向。",
+      "source": "宁波大学新闻网"
+    },
+    {
+      "id": 119061,
+      "columnId": 1005,
+      "columnName": "媒体宁大",
+      "title": "中国科学报：中国科学院院士谈基础学科人才培养",
+      "url": "https://news.nbu.edu.cn/info/1005/119061.htm",
+      "publishedAt": "2026-10-20",
+      "summary": "文章围绕基础学科拔尖人才培养模式展开讨论，介绍了我校相关改革探索。",
+      "source": "宁波大学新闻网"
+    }
+  ]
+}

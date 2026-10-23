@@ -1,0 +1,3 @@
+-keep class app.nbult.lite.data.db.** { *; }
+-dontwarn okhttp3.**
+-dontwarn org.jsoup.**

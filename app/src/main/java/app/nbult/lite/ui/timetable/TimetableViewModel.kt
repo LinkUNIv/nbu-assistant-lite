@@ -42,7 +42,7 @@ data class TimetableUiState(
     val pendingMove: PendingMove? = null
 ) {
     val isEmpty: Boolean get() = entries.isEmpty()
-    val totalSections: Int get() = ScheduleService.totalSections(entries)
+    val totalSections: Int get() = ScheduleService.totalSections(entries, overrides)
     val currentWeekEntries: List<TimetableEntry>
         get() = weeks.getOrElse(week - 1) { emptyList() }
 }
@@ -433,7 +433,7 @@ class TimetableViewModel(
         }
 
         val conflicts = detectMoveConflicts(entry, safeTarget, day, start, end)
-        if (conflicts.isNotEmpty() || sameSlotBlock != null) {
+        if (conflicts.isNotEmpty()) {
             _state.value = _state.value.copy(
                 pendingMove = PendingMove(
                     slotId = entry.originSlot.id,
@@ -460,8 +460,36 @@ class TimetableViewModel(
             end = end,
             room = room,
             editingOverrideId = entry.overrideId,
-            replaceTarget = false
+            // 目标周已有这一节 → 直接按"只上一次"处理，不再追问。
+            // 换课本来的意思就是把课换到那个时间，问一次反而多一步。
+            replaceTarget = sameSlotBlock != null
         )
+    }
+
+    /**
+     * 把这次「换课」改成「停课」：删掉调课记录，改为在**源周**停课。
+     *
+     * 调课块本身不该有"停课"选项 —— 那会停掉目标周原计划那节，
+     * 语义上完全跑偏。要停的是"被调走的这一节"。
+     */
+    fun convertMoveToSuspend() {
+        val entry = _state.value.selected ?: return
+        val sourceWeek = entry.sourceWeek.takeIf { it in 1..maxWeek() } ?: _state.value.week
+        viewModelScope.launch {
+            if (entry.overrideId > 0L) repository.clearOverride(entry.overrideId)
+            repository.setOverride(
+                SlotOverride(
+                    slotId = entry.originSlot.id,
+                    kind = SlotOverride.KIND_SUSPEND,
+                    weekMask = WeekMask.bit(sourceWeek),
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+            _state.value = _state.value.copy(
+                selected = null,
+                message = "第 $sourceWeek 周已改为停课"
+            )
+        }
     }
 
     /** 目标周已有这一节时选「补课」：那周上两次，第二次是调过去的。 */

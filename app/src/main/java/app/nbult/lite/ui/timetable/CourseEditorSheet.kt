@@ -1,8 +1,23 @@
 package app.nbult.lite.ui.timetable
 
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -54,6 +69,7 @@ fun CourseEditorSheet(
     onSave: (String, String, Int, Int, Int, Int, String) -> Unit,
     onSuspend: () -> Unit,
     onMove: (Int, Int, Int, String, Int) -> Unit,
+    onConvertToSuspend: () -> Unit,
     onRestore: () -> Unit,
     onDeleteSlot: () -> Unit,
     onDeleteCourse: () -> Unit
@@ -141,11 +157,15 @@ fun CourseEditorSheet(
                 onClick = { mode = EditMode.NORMAL },
                 label = { Text("正常上课") }
             )
-            FilterChip(
-                selected = mode == EditMode.SUSPEND,
-                onClick = { mode = EditMode.SUSPEND },
-                label = { Text("停课") }
-            )
+            // 调来的那一节不提供「停课」：那会停掉**目标周**原计划的那节，
+            // 而真正要停的是"被调走的这一节"，用下方「改为停课」表达。
+            if (!entry.movedIn) {
+                FilterChip(
+                    selected = mode == EditMode.SUSPEND,
+                    onClick = { mode = EditMode.SUSPEND },
+                    label = { Text("停课") }
+                )
+            }
             FilterChip(
                 selected = mode == EditMode.MOVE,
                 onClick = { mode = EditMode.MOVE },
@@ -183,33 +203,44 @@ fun CourseEditorSheet(
             }
 
             EditMode.MOVE -> {
-                TargetWeekPicker(
-                    currentWeek = week,
-                    totalWeeks = totalWeeks,
-                    selected = targetWeek,
-                    onSelect = { targetWeek = it }
-                )
+                // 周次与星期都换成滚轮：手指上下滑着选，比点一排 chip 快，也不用横着滚
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    for (d in 1..7) {
-                        FilterChip(
-                            selected = moveDay == d,
-                            onClick = { moveDay = d },
-                            label = { Text(DateUtil.dayNames[d - 1]) }
+                    Column(Modifier.weight(1f)) {
+                        Text("调到哪一周", style = MaterialTheme.typography.labelLarge)
+                        val weekCount = maxOf(totalWeeks, week) - week + 1
+                        val labels = (0 until weekCount).map { offset ->
+                            val w = week + offset
+                            if (w == week) "本周" else "第 $w 周"
+                        }
+                        WheelPicker(
+                            items = labels,
+                            selectedIndex = (targetWeek - week).coerceIn(0, weekCount - 1),
+                            onSelect = { targetWeek = week + it }
+                        )
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text("星期", style = MaterialTheme.typography.labelLarge)
+                        WheelPicker(
+                            items = DateUtil.dayNames,
+                            selectedIndex = (moveDay - 1).coerceIn(0, 6),
+                            onSelect = { moveDay = it + 1 }
                         )
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SectionStepper("开始", moveStart) {
+
+                Text("第几节", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SectionField("开始节", moveStart, Modifier.weight(1f)) {
                         moveStart = it.coerceIn(1, 12)
                         if (moveStart > moveEnd) moveEnd = moveStart
                     }
-                    Spacer(Modifier.width(12.dp))
-                    SectionStepper("结束", moveEnd) {
+                    SectionField("结束节", moveEnd, Modifier.weight(1f)) {
                         moveEnd = it.coerceIn(1, 12)
                         if (moveEnd < moveStart) moveStart = moveEnd
                     }
@@ -222,7 +253,7 @@ fun CourseEditorSheet(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    text = "若目标时段已有其他课程，会先提示冲突，由你决定是否替换。",
+                    text = "若目标周那个时段已有别的课，会提示是否替换；已有本节则直接替换，不再追问。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -230,6 +261,18 @@ fun CourseEditorSheet(
                     onClick = { onMove(moveDay, moveStart, moveEnd, moveRoom, targetWeek) },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("保存调课", fontWeight = FontWeight.Medium) }
+
+                if (entry.movedIn) {
+                    OutlinedButton(
+                        onClick = onConvertToSuspend,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "改为停课（取消这次换课）",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
         }
 
@@ -285,13 +328,15 @@ fun CourseEditorSheet(
             }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SectionStepper("开始", start) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SectionField("开始节", start, Modifier.weight(1f)) {
                 start = it.coerceIn(1, 12)
                 if (start > end) end = start
             }
-            Spacer(Modifier.width(12.dp))
-            SectionStepper("结束", end) {
+            SectionField("结束节", end, Modifier.weight(1f)) {
                 end = it.coerceIn(1, 12)
                 if (end < start) start = end
             }
@@ -373,17 +418,46 @@ fun CourseEditorSheet(
     }
 }
 
+/**
+ * 节次输入：文本框可直接键入，两侧保留 ± 用来微调。
+ *
+ * 原来只有 ± 按钮，从第 3 节改到第 11 节要点 8 次；现在点开键盘直接输两位数。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SectionStepper(label: String, value: Int, onChange: (Int) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.labelMedium)
-        IconButton(onClick = { onChange(value - 1) }) {
-            Icon(Icons.Outlined.Remove, contentDescription = "减少")
-        }
-        Text("$value", style = MaterialTheme.typography.bodyMedium)
-        IconButton(onClick = { onChange(value + 1) }) {
-            Icon(Icons.Outlined.Add, contentDescription = "增加")
-        }
+private fun SectionField(
+    label: String,
+    value: Int,
+    modifier: Modifier = Modifier,
+    onChange: (Int) -> Unit
+) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextButton(
+            onClick = { onChange((value - 1).coerceIn(1, 12)) },
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+        ) { Text("−", style = MaterialTheme.typography.titleMedium) }
+        OutlinedTextField(
+            value = text,
+            onValueChange = { raw ->
+                // 只收数字、最多两位：手滑输入字母或粘贴一长串时不会把状态写坏
+                val digits = raw.filter { it.isDigit() }.take(2)
+                text = digits
+                digits.toIntOrNull()?.let { if (it in 1..12) onChange(it) }
+            },
+            label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(
+            onClick = { onChange((value + 1).coerceIn(1, 12)) },
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+        ) { Text("+", style = MaterialTheme.typography.titleMedium) }
     }
 }
 
@@ -402,49 +476,83 @@ private fun WeekStepper(label: String, value: Int, onChange: (Int) -> Unit) {
 }
 
 /**
- * 目标周次选择器（单选）。
+ * 上下滑动的滚轮选择器（类似秒表的数字轮）。
  *
- * 只列「本周及之后」：调课本意是"这周的课因故不上，挪到以后补"，
- * 往过去调没有意义，也会让已经过去的周凭空多出一节课。
+ * 用 [LazyColumn] + 吸附（snap）实现：停下时自动对齐到整项，中间那项加粗高亮。
+ * 上下留出半屏空白，让首尾项也能滚到中线。
+ *
+ * 只做"一次性定位 + 向上汇报"，不回写内部滚动位置 —— 否则用户手指还没松，
+ * 外部的值就把列表拽回去了。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TargetWeekPicker(
-    currentWeek: Int,
-    totalWeeks: Int,
-    selected: Int,
-    onSelect: (Int) -> Unit
+private fun WheelPicker(
+    items: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    itemHeight: Dp = 34.dp,
+    visibleItems: Int = 3
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("调到哪一周", style = MaterialTheme.typography.labelLarge)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+    if (items.isEmpty()) return
+    val density = LocalDensity.current
+    val itemHeightPx = with(density) { itemHeight.toPx() }
+    val half = visibleItems / 2
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = selectedIndex.coerceIn(0, items.lastIndex)
+    )
+    val fling = rememberSnapFlingBehavior(listState)
+
+    // 停下后把最靠近中线的那项汇报出去
+    LaunchedEffect(listState, items.size) {
+        snapshotFlow { listState.isScrollInProgress }
+            .collect { scrolling ->
+                if (!scrolling) {
+                    val extra = if (listState.firstVisibleItemScrollOffset > itemHeightPx / 2) 1 else 0
+                    val index = (listState.firstVisibleItemIndex + extra)
+                        .coerceIn(0, items.lastIndex)
+                    onSelect(index)
+                }
+            }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(itemHeight * visibleItems),
+        contentAlignment = Alignment.Center
+    ) {
+        LazyColumn(
+            state = listState,
+            flingBehavior = fling,
+            contentPadding = PaddingValues(vertical = itemHeight * half),
+            modifier = Modifier.fillMaxHeight()
         ) {
-            val last = maxOf(totalWeeks, currentWeek)
-            for (w in currentWeek..last) {
-                FilterChip(
-                    selected = selected == w,
-                    onClick = { onSelect(w) },
-                    label = {
-                        Text(
-                            text = if (w == currentWeek) "本周" else "第 $w 周",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
-                )
+            itemsIndexed(items) { index, label ->
+                val selected = index == selectedIndex
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(itemHeight),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        }
+                    )
+                }
             }
         }
-        Text(
-            text = if (selected == currentWeek) {
-                "只改本周这一节，课程本身的周次设置不变"
-            } else {
-                "把本周这一节移到第 $selected 周；本周原位保留一条「已调至…」说明"
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        // 中线：告诉手指"现在选的是这一格"
+        HorizontalDivider(
+            modifier = Modifier.align(Alignment.Center),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
         )
     }
 }

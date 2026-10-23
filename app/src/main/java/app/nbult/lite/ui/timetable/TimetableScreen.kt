@@ -326,6 +326,7 @@ fun TimetableScreen(vm: TimetableViewModel) {
                     onMove = { day, start, end, room, targetWeek ->
                         vm.moveCurrent(day, start, end, room, targetWeek)
                     },
+                    onConvertToSuspend = { vm.convertMoveToSuspend() },
                     onRestore = { vm.restoreCurrentOverride() },
                     onDeleteSlot = { vm.deleteSelectedSlot() },
                     onDeleteCourse = { vm.deleteSelectedCourse() }
@@ -334,13 +335,12 @@ fun TimetableScreen(vm: TimetableViewModel) {
         }
     }
 
-    // 调课落地前需要用户裁决：撞了别的课，或目标周本来就有这一节
+    // 只有「与别的课程撞车」才需要问一句；目标周已有本节的情况在 VM 里直接替换掉了
     state.pendingMove?.let { pending ->
-        val hasOtherConflict = pending.conflicts.isNotEmpty()
         val dayName = DateUtil.dayNames.getOrNull(pending.day - 1).orEmpty()
         AlertDialog(
             onDismissRequest = { vm.cancelPendingMove() },
-            title = { Text(if (hasOtherConflict) "时间冲突" else "目标周已有这一节课") },
+            title = { Text("时间冲突") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
@@ -351,61 +351,26 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                 "第 ${pending.toWeek} 周 $dayName ${pending.start}-${pending.end} 节。"
                             }
                     )
-                    if (hasOtherConflict) {
+                    Text("该时段与以下课程重叠：", style = MaterialTheme.typography.labelMedium)
+                    pending.conflicts.forEach { conflict ->
                         Text(
-                            text = "该时段与以下课程重叠：",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                        pending.conflicts.forEach { conflict ->
-                            Text(
-                                text = "· ${conflict.courseName}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Text(
-                            text = "「替换原课程」会把这些课在目标周设为停课，再完成本次调课。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (pending.sameSlotInTarget) {
-                        Text(
-                            text = "另外，第 ${pending.toWeek} 周本来就有这门课（原时段）。",
+                            text = "· ${conflict.courseName}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text(
-                            text = "「只上一次」会用调过去的时间取代那周原时段；" +
-                                "「补课」则两节都保留，那周上两次。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
+                    Text(
+                        text = "「替换原课程」会把这些课在目标周设为停课，再完成本次调课。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             },
             confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (hasOtherConflict) {
-                        TextButton(onClick = { vm.confirmMoveWithReplace() }) {
-                            Text("替换原课程")
-                        }
-                    } else if (pending.sameSlotInTarget) {
-                        // 主操作给「只上一次」：用户看到两节时的直觉是"重复了"，
-                        // 默认不该再把它变成两节；想要补课是少数情况，放次位。
-                        TextButton(onClick = { vm.confirmMoveReplaceTarget() }) {
-                            Text("只上一次")
-                        }
-                    }
-                }
+                TextButton(onClick = { vm.confirmMoveWithReplace() }) { Text("替换原课程") }
             },
             dismissButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (!hasOtherConflict && pending.sameSlotInTarget) {
-                        TextButton(onClick = { vm.confirmMoveKeepBoth() }) { Text("补课（两节）") }
-                    }
-                    TextButton(onClick = { vm.cancelPendingMove() }) { Text("取消更改") }
-                }
+                TextButton(onClick = { vm.cancelPendingMove() }) { Text("取消更改") }
             }
         )
     }

@@ -237,6 +237,22 @@ object ScheduleService {
         return hour * 60 + minute
     }
 
-    fun totalSections(entries: List<TimetableEntry>, minimum: Int = 10): Int =
-        maxOf(minimum, entries.maxOfOrNull { it.slot.endSection } ?: minimum)
+    /**
+     * 网格要画多少节。
+     *
+     * 必须把调课的**目标节次**也算进来：调到第 12 节时，课程本身的 `slot.endSection`
+     * 仍然是原来的 5，只看它的话网格还是 11 节，那一块会被 clamp 到最后一行 ——
+     * 看起来就像"调到了第 11 节"。
+     */
+    fun totalSections(
+        entries: List<TimetableEntry>,
+        overrides: List<SlotOverride> = emptyList(),
+        minimum: Int = 10
+    ): Int {
+        val fromSlots = entries.maxOfOrNull { it.slot.endSection } ?: minimum
+        val fromMoves = overrides
+            .filter { SlotOverride.isMove(it.kind) }
+            .maxOfOrNull { it.toEnd } ?: 0
+        return maxOf(minimum, fromSlots, fromMoves)
+    }
 }

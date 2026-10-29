@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -58,20 +60,20 @@ import org.json.JSONObject
 @Composable
 fun PortalScreen(
     vm: TimetableViewModel,
-    onOpenCalendar: () -> Unit
+    onOpenCalendar: () -> Unit,
+    /** 入口失效时的反馈出口：直接进「数据与其他 → 工作日志」。 */
+    onOpenLogs: () -> Unit = {}
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
     var entries by remember { mutableStateOf<List<PortalEntry>>(emptyList()) }
-    var notice by remember { mutableStateOf("") }
     var toast by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val loaded = runCatching { PortalCatalog.load(context) }.getOrNull()
         entries = loaded?.first.orEmpty()
-        notice = loaded?.second.orEmpty()
     }
 
     LaunchedEffect(toast) {
@@ -81,11 +83,15 @@ fun PortalScreen(
         }
     }
 
-    Box(Modifier.fillMaxWidth()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+    ) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 12.dp, end = 12.dp, top = 8.dp, bottom = 28.dp
+                // top +6：与右侧横带同一条顶边
+                start = 12.dp, end = 12.dp, top = 14.dp, bottom = 28.dp
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -127,20 +133,28 @@ fun PortalScreen(
                 }
             }
 
-            item("footer") {
-                Column(Modifier.padding(top = 12.dp, start = 4.dp, end = 4.dp)) {
-                    Text(
-                        text = notice,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            // 反馈单独一栏：它不属于任何「服务」分类，之前紧跟在最后一个分组后面，
+            // 视觉上被并进了那一栏，看起来像某个校园系统的同族功能
+            item("header-feedback") {
+                Column(Modifier.padding(top = 8.dp)) {
+                    HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
                     )
                     Text(
-                        text = "入口失效？到「我的 → 工作日志」导出日志并反馈。",
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "反馈",
+                        style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
                     )
                 }
+            }
+
+            // 反馈做成和其他入口同一形态的一行：点一下直接进工作日志，
+            // 不再用一段说明文字教用户去哪里找
+            item("feedback") {
+                FeedbackRow(onClick = onOpenLogs)
             }
         }
 
@@ -325,5 +339,66 @@ object PortalCatalog {
             )
         }
         return list to root.optString("notice")
+    }
+}
+
+/**
+ * 反馈入口行。
+ *
+ * 图标位沿用 [EntryRow] 的"首字色块"——不引图标包，也不下载网络图标；
+ * 右侧用箭头而不是 OpenInNew，因为它不出应用。
+ */
+@Composable
+private fun FeedbackRow(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                        RoundedCornerShape(9.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "反",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "入口失效或建议",
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "导出工作日志，附上时间与入口名后反馈",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

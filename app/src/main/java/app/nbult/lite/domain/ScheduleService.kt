@@ -28,7 +28,18 @@ data class TimetableEntry(
      */
     val sourceWeek: Int = 0,
     /** 这一块是「从别的周调进来」的课，而不是本周原计划的课。 */
-    val movedIn: Boolean = false
+    val movedIn: Boolean = false,
+    /**
+     * 这条 override 的**目标时段**（第几周 / 星期几 / 起始节 / 结束节）。
+     *
+     * 之前没有这四个字段，只有 [ghostLabel] 那句人话。于是"原位灰块"点开详情页时，
+     * 面板只能拿 `originDay + 1` 猜目标，猜出来的并不是真实的调课目标。
+     * 0 表示没有调课（或被停课覆盖）。
+     */
+    val toWeek: Int = 0,
+    val toDay: Int = 0,
+    val toStart: Int = 0,
+    val toEnd: Int = 0
 ) {
     val displayName: String
         get() = course.name.replace(Regex("""^[A-Za-z0-9]{4,14}\s*[-_]\s*(?=\S)"""), "")
@@ -126,16 +137,27 @@ object ScheduleService {
                                 originSlot = entry.slot,
                                 badge = "调",
                                 overrideId = ov.id,
-                                sourceWeek = week
+                                sourceWeek = week,
+                                toWeek = targetWeek,
+                                toDay = ov.toDay,
+                                toStart = start,
+                                toEnd = end
                             )
                         )
                         out.add(
                             entry.copy(
                                 slot = entry.slot,
                                 originSlot = entry.slot,
-                                ghostLabel = "已调至 $day $start-$end 节",
+                                // 显式换行，且每行控制在 3~4 个字符内。
+                                // 实测：一列只有约 32dp 可用宽（7 列手机屏），一行放不下 4 个汉字，
+                                // 交给自动换行会把"周日"拆成"周/日"、把"节"甩到第三行（两版截图确认）。
+                                ghostLabel = "已调至\n$day\n$start-${end}节",
                                 overrideId = ov.id,
-                                sourceWeek = week
+                                sourceWeek = week,
+                                toWeek = targetWeek,
+                                toDay = ov.toDay,
+                                toStart = start,
+                                toEnd = end
                             )
                         )
                     } else {
@@ -144,9 +166,13 @@ object ScheduleService {
                             entry.copy(
                                 slot = entry.slot,
                                 originSlot = entry.slot,
-                                ghostLabel = "已调至 第${targetWeek}周 $day $start-$end 节",
+                                ghostLabel = "已调至\n第${targetWeek}周\n$day\n$start-${end}节",
                                 overrideId = ov.id,
-                                sourceWeek = week
+                                sourceWeek = week,
+                                toWeek = targetWeek,
+                                toDay = ov.toDay,
+                                toStart = start,
+                                toEnd = end
                             )
                         )
                     }
@@ -171,7 +197,11 @@ object ScheduleService {
                     badge = "调",
                     overrideId = ov.id,
                     sourceWeek = WeekMask.weeksOf(ov.weekMask).firstOrNull() ?: week,
-                    movedIn = true
+                    movedIn = true,
+                    toWeek = week,
+                    toDay = ov.toDay,
+                    toStart = start,
+                    toEnd = end
                 )
             )
         }
@@ -196,7 +226,9 @@ object ScheduleService {
         term: Term?,
         periods: List<PeriodTime>,
         overrides: List<SlotOverride> = emptyList(),
-        nowMillis: Long = AppClock.now()
+        nowMillis: Long = AppClock.now(),
+        /** 为 true 时把「停课」与「已调走」的块也列进来（置顶卡的开关）。 */
+        includeInactive: Boolean = false
     ): DayPlan {
         if (term == null) return DayPlan(emptyList(), false)
 
@@ -205,10 +237,11 @@ object ScheduleService {
         val day = DateUtil.dayOfWeekIso(today)
         val nowMinutes = minutesOfDay(nowMillis)
 
-        // 停课与"已调走"的占位块都不参与"下一节课"
+        // 停课与"已调走"的占位块默认不参与"下一节课"；
+        // 置顶卡的开关打开时把它们也带上，方便一眼看到"这节停了/挪走了"
         fun dayEntries(w: Int, d: Int): List<TimetableEntry> =
             weekEntries(entries, w, overrides)
-                .filter { it.slot.dayOfWeek == d && it.isActive }
+                .filter { it.slot.dayOfWeek == d && (includeInactive || it.isActive) }
                 .sortedBy { it.slot.startSection }
 
         val remaining = dayEntries(week, day).filter { entry ->

@@ -16,6 +16,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalDensity
+import app.nbult.lite.ui.common.BandMetrics
+import androidx.compose.material.icons.outlined.Today
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.drawWithContent
@@ -35,6 +38,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +64,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -146,10 +156,30 @@ fun WeekHeader(
     val page = pagerState.currentPage
     val offsetProvider: () -> Float = { pagerState.currentPageOffsetFraction }
 
+    // 顶栏要按可用宽分三档：固定开销约 202dp（箭头 48×2 + 本周 58 + ＋48），
+    // 360dp 屏上中间那列只剩 64dp，而日期行要 114dp —— 不分档就必然被裁
+    BoxWithConstraints {
+    val fullWidth = maxWidth >= BandMetrics.HeaderFullMin
+    val tooNarrow = maxWidth < BandMetrics.HeaderCompactMin
+    // 系统字号放大后文字会吃掉余量，整体降一档
+    val demote = LocalDensity.current.fontScale >= BandMetrics.FontScaleDemote
+    val tier = when {
+        demote -> if (fullWidth) 1 else 2
+        fullWidth -> 0
+        tooNarrow -> 2
+        else -> 1
+    }
+    val dateCellWidth = if (tier == 0) 42.dp else 32.dp
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+            // 不再加纵向内边距：Row 里最高的 IconButton 正好 48dp，
+            // 去掉那 2dp 后卡片天然落到 48dp，与右侧圆钮同高
+            //
+            // 右端留 10dp：胶囊右端是半径 24dp 的半圆，
+            // 内容贴到边会被圆角切掉一块水波纹
+            .padding(start = 4.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onPrev, enabled = page > 0) {
@@ -187,12 +217,13 @@ fun WeekHeader(
                 )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // C 档（<250dp）连日期行一起藏掉，只留「第 X 周」
+            if (tier < 2) Row(verticalAlignment = Alignment.CenterVertically) {
                 if (startEpochDay != null) {
                     PageRibbon(
                         page = page,
                         offsetProvider = offsetProvider,
-                        cellWidth = 42.dp,
+                        cellWidth = dateCellWidth,
                         count = totalWeeks
                     ) { index ->
                         Text(
@@ -204,14 +235,15 @@ fun WeekHeader(
                         )
                     }
                     Text(
-                        text = " - ",
+                        // 紧凑档去掉两侧空白，只要能看出"起 - 止"
+                        text = if (tier == 0) " - " else "-",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     PageRibbon(
                         page = page,
                         offsetProvider = offsetProvider,
-                        cellWidth = 42.dp,
+                        cellWidth = dateCellWidth,
                         count = totalWeeks
                     ) { index ->
                         Text(
@@ -222,22 +254,27 @@ fun WeekHeader(
                             softWrap = false
                         )
                     }
-                    Text(text = "　", style = MaterialTheme.typography.labelSmall)
+                    // 这个全角空格只是个占位符，纯浪费约 10dp，紧凑档不要
+                    if (tier == 0) {
+                        Text(text = "　", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
-                Text(
-                    text = "共 $totalWeeks 周",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
         IconButton(onClick = onNext, enabled = page < totalWeeks - 1) {
             Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = "下一周")
         }
-        TextButton(onClick = onToday) { Text("本周") }
+        if (tier == 0) {
+            TextButton(onClick = onToday) { Text("本周") }
+        } else {
+            IconButton(onClick = onToday) {
+                Icon(Icons.Outlined.Today, contentDescription = "回到本周")
+            }
+        }
         IconButton(onClick = onImport) {
             Icon(Icons.Outlined.Add, contentDescription = "导入课表")
         }
+    }
     }
 }
 
@@ -304,16 +341,43 @@ fun TodayCard(
     entries: List<TimetableEntry>,
     periods: List<PeriodTime>,
     isTomorrow: Boolean,
+    /** 是否把「停课」「已调走」的块也列出来。偏好存在 DataStore，跨进程有效。 */
+    showInactive: Boolean = false,
+    onToggleInactive: () -> Unit = {},
     onEntryClick: (TimetableEntry) -> Unit = {}
 ) {
     if (entries.isEmpty()) return
     var expanded by rememberSaveable { mutableStateOf(true) }
-    val title = if (isTomorrow) {
-        "明日课程 · ${entries.size} 节"
-    } else {
-        "下一节课 · 共 ${entries.size} 节"
+    // 展开进度：0 折叠、1 展开。标题位移和内容模糊都由它驱动 ——
+    // 用 graphicsLayer / blur 而不是 offset / animateContentSize，
+    // 前者只影响绘制，后者每帧都会重新测量布局，是滚动掉帧的大头
+    val expandProgress by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = MotionSpecs.decelerate(220),
+        label = "today-expand"
+    )
+    // 箭头：展开时朝上（0°），折叠后绕自身中心转 180° 朝下
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (expanded) 0f else 180f,
+        animationSpec = MotionSpecs.decelerate(220),
+        label = "today-arrow"
+    )
+    // 计数只算"还能上"的：混入停课块之后，直接把总数写上去会骗人
+    val activeCount = entries.count { it.isActive }
+    val suspendedCount = entries.count { it.suspended }
+    val title = buildString {
+        append(if (isTomorrow) "明天" else "今天")
+        if (activeCount > 0) {
+            append(" · 共 $activeCount 节")
+        } else if (suspendedCount > 0) {
+            append(" · 停课 $suspendedCount 节")
+        } else {
+            append(" · 共 0 节")
+        }
+        if (suspendedCount > 0 && activeCount > 0) append(" · 停课 $suspendedCount")
     }
-    val first = entries.first()
+    // 折叠态的摘要是"下一节上什么"，别让停课块抢了位置
+    val first = entries.firstOrNull { it.isActive } ?: entries.first()
     val firstRange = timeRangeOf(periods, first.slot.startSection, first.slot.endSection)
 
     Surface(
@@ -324,10 +388,12 @@ fun TodayCard(
         color = MaterialTheme.colorScheme.primaryContainer
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            // 整块不再当折叠按钮：只有右侧那个箭头按钮负责开合
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded },
+                    // 展开时标题向上让 5dp，折叠时落回。只改绘制不触发重排
+                    .graphicsLayer { translationY = -5.dp.toPx() * expandProgress },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
@@ -348,15 +414,44 @@ fun TodayCard(
                         )
                     }
                 }
-                Icon(
-                    imageVector = if (expanded) {
-                        Icons.Outlined.KeyboardArrowUp
-                    } else {
-                        Icons.Outlined.KeyboardArrowDown
-                    },
-                    contentDescription = if (expanded) "折叠" else "展开",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                // 切换「显示停课 / 已调走」。
+                // 360dp 屏上标题已经快占满，所以只放图标，不加文字
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .clickable { onToggleInactive() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (showInactive) {
+                            Icons.Outlined.Visibility
+                        } else {
+                            Icons.Outlined.VisibilityOff
+                        },
+                        contentDescription = if (showInactive) "隐藏停课与换课" else "显示停课与换课",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(
+                            alpha = if (showInactive) 1f else 0.55f
+                        )
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .clickable { expanded = !expanded },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.KeyboardArrowUp,
+                        contentDescription = if (expanded) "折叠" else "展开",
+                        modifier = Modifier
+                            .size(22.dp)
+                            .graphicsLayer { rotationZ = arrowRotation },
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
 
             AnimatedVisibility(
@@ -366,13 +461,20 @@ fun TodayCard(
                 exit = shrinkVertically(MotionSpecs.decelerate(150)) +
                     fadeOut(MotionSpecs.decelerate(120))
             ) {
-                Column {
+                // 展开的明细从模糊里浮出来；折叠时反向糊掉再消失。
+                // 模糊只在这一次性过渡里出现，滚动时恒为 0 —— 离屏合成太贵，
+                // 每帧开着它会直接把高刷打回 40fps
+                Column(
+                    Modifier.blur(((1f - expandProgress) * 8f).dp)
+                ) {
                     Spacer(Modifier.height(6.dp))
                     entries.forEach { entry ->
                         val range = timeRangeOf(periods, entry.slot.startSection, entry.slot.endSection)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                // 停课与「已调走」的块压暗，和还能上的课一眼分开
+                                .alpha(if (entry.isActive) 1f else 0.55f)
                                 .clickable { onEntryClick(entry) }
                                 .padding(vertical = 3.dp),
                             verticalAlignment = Alignment.Top
@@ -389,7 +491,12 @@ fun TodayCard(
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    textDecoration = if (entry.isActive) {
+                                        null
+                                    } else {
+                                        TextDecoration.LineThrough
+                                    }
                                 )
                                 if (entry.teacher.isNotBlank()) {
                                     Text(
@@ -559,10 +666,14 @@ fun WeekBody(
     cellHeight: Dp,
     weekStartEpochDay: Long? = null,
     today: Long = 0L,
+    /** 要渲染的星期，升序。没有周末课时就少两列，工作日能宽出 40%。 */
+    visibleDays: List<Int> = listOf(1, 2, 3, 4, 5, 6, 7),
     onEntryClick: (TimetableEntry) -> Unit = {}
 ) {
     val headerHeight = WeekGridMetrics.headerHeight
-    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
+    // 页面底色全透之后，格子没有白底兜着，网格线是唯一的分隔 ——
+    // 0.22 太淡，抬到 0.34 才看得出格
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)
     val todayColor = MaterialTheme.colorScheme.primary
     val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
 
@@ -579,6 +690,10 @@ fun WeekBody(
     val nameSize = if (compact) 10.sp else 11.sp
     val metaSize = if (compact) 9.sp else 10.sp
 
+    // 列宽三档：40dp 以下教室放不下，34dp 以下连课程名都得截
+    val hideRoom = columnWidth < 40.dp
+    val nameLimit = if (columnWidth < 34.dp) 2 else 0
+
     Box(
         Modifier
             .fillMaxSize()
@@ -586,7 +701,7 @@ fun WeekBody(
                 val colW = columnWidth.toPx()
                 val top = headerHeight.toPx()
                 val cellH = cellHeight.toPx()
-                for (i in 0..7) {
+                for (i in 0..visibleDays.size) {
                     val x = colW * i
                     drawLine(gridColor, Offset(x, top), Offset(x, size.height), 1f)
                 }
@@ -598,7 +713,7 @@ fun WeekBody(
     ) {
         // 星期 + 日期表头（随页滑动）
         Row(Modifier.height(headerHeight)) {
-            for (day in 1..7) {
+            for (day in visibleDays) {
                 val date = dayDates?.getOrNull(day - 1)
                 val isToday = date != null && today != 0L && date == today
                 val dayColor = if (isToday) todayColor else mutedColor
@@ -646,6 +761,9 @@ fun WeekBody(
             compact = compact,
             nameSize = nameSize,
             metaSize = metaSize,
+            visibleDays = visibleDays,
+            hideRoom = hideRoom,
+            nameLimit = nameLimit,
             onEntryClick = onEntryClick
         )
     }
@@ -657,7 +775,9 @@ private fun CourseBlock(
     weekLabel: String,
     compact: Boolean,
     nameSize: TextUnit,
-    metaSize: TextUnit
+    metaSize: TextUnit,
+    hideRoom: Boolean = false,
+    nameLimit: Int = 0
 ) {
     val accent = courseColor(entry.course.colorSeed)
     val sections = entry.slot.endSection - entry.slot.startSection + 1
@@ -698,7 +818,17 @@ private fun CourseBlock(
 
     // 文案只在数据/尺寸变化时重建：滑动过程中相邻页会反复重组，
     // 每帧重建 AnnotatedString 会持续制造 SpanStyle 垃圾，正是高刷下滑顿挫的来源之一
-    val titleText = remember(entry.displayName, entry.teacher, sections, nameSize, metaSize, blockColor) {
+    val titleText = remember(
+        entry.displayName,
+        entry.teacher,
+        sections,
+        nameSize,
+        metaSize,
+        blockColor,
+        nameLimit
+    ) {
+        // 列宽 <34dp 时只留前两个字，否则一定溢出格子
+        val shownName = if (nameLimit > 0) entry.displayName.take(nameLimit) else entry.displayName
         buildAnnotatedString {
             withStyle(
                 SpanStyle(
@@ -706,7 +836,7 @@ private fun CourseBlock(
                     fontSize = nameSize,
                     fontWeight = FontWeight.Medium
                 )
-            ) { append(entry.displayName) }
+            ) { append(shownName) }
             if (sections >= 2 && entry.teacher.isNotBlank()) {
                 withStyle(
                     SpanStyle(color = blockColor.copy(alpha = 0.85f), fontSize = metaSize)
@@ -726,7 +856,8 @@ private fun CourseBlock(
         compact,
         metaSize,
         metaSmall,
-        roomColor
+        roomColor,
+        hideRoom
     ) {
         buildAnnotatedString {
             var first = true
@@ -736,7 +867,8 @@ private fun CourseBlock(
                 withStyle(style) { append(text) }
                 first = false
             }
-            line(SpanStyle(color = roomColor, fontSize = metaSize), entry.room)
+            // 窄列放不下教室，直接不写，省下的高度留给周次
+            if (!hideRoom) line(SpanStyle(color = roomColor, fontSize = metaSize), entry.room)
             if (!compact && sections >= 3) {
                 line(
                     SpanStyle(color = roomColor.copy(alpha = 0.6f), fontSize = metaSmall),
@@ -842,6 +974,9 @@ private fun BlockLayer(
     compact: Boolean,
     nameSize: TextUnit,
     metaSize: TextUnit,
+    visibleDays: List<Int>,
+    hideRoom: Boolean,
+    nameLimit: Int,
     onEntryClick: (TimetableEntry) -> Unit
 ) {
     Layout(
@@ -852,19 +987,23 @@ private fun BlockLayer(
                     weekLabel = block.weekLabel,
                     compact = compact,
                     nameSize = nameSize,
-                    metaSize = metaSize
+                    metaSize = metaSize,
+                    hideRoom = hideRoom,
+                    nameLimit = nameLimit
                 )
             }
         },
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(blocks, columnWidth, cellHeight) {
+            .pointerInput(blocks, columnWidth, cellHeight, visibleDays) {
                 detectTapGestures { offset ->
                     val colW = columnWidth.toPx()
                     val cellH = cellHeight.toPx()
                     val top = headerHeight.toPx()
                     if (offset.x < 0f || offset.y < top) return@detectTapGestures
-                    val day = (offset.x / colW).toInt() + 1
+                    // 列号 → 星期：隐藏周末后列号不再等于 dayOfWeek
+                    val day = visibleDays.getOrNull((offset.x / colW).toInt())
+                        ?: return@detectTapGestures
                     val section = ((offset.y - top) / cellH).toInt() + 1
                     blocks.lastOrNull { b ->
                         b.entry.slot.dayOfWeek == day &&
@@ -896,7 +1035,10 @@ private fun BlockLayer(
         val height = constraints.maxHeight.coerceAtLeast(0)
         layout(width, height) {
             placed.forEach { (slot, placeable) ->
-                val x = colW * (slot.dayOfWeek.coerceIn(1, 7) - 1)
+                // 被隐藏的那天不该有块；真有就跳过，而不是画到别人的列上
+                val col = visibleDays.indexOf(slot.dayOfWeek)
+                if (col < 0) return@forEach
+                val x = colW * col
                 val y = headH + cellH * (slot.startSection.coerceIn(1, totalSections) - 1)
                 placeable.place(x, y)
             }

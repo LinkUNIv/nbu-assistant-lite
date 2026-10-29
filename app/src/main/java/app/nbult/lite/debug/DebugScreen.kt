@@ -225,7 +225,7 @@ fun DebugScreen(onBack: () -> Unit) {
 
             DebugCard("环境") {
                 Text("包名：${context.packageName}", style = MaterialTheme.typography.labelSmall)
-                Text("构建：debug=${app.nbult.lite.BuildConfig.DEBUG}", style = MaterialTheme.typography.labelSmall)
+                Text("构建：${app.nbult.lite.BuildConfig.BUILD_KIND}（${app.nbult.lite.BuildConfig.VERSION_NAME}）", style = MaterialTheme.typography.labelSmall)
                 Text("资讯源：${app.nbult.lite.data.remote.NewsConfig.FEED_URL}", style = MaterialTheme.typography.labelSmall)
             }
         }

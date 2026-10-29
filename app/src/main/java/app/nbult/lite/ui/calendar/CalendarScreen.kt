@@ -32,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import app.nbult.lite.ui.common.luminanceIsDark
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.nbult.lite.domain.AppClock
@@ -355,12 +357,26 @@ private fun CenterHint(text: String) {
     }
 }
 
-private fun colorOf(type: CalendarEventType): Color = when (type) {
-    CalendarEventType.HOLIDAY -> Color(0xFF0F766E)
-    CalendarEventType.REGISTER -> Color(0xFF2F6FED)
-    CalendarEventType.CLASS -> Color(0xFF1D4ED8)
-    CalendarEventType.SPORT -> Color(0xFF7C3AED)
-    CalendarEventType.MAKEUP -> Color(0xFFB4530A)
-    CalendarEventType.EXAM -> Color(0xFFB91C1C)
-    CalendarEventType.OTHER -> Color(0xFF6B7280)
+/**
+ * 事件类型色。
+ *
+ * 这套色值是为白底挑的，深色模式下几支深蓝/深绿压到背景里几乎看不出，
+ * 所以深色时统一往白色方向提亮 —— 分类的色相不动，只抬亮度。
+ */
+@Composable
+private fun colorOf(type: CalendarEventType): Color {
+    val base = when (type) {
+        CalendarEventType.HOLIDAY -> Color(0xFF0F766E)
+        CalendarEventType.REGISTER -> Color(0xFF2F6FED)
+        CalendarEventType.CLASS -> Color(0xFF1D4ED8)
+        CalendarEventType.SPORT -> Color(0xFF7C3AED)
+        CalendarEventType.MAKEUP -> Color(0xFFB4530A)
+        CalendarEventType.EXAM -> Color(0xFFB91C1C)
+        CalendarEventType.OTHER -> Color(0xFF6B7280)
+    }
+    return if (MaterialTheme.colorScheme.background.luminanceIsDark()) {
+        lerp(base, Color.White, 0.42f)
+    } else {
+        base
+    }
 }

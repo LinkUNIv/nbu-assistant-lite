@@ -4,7 +4,7 @@ import android.provider.Settings
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.TweenSpec
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,9 +15,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 
 /**
  * 全应用统一的动效规格。
@@ -50,24 +49,22 @@ object MotionSpecs {
 }
 
 /**
- * 入场模糊：与 NavHost 的左右横移叠加，形成「横向推入 + 由虚到实」的观感。
+ * 切页入场效果：与 NavHost 的左右横移叠加，形成「横向推入 + 由淡到实」的观感。
  *
- * 性能处理：
- * 1. 模糊只在动画期间挂载，结束后完全移除该图层，静止时零开销；
- * 2. 系统「动画时长缩放」为 0（开发者选项或无障碍中的“移除动画”）时直接跳过；
- * 3. 高斯模糊走 RenderEffect，需要 API 31+，低版本自动退化为纯横移。
+ * **为什么现在不用整页高斯模糊**：
+ * 0.18.6 曾把「一开精致动效就闪退」归因于这里的整页 `Modifier.blur()`，事后证明是误判 ——
+ * 真正的崩溃在 `SmoothSwitch` 的 `lerp(Color.Transparent)`（Oklab 越界，见 v0.18.7）。
+ * 也就是说整页模糊并没有被证实有问题，只是"顺手一起删掉了"。
+ * 目前它保持移除状态（它确实是全应用里最重的一次离屏渲染），需要的话可以单独加回来。
+ *
+ * 现在只用**不建离屏图层**的 alpha + 轻微缩放：结构永远是有 Box 的（不随开关改变组合结构），
+ * 开关只改参数，因此不存在"在动画中途换掉整棵子树"的风险。
  */
 @Composable
-fun BlurIn(
+fun PageEnterEffect(
     enabled: Boolean = true,
-    radius: Int = 6,
-    durationMillis: Int = 150,
     content: @Composable () -> Unit
 ) {
-    if (!enabled) {
-        content()
-        return
-    }
     val context = LocalContext.current
     val animationsEnabled = remember {
         runCatching {
@@ -78,23 +75,30 @@ fun BlurIn(
             )
         }.getOrDefault(1f) > 0f
     }
-
-    var settled by remember { mutableStateOf(!animationsEnabled) }
-    LaunchedEffect(Unit) { if (animationsEnabled) settled = true }
-
-    val blurRadius by animateDpAsState(
-        targetValue = if (settled) 0.dp else radius.dp,
-        animationSpec = tween(durationMillis),
-        label = "entryBlur"
-    )
-
-    val modifier = if (blurRadius > 0.5.dp) {
-        Modifier
-            .fillMaxSize()
-            .blur(blurRadius)
-    } else {
-        Modifier.fillMaxSize()
+    val active = enabled && animationsEnabled
+    // 首帧以"未落地"状态呈现，随后翻成 1f 触发动画；关闭时直接落地，不播动画
+    var settled by remember { mutableStateOf(!active) }
+    LaunchedEffect(active) {
+        if (active) settled = true
     }
 
-    Box(modifier) { content() }
+    val progress by animateFloatAsState(
+        targetValue = if (settled) 1f else 0f,
+        animationSpec = tween(220, easing = MotionSpecs.Decelerate),
+        label = "pageEnter"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                // 只动 alpha 与缩放，不碰 RenderEffect / 离屏合成
+                alpha = 0.45f + 0.55f * progress
+                val scale = 0.988f + 0.012f * progress
+                scaleX = scale
+                scaleY = scale
+            }
+    ) {
+        content()
+    }
 }

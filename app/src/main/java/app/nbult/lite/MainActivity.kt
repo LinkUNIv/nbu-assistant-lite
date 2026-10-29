@@ -1,5 +1,7 @@
 package app.nbult.lite
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -9,10 +11,19 @@ import android.view.Window
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nbult.lite.ui.AppRoot
 import app.nbult.lite.ui.LocalAppContainer
+import app.nbult.lite.ui.theme.DarkMode
 import app.nbult.lite.ui.theme.NbuLiteTheme
+import app.nbult.lite.ui.theme.SeedColor
 import app.nbult.lite.util.FrameStats
 
 /**
@@ -49,17 +60,76 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // targetSdk 36 起系统**强制**边到边（35 已开始，36 无法再用 windowOptOutEdgeToEdgeEnforcement 退出）。
+        // 不调用这一句，内容只会被动地铺到状态栏/导航栏下面，而且系统栏图标的明暗没人负责，
+        // 深色模式下会出现"浅色背景 + 白色图标"。enableEdgeToEdge 会按系统深色开关设置图标明暗，
+        // 并给三键导航加一层对比度 scrim（手势导航下保持透明）。
+        //
+        // 内容避让不在这里做：AppRoot 用的是 Scaffold + NavigationBar，
+        // 它们本身就会消费 systemBars inset（顶部给内容、底部给导航栏），不需要额外 padding。
+        enableEdgeToEdge()
+
         val container = (application as NbuLiteApp).container
+        handleIntent(intent, container)
 
         requestHighRefreshRate()
         attachFrameMetrics()
 
         setContent {
             CompositionLocalProvider(LocalAppContainer provides container) {
-                NbuLiteTheme {
+                // 深浅与主题色都存在设置里，先拿初值再跟着流走。
+                // darkTheme 在这里算好传给主题 —— 主题本身不认识"跟随系统"这个概念
+                val darkModeId by container.settings.darkMode
+                    .collectAsStateWithLifecycle(initialValue = "system")
+                val themeColorId by container.settings.themeColor
+                    .collectAsStateWithLifecycle(initialValue = "blue")
+
+                val darkTheme = when (DarkMode.of(darkModeId)) {
+                    DarkMode.Dark -> true
+                    DarkMode.Light -> false
+                    DarkMode.System -> isSystemInDarkTheme()
+                }
+
+                // enableEdgeToEdge 只按**系统**深浅决定状态栏图标的明暗，
+                // 用户强制深色而系统是浅色时，白底上的黑图标会落在深色背景上看不见。
+                // 这里跟着应用主题再设一次。
+                val view = LocalView.current
+                SideEffect {
+                    val activity = view.context as? Activity ?: return@SideEffect
+                    WindowCompat.getInsetsController(activity.window, view).apply {
+                        isAppearanceLightStatusBars = !darkTheme
+                        isAppearanceLightNavigationBars = !darkTheme
+                    }
+                }
+
+                NbuLiteTheme(
+                    darkTheme = darkTheme,
+                    seed = SeedColor.of(themeColorId)
+                ) {
                     AppRoot()
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent, (application as NbuLiteApp).container)
+    }
+
+    /**
+     * 通知点击带过来的「跳到第 N 周」。
+     *
+     * 只写进 [AppContainer.pendingWeekJump]，切页与 setWeek 由 AppRoot 消费 ——
+     * 这里拿不到 NavController，也不该由 Activity 去指挥 Compose 的导航。
+     */
+    private fun handleIntent(intent: Intent?, container: AppContainer) {
+        val week = intent?.getIntExtra(app.nbult.lite.data.notify.ReminderNotifier.EXTRA_WEEK, 0) ?: 0
+        if (week > 0) {
+            container.pendingWeekJump.value = week
+            intent?.removeExtra(app.nbult.lite.data.notify.ReminderNotifier.EXTRA_WEEK)
         }
     }
 

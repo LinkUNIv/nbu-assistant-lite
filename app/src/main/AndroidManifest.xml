@@ -4,6 +4,17 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 滚轮越格的档位震动。缺这条 vibrate() 会抛 SecurityException（被 runCatching 吞掉→表现为"震动没做"） -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 上课提醒：精确闹钟（API 31+ 用户可关，关了就退化成不精确闹钟） -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 「去设置」跳电池优化白名单用；缺这条 startActivity 会直接抛 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Android 16 起把"上课中"升级成实时动态（抽屉顶部/锁屏/状态栏胶囊）。
+         普通权限，声明即授予；系统不支持时系统自己忽略 -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <!-- 开机后重排提醒；不声明的话重启一次提醒就永久失效 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".NbuLiteApp"
@@ -18,12 +29,30 @@
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:exported="true"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 闹钟回调：只由本应用的 PendingIntent 触发，不对外暴露 -->
+        <receiver
+            android:name=".data.notify.ClassReminderReceiver"
+            android:exported="false" />
+
+        <!-- 开机/改时间/改时区/覆盖安装后重排。这些都是系统受保护广播，第三方发不出来 -->
+        <receiver
+            android:name=".data.notify.ReminderRescheduleReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

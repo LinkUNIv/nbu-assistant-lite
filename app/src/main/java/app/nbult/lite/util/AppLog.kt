@@ -44,6 +44,36 @@ object AppLog {
         trimLocked(now)
     }
 
+    /**
+     * 结构化事件：`[tag] 名称 key=value key=value`。
+     *
+     * 统一成 key=value 而不是自由文本，是为了让验收可以「读日志判定」而不是靠眼睛 ——
+     * 例如 `[Nav] 请求 目标=8 来源=本周 方式=瞬移` 这一行就能证明按钮真的动了。
+     * 值为 null 的字段直接跳过，避免日志里出现 `key=null`。
+     */
+    fun event(tag: String, name: String, vararg fields: Pair<String, Any?>) {
+        val body = buildString {
+            append(name)
+            fields.forEach { (key, value) ->
+                if (value != null) append(' ').append(key).append('=').append(value)
+            }
+        }
+        log(tag, body)
+    }
+
+    /**
+     * 不变量自检：`ok = false` 时落一条 `[Assert]` 记录。
+     *
+     * 这样「有没有坏」不需要人盯屏幕 —— 验收清单只要写「日志里不得出现 `[Assert]`」。
+     * 返回 [ok]，便于调用点按需继续处理。
+     */
+    fun assert(tag: String, name: String, ok: Boolean, detail: String = ""): Boolean {
+        if (!ok) {
+            log("Assert", "$tag.$name${if (detail.isEmpty()) "" else " $detail"}")
+        }
+        return ok
+    }
+
     private fun trimLocked(now: Long) {
         val cutoff = now - RETAIN_DAYS * DAY_MILLIS
         while (entries.isNotEmpty() && entries.first().at < cutoff) entries.removeFirst()
@@ -89,6 +119,9 @@ object AppLog {
         appendLine("设备时区：${app.nbult.lite.domain.AppClock.deviceZoneId()}")
         appendLine("条目数：${entries.size}（保留 ${RETAIN_DAYS} 天 / 上限 $MAX_ENTRIES 条）")
         appendLine("-".repeat(40))
+        // 摘要在最前面：验收时读这几行就够，不用在几十行流水里数
+        summaryLines().forEach { appendLine(it) }
+        appendLine("-".repeat(40))
         if (entries.isEmpty()) appendLine("（暂无记录）")
         entries.forEach { appendLine(it.text) }
         val crash = crashRecord
@@ -98,6 +131,42 @@ object AppLog {
             appendLine("最近一次崩溃堆栈")
             appendLine("=".repeat(40))
             appendLine(crash)
+        }
+    }
+
+    /** 从已有条目里现算，不额外维护计数器 —— 少一处状态就少一处能算错的地方。 */
+    private fun summaryLines(): List<String> {
+        val texts = entries.map { it.text }
+        fun hits(vararg needles: String) = texts.count { line -> needles.all { line.contains(it) } }
+        val launches = hits("[App]", "启动")
+        val navRequests = hits("[Nav]", "请求")
+        val teleports = hits("方式=瞬移")
+        val asserts = hits("[Assert]")
+        val reminders = hits("[Reminder]", "下一次=")
+        // 取**最差**一次而不是最近一次：最近一次往往刚好是平顺的那次，
+        // 只看它会把开头的 11%、14% 藏掉，比不写摘要更容易误判
+        // (掉帧百分比, 帧数, "5(35%)")。帧数要一起带上：14 帧里掉 5 帧也是 35%，
+        // 只报百分比会把人吓一跳，报出帧数才知道这是不是一个可信的样本
+        val drops = texts.filter { it.contains("[Perf]") && it.contains("掉帧=") }
+            .mapNotNull { line ->
+                val token = line.substringAfter("掉帧=").substringBefore(" 平均").trim()
+                val pct = token.substringAfter('(', "").substringBefore("%)").toIntOrNull()
+                val frames = line.substringAfter("帧数=").substringBefore(' ').toIntOrNull() ?: 0
+                if (pct == null) null else Triple(pct, frames, token)
+            }
+        // 优先用 ≥30 帧的样本；全是短样本时才退回全部，并如实报出帧数
+        val worstDrop = drops.filter { it.second >= 30 }.ifEmpty { drops }.maxByOrNull { it.first }
+        return buildList {
+            add("摘要（读这几行就够）：")
+            add("  启动 $launches 次 · 切周 $navRequests 次（其中瞬移 $teleports）")
+            add("  提醒重排 $reminders 次")
+            add("  [Assert] $asserts 条" + if (asserts == 0) "（正常）" else "（异常，看正文）")
+            if (worstDrop != null) {
+                add("  最差一次滑动 掉帧=${worstDrop.third}（${worstDrop.second} 帧）")
+            }
+            if (launches == 0 && texts.isNotEmpty()) {
+                add("  本次运行没有启动记录，正文可能来自上一次会话")
+            }
         }
     }
 

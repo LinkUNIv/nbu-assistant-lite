@@ -33,6 +33,15 @@ object FrameStats {
 
     private var running = false
 
+    // 本次统计的上下文：来源（手势 / 按钮）与当时的行列数。
+    // 不加这几个字段的话，「本周」触发的翻页动画也会被记成一次滑动，
+    // 两类数据混在一起，掉帧到底来自哪种操作就说不清了
+    private var scrollSource = "手势"
+    private var scrollColumns = 0
+    private var scrollSections = 0
+    /** 这次滑动开始时距进程启动多少毫秒：一眼判断是不是冷启动那几秒。 */
+    private var scrollSinceStart = -1L
+
     // 出帧节奏
     private var frames = 0
     private var janky = 0
@@ -120,13 +129,37 @@ object FrameStats {
         sumUnknown += unknownDelay.coerceAtLeast(0L)
     }
 
+    /**
+     * 每次开始统计前设置：这一次是手指滑的，还是按钮触发的翻页动画；
+     * 以及当时课表是几列几行 —— 跨「有周末课的那一周」时列数会 5↔6，
+     * 行数会 10↔11，不记下来就没法按条件分组比对。
+     */
+    fun setScrollContext(source: String, columns: Int, sections: Int) {
+        scrollSource = source
+        scrollColumns = columns
+        scrollSections = sections
+        scrollSinceStart = sinceProcessStart()
+    }
+
+    /** 距进程启动的时长；拿不到就返回 -1，日志里不写这个字段。 */
+    private fun sinceProcessStart(): Long = runCatching {
+        android.os.SystemClock.uptimeMillis() - android.os.Process.getStartUptimeMillis()
+    }.getOrDefault(-1L)
+
+    private fun contextSuffix(): String = buildString {
+        append(" 方式=").append(scrollSource)
+        append(" 列数=").append(scrollColumns)
+        append(" 行数=").append(scrollSections)
+        if (scrollSinceStart >= 0) append(" 自启=").append(scrollSinceStart).append("ms")
+    }
+
     /** 起滑时的面包屑：万一下一帧就崩，日志里能看出崩在哪个周次、什么刷新率。 */
     fun logScrollStart(page: Int, totalWeeks: Int, refreshRate: Float) {
         runCatching {
             AppLog.log(
                 "Perf",
                 "滑动开始 第${page}周/共${totalWeeks}周 面板=${hz(refreshRate)} " +
-                    "预算=${ms(budgetNanos / NS_PER_MS)}ms"
+                    "预算=${ms(budgetNanos / NS_PER_MS)}ms" + contextSuffix()
             )
         }
     }
@@ -148,7 +181,7 @@ object FrameStats {
                 "Perf",
                 "滑动 帧数=$frames 掉帧=$janky($pct%) " +
                     "平均=${ms(avgMs)}ms(≈${hz(fps)}) 最长=${ms(worstMs)}ms " +
-                    "预算=${ms(budgetMs)}ms 面板结束=${hz(observedHz)}"
+                    "预算=${ms(budgetMs)}ms 面板结束=${hz(observedHz)}" + contextSuffix()
             )
         }
 

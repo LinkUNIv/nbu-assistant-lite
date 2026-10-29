@@ -74,6 +74,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: apk-preview
@@ -85,9 +87,24 @@ jobs:
           for f in *.apk; do sha256sum "$f" > "$f.sha256"; done
           cat *.sha256
 
+      - name: 解析发布说明
+        # 每个版本手写一份 docs/releases/<tag>.md。不再使用 generate_release_notes，
+        # 它只会输出一条提交链接，读者无法据此判断版本内容。
+        run: |
+          BODY="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ -f "$BODY" ]; then
+            echo "使用手写发布说明：$BODY"
+          else
+            BODY="$RUNNER_TEMP/release.md"
+            printf '## %s\n\n本版本未提供手写发布说明，逐版本变更见 CHANGELOG.md。\n' \
+              "${GITHUB_REF_NAME}" > "$BODY"
+            echo "未找到手写发布说明，使用默认正文"
+          fi
+          echo "BODY_PATH=$BODY" >> "$GITHUB_ENV"
+
       - uses: softprops/action-gh-release@v2
         with:
+          body_path: ${{ env.BODY_PATH }}
           files: |
             apk/*.apk
             apk/*.sha256
-          generate_release_notes: true

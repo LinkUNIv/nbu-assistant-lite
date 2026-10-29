@@ -16,175 +16,38 @@
 
 # 路线图
 
-按「能不能做」与「做完谁受益」排，不按功能大小排。⛔ 表示被外部条件卡住。
+按依赖关系与收益排序。⛔ 表示被外部条件阻塞。
 
 | 优先级 | 版本 | 主题 | 依赖 / 阻塞 |
 |---|---|---|---|
-| P0 | 0.31.0 | 桌面小组件 2×2 → 4×2 → 2×4 | ⛔ **需要设备**，组件只能装到桌面才验得了 |
-| P0 | 0.31.1 | 应用内更新日志（含资源更新说明） | 无，随时可做 |
-| P0 | 0.32.0 | 增量更新：App 更新器 + 资源包外置 | pack 清单与版本规则已定 |
-| P1 | 0.31.2 | 资讯日期块改衬线海报式 | 无，纯前端 |
-| P1 | 0.33.0 | 新手引导 | 建议在 0.32.0 之后：引导里要能说「资源自动更新」 |
-| P1 | 0.34.0 | **多校适配 + 资讯源选择性抓取** | ⛔ 强依赖 0.32.0（多校资源不可能全打进 APK） |
-| P2 | 0.35.0 | 前台服务持有常驻通知 | 无 |
-| P2 | 0.36.0 | 登录数据源 + 安全地基 | 需抓包；争议大，可能永远不做 |
+| P0 | 0.31.0 | 资讯页改版：日期块、卡片与列表双视图、层叠卡 | 无，纯前端 |
+| P0 | 0.31.1 | 应用内更新日志 | 无 |
+| P0 | 0.32.0 | 桌面小组件 2×2 → 4×2 → 2×4 | 设备已连接 |
+| P0 | 0.33.0 | 应用内更新器 | 无 |
+| P0 | 0.33.1 | 资源包外置：校历、资讯源、入口配置 | 依赖 0.33.0 |
+| P1 | 0.34.0 | 新手引导 | 建议排在资源包之后 |
+| P1 | 0.35.0 | 多校适配与资讯源选择性抓取 | 依赖 0.33.1 |
+| P2 | 0.36.0 | 前台服务持有常驻通知 | 无 |
+| P2 | 0.37.0 | 登录数据源与安全地基 | 需要抓包；争议较大 |
 | P3 | — | 双指缩放、相册图片背景、Baseline Profile | 无 |
 
-排序理由：
+排序依据：
 
-- **0.31.0 卡在设备**。方案、尺寸、栅格全都就绪，唯一缺的是「能不能真的加到桌面」。
-  设备一接上就做 —— 这是目前唯一无法在无设备时推进的大项
-- **0.31.1 排第二**：最小且独立（一个只读页 + 复用开源许可的结构），
-  而且它同时是 0.32.0 的说明书 —— 资源包更新了什么，只有这个页面看得见
-- **0.32.0 是分发前的关键**。分发给同学之后，每次改动都要走「发版 → 通知 → 下载 → 安装」，
-  摩擦全在这一步；资源包能把 64KB 内容更新变成零安装
-- **0.33.0 放 0.32.0 之后**：引导里会提「资源会自动更新」，先让这句话成立再教。
-  但若近期就要分发，**0.31.1 与 0.33.0 可以对调** —— 首次体验比更新体验更靠前
-- **0.34.0 多校适配强依赖 0.32.0**：每校一套校历、作息、入口、资讯源，
-  全打进 APK 会让包体随学校数量线性膨胀，也无法单独发某一校的修正。
-  所以顺序只能是「先有资源包，再谈多校」
-- P2 两项都不急：常驻通知是「进程被杀后不更新」的补丁，登录大概率不做
+- **0.31.0 排在最前**：资讯页改版是当前唯一既不依赖设备、又能被使用者立即感知的大项
+- **0.31.1 紧随其后**：体量最小，同时是 0.33.x 的前置内容 —— 资源包更新了什么，需要这一页呈现给使用者
+- **0.32.0 条件已具备**：桌面小组件此前因设备缺失无法验证，现设备已连接
+- **0.33.0 与 0.33.1 共同构成分发基础**：前者解决安装包更新，后者解决内容更新。
+  资源包外置的价值不在流量，而在于避免每次修改入口或校历都要触发一次安装流程
+- **0.34.0 应在资源包可用之后实现**：引导文案需要说明「资源自动更新」，前提是这句话已经成立
+- **0.35.0 强依赖 0.33.1**：每所学校一套校历、作息、入口与资讯源，全部打进安装包会使包体
+  随学校数量线性增长，也无法针对单一学校发布修正
+- P2 两项优先级最低：常驻通知用于缓解进程被终止后不更新的问题，登录方案争议较大
 
 ---
 
 # 详细方案
 
-## 桌面小组件（0.31.0，阻塞：需设备）
-
-**结论：可行，而且数据层几乎不用改。** `ScheduleService` 全是纯函数
-（`planForToday` / `weekEntries` / `totalSections`），widget 只要能从磁盘读出
-课表快照 + 作息 + 设置，就能自己算出"下一节课"，不需要 ViewModel。
-
-### 先确认现状
-
-| 项 | 值 | 对 widget 的影响 |
-|---|---|---|
-| Kotlin / Compose 编译器 | 1.9.24 / **1.5.14** | Glance 1.1.1 官方示例要求 1.5.15，差一个 patch；大概率能直接编，若报 ABI 错就升 Kotlin 1.9.25 |
-| minSdk | 24 | Glance 要求 21+，够 |
-| R8 | preview/release 已开 | Glance 自带 consumer rules，另需 `-keep` 住 receiver |
-| 现有 appwidget 配置 | **无** | 从零加 |
-| `AppContainer` | MainActivity 里 `new` | **widget 拿不到**，需要进程级单例 |
-
-### 三个方案
-
-| | A. Glance 1.1.1（推荐） | B. RemoteViews + XML | C. 不做组件 |
-|---|---|---|---|
-| 体积 | +300~500KB（2.1 → ~2.5MB） | +0（无新依赖） | 0 |
-| UI 能力 | Compose 语法、RemoteViews 现实：无 Canvas / 无模糊 | 最低，只能拼 TextView/ImageView | —— |
-| 代码量 | 小（一个 Composable 一张卡） | 大（XML + 手写 update 逻辑） | 0 |
-| 兼容性 | minSdk 21+，`cornerRadius` 仅 31+ | 全版本一致 | —— |
-
-选 A。B 的唯一优势是体积，而 400KB 对 2MB 的包不构成理由。
-
-### 形态：三个尺寸，共用一套行式语言（10-28 定稿）
-
-统一为「起止时间列 + 竖色条 + 课名/教室 + 右对齐节次·教师」，一个
-`WidgetRow(wide: Boolean)` 出两个宽度。
-
-| 尺寸 | 内容 | 行高 | 一屏可见 | 滚动 |
-|---|---|---|---|---|
-| 2×2 | 只放下一节：大号时间 / 课名 / 教室 / 倒计时胶囊 | — | 1 | 否 |
-| 4×2 | 双行版，超出一门上滑 | 45 | 3 | **是**（`LazyColumn`） |
-| 2×4 | 双行版，超出四门上滑；底部固定周进度条 | 58 | 4 | **是**（`LazyColumn`） |
-
-两个列表尺寸共用同一套 `LazyColumn` 骨架，只有行高和可见行数不同，
-所以「滚动」这件事只有一条实现路径，不存在 4×2 能滚而 2×4 不能的错位。
-
-**首行恒为下一节课**：渲染前剔除「结束时间早于当前」的条目，4×2 把已上课时折叠进标题栏
-（`周三 · 第 6 周` + `已上 2 节 · 还有 4 节`），2×4 折叠进底部周进度那一行。
-这是唯一可靠的自动对齐 —— Glance 没有 `scrollTo(index)`，靠数据裁剪比靠滚动定位稳，
-且 <12 不会因刷新跳回顶部。
-
-### 落点
-
-- [ ] `app/build.gradle.kts`：`androidx.glance:glance-appwidget:1.1.1`
-      + `androidx.glance:glance-material3:1.1.1`
-- [ ] `NbuLiteApp.kt`：`AppContainer` 加进程级单例 `AppContainer.get(context)`
-      —— 现在 `MainActivity` 里 new 的实例 widget 根本拿不到，而 widget 每次刷新都新建
-      一个 Room + DataStore 连接是浪费
-- [ ] `widget/NextClassWidget.kt`（`GlanceAppWidget`）+ `NextClassReceiver`（`GlanceAppWidgetReceiver`）
-- [ ] `widget/WidgetRow.kt`：`WidgetRow(wide: Boolean)` —— `wide=true` 给 4×2
-      （318dp 宽、行高 45、右侧多一节次/教师列），`false` 给 2×4（138dp 宽、行高 58、
-      教室在课名下）。列宽全部硬固定（时间列 44 / 色条 +12 / 课名弹性 / 右列右对齐 34），
-      **禁用 `defaultWeight` 混排** —— 滚动列表每行独立 inflate，只要有一列自适应就会行间错位
-- [ ] `widget/TodayListWidget.kt`：4×2 与 2×4 共用同一个 `LazyColumn`，
-      只有行高与可见行数不同；2×4 的周进度条固定在列表外（`Column` 底部），不参与滚动
-- [ ] `itemId = courseId * 100 + 当日序号`：两张列表都要给，不稳定 itemId 会让每次
-      update 回到顶部
-- [ ] `ScheduleService.kt` 加 `remainingToday(now)`：剔除已结束条目，
-      返回 `(已上课时数, 剩余列表)`，widget 与 2×2 共用
-- [ ] `res/xml/*_widget_info.xml`（每尺寸一份）：`targetCellWidth/Height`（31+）、
-      `minWidth = 70n - 30`（旧版）、`resizeMode="horizontal|vertical"`、
-      `updatePeriodMillis = 1800000`、`widgetCategory="home_screen"`；
-      `SizeMode.Responsive` 给 (110,110)/(110,220)/(250,110)/(250,220) 四档预生成
-- [ ] `AndroidManifest.xml`：注册 receiver + `android.appwidget.action.APPWIDGET_UPDATE`
-- [ ] `widget/WidgetTheme.kt`：把 `SeedColor` + 深浅换算成 `GlanceTheme` 的 ColorProviders
-      —— **应用主题是运行时 seed，widget 用不了 `MaterialTheme`，必须自己读 DataStore 重建**
-
-### 刷新：这是最容易做错的一处
-
-widget 跑在 launcher 进程，**没有 ViewModel、没有 Compose 状态**，
-只能在 `provideGlance` 里 suspend 取一次数，然后一次性渲染。三条触发源：
-
-- [ ] 数据变更：`TimetableRepository` 写入后调 `NextClassWidget().updateAll(context)`
-- [ ] 上下课边界：复用 `ClassReminderScheduler` 已有的下课撤销闹钟，在 receiver 里顺带刷一次
-- [ ] 兜底：`updatePeriodMillis = 30min`（系统下限）
-- [ ] **不要在每分钟的倒计时里 `update()`**：4×2 与 2×4 都是 `LazyColumn`，整表重建会打断
-      滚动并把位置弹回顶部。倒计时只在 2×2 那张卡上做，且随「下一节切换」一起刷
-- **不能依赖内存缓存**：进程被杀后 widget 仍要能画出来，所以只能读磁盘
-
-### 必须提前承认的限制
-
-- **亚克力做不到**。RemoteViews 没有模糊、噪点、渐变描边，widget 只能是纯色 + 圆角。
-  侧栏那套 `acrylicPanel` 一点都用不上。
-- `cornerRadius` 仅 API 31+，24–30 得退回 shape drawable。
-- 无 Canvas、无自定义绘制、无动画 —— widget 是"每次更新重画一张静态图"。
-- 自定义字体在 Glance 里支持有限，**内嵌的 Noto Serif 子集可能用不上**，需实测；
-  不行就退回系统 sans（数字会跟应用内不一致，可接受）。
-- `LazyColumn` 会被翻译成真正的 `ListView`（RemoteViews collection），因此：
-  行高必须写死、滚动位置只在 **Android 12+ 且提供稳定 `itemId`** 时保留，
-  12 以下每次 update 回到顶部；部分第三方桌面/老 ROM 直接不支持集合滚动，列表会被裁切
-- 「现在」那条时间指示线做不了：列表内元素跟着内容滚，RemoteViews 没有 z 轴叠放
-- `Text` 不支持 `fontFeatureSettings`，等不了宽数字，时间列只能靠固定宽度兜底
-- 列表有 item 上限，`LazyColumn` 在 <31 上走另一条路径。
-
-### 风险
-
-- 体积 2.1 → ~2.5MB，可接受（jsDelivr 单文件限制 20MB，离得远）
-- R8 目前只在 preview/release 开，debug 不混淆 —— widget 只在正式包上验一次才准
-- 各 launcher 脾气不同：MIUI / ColorOS 对圆角裁剪、尺寸吸附、刷新频率都有额外处理
-- 首次添加时 `provideGlance` 可能还没数据，要用 `glance_default_loading_layout` 占位
-
-### 排期与前置
-
-- 排在 **0.31.0**，前置是 0.30.0 验收完 —— widget 要读 `showFullTimetable`（行数/列数）
-  和主题色，这两样都在 0.30.0 定型
-- 按 **2×2 → 4×2 → 2×4** 的顺序出，每张单独可装可验：
-  2×2 是"能不能做"的最小切片（不带列表、固定浅色底），4×2 才引入 `LazyColumn` 与行式布局，
-  2×4 复用同一个骨架、只换行高与宽度，基本是白送
-- 若滚动在真机上体验崩（跳回顶部 / 部分桌面不支持集合滚动），**两张列表一起降级**：
-  4×2 回「行高 29 单行、一屏 4 门、不滚动」，2×4 回「固定 4 行 + 底部『还有 N 节』」。
-  两条降级都不用重写布局，`WidgetRow` 加一个 `dense` 单行档即可
-
----
-
-## 应用内更新日志（0.31.1）
-
-`CHANGELOG.md` 现在只活在仓库里，用户装完新包看不到改了什么。
-
-- [ ] 数据源：打包时把 `CHANGELOG.md` 的**当前版本段**抽成 `assets/changelog.json`
-      （构建脚本生成，不手工维护第二份）
-- [ ] `ui/settings/ChangelogScreen.kt`：结构复用 `LicensesScreen`（分组 + 展开正文），
-      顶部显示「当前版本 0.31.1（3011）」与「资源包 2026-10-29 12:48」
-- [ ] 路由 `settings/changelog` **必须注册在 `settings/{section}` 之前** —— 同一个坑踩过一次
-- [ ] 「关于」页加入口，与「开源许可」并排
-- [ ] 分两块：「应用更新」来自 `changelog.json`，「资源更新」来自 pack 的 `notes`。
-      资源更新没有独立的版本页可看，只有这里能看到
-- [ ] 只读，不做「已读标记」：那会引入状态与红点，收益不抵复杂度
-
----
-
-## 资讯日期块：衬线海报式（0.31.2）
+## 资讯页改版：日期块、双视图与层叠卡（0.31.0）
 
 参考图给的样式：圆角方块 + 顶部小号年份（下方一条细横线）+ 大号 `MM.DD`，
 整体高对比衬线，像一张日期海报。现状是另一套：
@@ -382,7 +245,142 @@ widget 跑在 launcher 进程，**没有 ViewModel、没有 Compose 状态**，
 
 ---
 
-## 增量更新：App 更新器 + 资源包（0.32.0）
+## 应用内更新日志（0.31.1）
+
+`CHANGELOG.md` 现在只活在仓库里，用户装完新包看不到改了什么。
+
+- [ ] 数据源：打包时把 `CHANGELOG.md` 的**当前版本段**抽成 `assets/changelog.json`
+      （构建脚本生成，不手工维护第二份）
+- [ ] `ui/settings/ChangelogScreen.kt`：结构复用 `LicensesScreen`（分组 + 展开正文），
+      顶部显示「当前版本 0.31.1（3011）」与「资源包 2026-10-29 12:48」
+- [ ] 路由 `settings/changelog` **必须注册在 `settings/{section}` 之前** —— 同一个坑踩过一次
+- [ ] 「关于」页加入口，与「开源许可」并排
+- [ ] 分两块：「应用更新」来自 `changelog.json`，「资源更新」来自 pack 的 `notes`。
+      资源更新没有独立的版本页可看，只有这里能看到
+- [ ] 只读，不做「已读标记」：那会引入状态与红点，收益不抵复杂度
+
+---
+
+## 桌面小组件（0.32.0）
+
+**结论：可行，而且数据层几乎不用改。** `ScheduleService` 全是纯函数
+（`planForToday` / `weekEntries` / `totalSections`），widget 只要能从磁盘读出
+课表快照 + 作息 + 设置，就能自己算出"下一节课"，不需要 ViewModel。
+
+### 先确认现状
+
+| 项 | 值 | 对 widget 的影响 |
+|---|---|---|
+| Kotlin / Compose 编译器 | 1.9.24 / **1.5.14** | Glance 1.1.1 官方示例要求 1.5.15，差一个 patch；大概率能直接编，若报 ABI 错就升 Kotlin 1.9.25 |
+| minSdk | 24 | Glance 要求 21+，够 |
+| R8 | preview/release 已开 | Glance 自带 consumer rules，另需 `-keep` 住 receiver |
+| 现有 appwidget 配置 | **无** | 从零加 |
+| `AppContainer` | MainActivity 里 `new` | **widget 拿不到**，需要进程级单例 |
+
+### 三个方案
+
+| | A. Glance 1.1.1（推荐） | B. RemoteViews + XML | C. 不做组件 |
+|---|---|---|---|
+| 体积 | +300~500KB（2.1 → ~2.5MB） | +0（无新依赖） | 0 |
+| UI 能力 | Compose 语法、RemoteViews 现实：无 Canvas / 无模糊 | 最低，只能拼 TextView/ImageView | —— |
+| 代码量 | 小（一个 Composable 一张卡） | 大（XML + 手写 update 逻辑） | 0 |
+| 兼容性 | minSdk 21+，`cornerRadius` 仅 31+ | 全版本一致 | —— |
+
+选 A。B 的唯一优势是体积，而 400KB 对 2MB 的包不构成理由。
+
+### 形态：三个尺寸，共用一套行式语言（10-28 定稿）
+
+统一为「起止时间列 + 竖色条 + 课名/教室 + 右对齐节次·教师」，一个
+`WidgetRow(wide: Boolean)` 出两个宽度。
+
+| 尺寸 | 内容 | 行高 | 一屏可见 | 滚动 |
+|---|---|---|---|---|
+| 2×2 | 只放下一节：大号时间 / 课名 / 教室 / 倒计时胶囊 | — | 1 | 否 |
+| 4×2 | 双行版，超出一门上滑 | 45 | 3 | **是**（`LazyColumn`） |
+| 2×4 | 双行版，超出四门上滑；底部固定周进度条 | 58 | 4 | **是**（`LazyColumn`） |
+
+两个列表尺寸共用同一套 `LazyColumn` 骨架，只有行高和可见行数不同，
+所以「滚动」这件事只有一条实现路径，不存在 4×2 能滚而 2×4 不能的错位。
+
+**首行恒为下一节课**：渲染前剔除「结束时间早于当前」的条目，4×2 把已上课时折叠进标题栏
+（`周三 · 第 6 周` + `已上 2 节 · 还有 4 节`），2×4 折叠进底部周进度那一行。
+这是唯一可靠的自动对齐 —— Glance 没有 `scrollTo(index)`，靠数据裁剪比靠滚动定位稳，
+且 <12 不会因刷新跳回顶部。
+
+### 落点
+
+- [ ] `app/build.gradle.kts`：`androidx.glance:glance-appwidget:1.1.1`
+      + `androidx.glance:glance-material3:1.1.1`
+- [ ] `NbuLiteApp.kt`：`AppContainer` 加进程级单例 `AppContainer.get(context)`
+      —— 现在 `MainActivity` 里 new 的实例 widget 根本拿不到，而 widget 每次刷新都新建
+      一个 Room + DataStore 连接是浪费
+- [ ] `widget/NextClassWidget.kt`（`GlanceAppWidget`）+ `NextClassReceiver`（`GlanceAppWidgetReceiver`）
+- [ ] `widget/WidgetRow.kt`：`WidgetRow(wide: Boolean)` —— `wide=true` 给 4×2
+      （318dp 宽、行高 45、右侧多一节次/教师列），`false` 给 2×4（138dp 宽、行高 58、
+      教室在课名下）。列宽全部硬固定（时间列 44 / 色条 +12 / 课名弹性 / 右列右对齐 34），
+      **禁用 `defaultWeight` 混排** —— 滚动列表每行独立 inflate，只要有一列自适应就会行间错位
+- [ ] `widget/TodayListWidget.kt`：4×2 与 2×4 共用同一个 `LazyColumn`，
+      只有行高与可见行数不同；2×4 的周进度条固定在列表外（`Column` 底部），不参与滚动
+- [ ] `itemId = courseId * 100 + 当日序号`：两张列表都要给，不稳定 itemId 会让每次
+      update 回到顶部
+- [ ] `ScheduleService.kt` 加 `remainingToday(now)`：剔除已结束条目，
+      返回 `(已上课时数, 剩余列表)`，widget 与 2×2 共用
+- [ ] `res/xml/*_widget_info.xml`（每尺寸一份）：`targetCellWidth/Height`（31+）、
+      `minWidth = 70n - 30`（旧版）、`resizeMode="horizontal|vertical"`、
+      `updatePeriodMillis = 1800000`、`widgetCategory="home_screen"`；
+      `SizeMode.Responsive` 给 (110,110)/(110,220)/(250,110)/(250,220) 四档预生成
+- [ ] `AndroidManifest.xml`：注册 receiver + `android.appwidget.action.APPWIDGET_UPDATE`
+- [ ] `widget/WidgetTheme.kt`：把 `SeedColor` + 深浅换算成 `GlanceTheme` 的 ColorProviders
+      —— **应用主题是运行时 seed，widget 用不了 `MaterialTheme`，必须自己读 DataStore 重建**
+
+### 刷新：这是最容易做错的一处
+
+widget 跑在 launcher 进程，**没有 ViewModel、没有 Compose 状态**，
+只能在 `provideGlance` 里 suspend 取一次数，然后一次性渲染。三条触发源：
+
+- [ ] 数据变更：`TimetableRepository` 写入后调 `NextClassWidget().updateAll(context)`
+- [ ] 上下课边界：复用 `ClassReminderScheduler` 已有的下课撤销闹钟，在 receiver 里顺带刷一次
+- [ ] 兜底：`updatePeriodMillis = 30min`（系统下限）
+- [ ] **不要在每分钟的倒计时里 `update()`**：4×2 与 2×4 都是 `LazyColumn`，整表重建会打断
+      滚动并把位置弹回顶部。倒计时只在 2×2 那张卡上做，且随「下一节切换」一起刷
+- **不能依赖内存缓存**：进程被杀后 widget 仍要能画出来，所以只能读磁盘
+
+### 必须提前承认的限制
+
+- **亚克力做不到**。RemoteViews 没有模糊、噪点、渐变描边，widget 只能是纯色 + 圆角。
+  侧栏那套 `acrylicPanel` 一点都用不上。
+- `cornerRadius` 仅 API 31+，24–30 得退回 shape drawable。
+- 无 Canvas、无自定义绘制、无动画 —— widget 是"每次更新重画一张静态图"。
+- 自定义字体在 Glance 里支持有限，**内嵌的 Noto Serif 子集可能用不上**，需实测；
+  不行就退回系统 sans（数字会跟应用内不一致，可接受）。
+- `LazyColumn` 会被翻译成真正的 `ListView`（RemoteViews collection），因此：
+  行高必须写死、滚动位置只在 **Android 12+ 且提供稳定 `itemId`** 时保留，
+  12 以下每次 update 回到顶部；部分第三方桌面/老 ROM 直接不支持集合滚动，列表会被裁切
+- 「现在」那条时间指示线做不了：列表内元素跟着内容滚，RemoteViews 没有 z 轴叠放
+- `Text` 不支持 `fontFeatureSettings`，等不了宽数字，时间列只能靠固定宽度兜底
+- 列表有 item 上限，`LazyColumn` 在 <31 上走另一条路径。
+
+### 风险
+
+- 体积 2.1 → ~2.5MB，可接受（jsDelivr 单文件限制 20MB，离得远）
+- R8 目前只在 preview/release 开，debug 不混淆 —— widget 只在正式包上验一次才准
+- 各 launcher 脾气不同：MIUI / ColorOS 对圆角裁剪、尺寸吸附、刷新频率都有额外处理
+- 首次添加时 `provideGlance` 可能还没数据，要用 `glance_default_loading_layout` 占位
+
+### 排期与前置
+
+- 排在 **0.31.0**，前置是 0.30.0 验收完 —— widget 要读 `showFullTimetable`（行数/列数）
+  和主题色，这两样都在 0.30.0 定型
+- 按 **2×2 → 4×2 → 2×4** 的顺序出，每张单独可装可验：
+  2×2 是"能不能做"的最小切片（不带列表、固定浅色底），4×2 才引入 `LazyColumn` 与行式布局，
+  2×4 复用同一个骨架、只换行高与宽度，基本是白送
+- 若滚动在真机上体验崩（跳回顶部 / 部分桌面不支持集合滚动），**两张列表一起降级**：
+  4×2 回「行高 29 单行、一屏 4 门、不滚动」，2×4 回「固定 4 行 + 底部『还有 N 节』」。
+  两条降级都不用重写布局，`WidgetRow` 加一个 `dense` 单行档即可
+
+---
+
+## 增量更新：App 更新器（0.33.0）与资源包外置（0.33.1）
 
 **结论：APK 层面没有「不安装」的更新。** Android 的更新模型就是「装新包覆盖旧包」，
 差分包（bsdiff/bspatch）只减少下载体积，安装这一步省不掉。
@@ -553,7 +551,7 @@ MAA 能"不重装就更新"的根本原因：**它的资源是 `resource/` 目�
 
 ---
 
-## 新手引导（0.33.0）
+## 新手引导（0.34.0）
 
 首次打开时课表是空的，只有一个 `TimetableEmptyHint`。同学拿到包，大概率卡在「怎么导入」。
 
@@ -571,7 +569,7 @@ MAA 能"不重装就更新"的根本原因：**它的资源是 `resource/` 目�
 
 ---
 
-## 多校适配与资讯源扩充（0.34.0）
+## 多校适配与资讯源扩充（0.35.0）
 
 **可行性：技术可行，但这是重构数据层，不是加个开关。** 三件事必须先立住，
 否则做到一半要推倒重来。
@@ -635,7 +633,7 @@ MAA 能"不重装就更新"的根本原因：**它的资源是 `resource/` 目�
 
 ---
 
-## 前台服务持有常驻通知（0.35.0）
+## 前台服务持有常驻通知（0.36.0）
 
 - [ ] `ResidentNotificationService`（`foregroundServiceType="specialUse"`，需写用途说明），
       把「上课中」常驻通知从普通 `notify()` 改为服务持有
@@ -646,7 +644,7 @@ MAA 能"不重装就更新"的根本原因：**它的资源是 `resource/` 目�
 
 ---
 
-## 登录数据源 + 安全地基（0.36.0，争议大）
+## 登录数据源 + 安全地基（0.37.0，争议大）
 
 **侦察结论**（`Downloads/风华宁大.apk.1`，133MB）：包名 `com.wisedu.cpdaily.nbu`，
 即「今日校园」（金智 Wisedu）宁波大学定制版，`cpdaily/9.5.0 wisedu/9.5.0`。

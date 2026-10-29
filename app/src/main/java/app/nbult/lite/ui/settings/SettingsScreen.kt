@@ -447,29 +447,18 @@ SettingCard(title = "关于") {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            // 许可全文随包分发（OFL 要求"用户可轻易查看"），入口进独立页。
-            // 摘要不再重复写在这里 —— 两处都写，换字体时必然改一处忘一处
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateSection("licenses") }
-                    .padding(top = 8.dp, bottom = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("开源许可", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = "字体与运行时依赖的许可全文",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            // 许可全文与变更记录都随包分发，入口进独立页。
+            // 摘要不再重复写在这里 —— 两处都写，换字体或改版本时必然改一处忘一处
+            LinkRow(
+                title = "开源许可",
+                subtitle = "字体与运行时依赖的许可全文",
+                onClick = { onNavigateSection("licenses") }
+            )
+            LinkRow(
+                title = "更新日志",
+                subtitle = "各版本的改动说明，最新在前",
+                onClick = { onNavigateSection("changelog") }
+            )
             // 版本号放在「关于」页里，因为用户反馈问题时常被要求「报一下版本」，
             // 截图这一页最方便。入口列表里显示在「关于」行右侧，两处不在同一屏，不算重复
             Text(
@@ -626,6 +615,37 @@ SettingCard(title = "调试") {
         ) {
             DatePicker(state = pickerState)
         }
+    }
+}
+
+/**
+ * 跳转到子页面的行：左侧标题与说明，右侧箭头。
+ *
+ * 「关于」页里已有两条这样的入口，样式必须完全一致 ——
+ * 复制一份出来改，早晚会有一条忘了改内边距。
+ */
+@Composable
+private fun LinkRow(title: String, subtitle: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(top = 8.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

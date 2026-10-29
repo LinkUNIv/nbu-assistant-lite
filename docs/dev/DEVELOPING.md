@@ -100,6 +100,27 @@ tools/archive-release.sh debug -f      # → dist/archive/v<版本>-Debug/（-f 
 
 ---
 
+## 变更记录
+
+`CHANGELOG.md` 是唯一的变更记录来源，同时也是应用内「更新日志」页的正文：
+构建时由 `copyChangelog` 任务复制到 `build/generated/changelogAssets/changelog/CHANGELOG.md`，
+该目录通过 `sourceSets` 注册为 assets 源目录，页面读取后按 Markdown 子集解析。
+
+这意味着 **写 CHANGELOG 就等于写应用内文案**，不需要在 app 里维护第二份。两条注意事项：
+
+- 生成目录属于「源目录」而非任务产物，AGP 不会自动建立依赖。读取它的任务有两类：
+  `merge*Assets` 与 lint（`generate*LintVitalReportModel`、`lintVitalAnalyze*`、`lintAnalyze*`）。
+  `app/build.gradle.kts` 里已按任务名挂 `dependsOn`，**少挂一个构建会直接失败**，
+  报错形如 `uses this output ... without declaring an explicit or implicit dependency`。
+- CHANGELOG 会随包分发，体积直接计入 APK。当前全文约 145 KB，压缩后十几 KB；
+  如果将来增长到数 MB，再考虑只打包最近若干版本。
+
+解析器只支持本项目实际用到的语法：`## vX.Y.Z[-渠道] — 日期` 分版本、`### ` 作分组、
+`- ` 列表、围栏代码块、`**加粗**` 与反引号代码。表格会在解析时拍平为逐行文字，
+手机屏宽放不下真正的表格。给 CHANGELOG 加新语法之前，先确认解析器认识它。
+
+---
+
 ## 代码结构
 
 ```
@@ -108,6 +129,8 @@ app/src/main/java/app/nbult/lite/
 ├─ data/remote/    资讯与校历抓取、服务器校时
 ├─ data/repo/      课表 / 资讯仓库
 ├─ data/notify/    上课提醒调度与常驻通知
+├─ data/licenses/  开源许可清单（读 assets/licenses/index.json）
+├─ data/changelog/ 变更记录解析（读 assets/changelog/CHANGELOG.md）
 ├─ domain/         时间与周次计算、停课调课合成、提醒规划
 ├─ parser/         xlsx / docx / rtf / HTML 表格 / 文本网格解析
 ├─ net/            网络状态监控（三态）
@@ -116,11 +139,14 @@ app/src/main/java/app/nbult/lite/
 ├─ ui/calendar/    校历、官方原图查看器
 ├─ ui/portal/      校园入口（纯跳转）
 ├─ ui/nav/         右侧常驻侧栏与进度胶囊
-├─ ui/settings/    设置、外观、日志导出、开源许可
+├─ ui/settings/    设置、外观、日志导出、开源许可、更新日志
 └─ util/           日志、崩溃捕获、外部链接、帧统计
 app/src/main/assets/
 ├─ calendar/       校历数据（人工结构化的 JSON）
-└─ portal/         入口配置（改入口不必改代码）
+├─ changelog/      构建时由 CHANGELOG.md 复制而来，不手工编辑
+├─ licenses/       许可全文与清单
+├─ portal/         入口配置（改入口不必改代码）
+└─ samples/        虚构样例数据（真实导出件不入库）
 ```
 
 ---

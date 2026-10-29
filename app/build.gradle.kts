@@ -16,8 +16,8 @@ android {
         targetSdk = 36
         // 版本号规则：主.次.修订；小改动只递增修订号
         // versionCode = 主*10000 + 次*100 + 修订，每版必须递增，保证可覆盖安装
-        versionCode = 3101
-        versionName = "0.31.1"
+        versionCode = 3102
+        versionName = "0.31.2"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -76,7 +76,31 @@ android {
     packaging {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}")
     }
+
+    // 变更记录随包分发。仓库根目录的 CHANGELOG.md 是唯一来源，构建时复制进 assets，
+    // 更新日志页直接读它 —— 不在 app 里维护第二份，避免两处不同步。
+    // 生成物落在 build/ 下，不进版本库，也不会每次构建都把工作区弄脏。
+    sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/changelogAssets"))
 }
+
+val changelogAssetsDir = layout.buildDirectory.dir("generated/changelogAssets")
+
+val copyChangelog = tasks.register<Copy>("copyChangelog") {
+    from(rootProject.file("CHANGELOG.md"))
+    into(changelogAssetsDir.map { it.dir("changelog") })
+}
+
+// assets 目录是「源目录」而非任务产物，AGP 不会自动建立依赖关系。
+// 读取它的任务有两类：合并资源（merge*Assets）与 lint 分析
+// （generate*LintVitalReportModel、lintVitalAnalyze*、lintAnalyze*）。
+// 少挂一个，Gradle 会直接以「uses this output without declaring an explicit
+// or implicit dependency」判失败，而不是容忍执行顺序不确定。
+// 注意任务名大小写不一致：mergePreviewAssets 是小写，lintVitalAnalyzePreview
+// 也是小写开头，generatePreviewLintVitalReportModel 中间才是大写 Lint。
+tasks.matching {
+    it.name.contains("lint", ignoreCase = true) ||
+        (it.name.startsWith("merge", ignoreCase = true) && it.name.endsWith("Assets"))
+}.configureEach { dependsOn(copyChangelog) }
 
 dependencies {
     implementation("androidx.core:core-ktx:1.17.0")

@@ -65,6 +65,7 @@ import app.nbult.lite.ui.news.NewsScreen
 import app.nbult.lite.ui.news.NewsViewModel
 import app.nbult.lite.ui.portal.PortalScreen
 import app.nbult.lite.ui.settings.AppearanceScreen
+import app.nbult.lite.ui.settings.ChangelogScreen
 import app.nbult.lite.ui.settings.LicensesScreen
 import app.nbult.lite.ui.settings.ScheduleEditorScreen
 import app.nbult.lite.ui.settings.SettingsScreen
@@ -314,6 +315,11 @@ fun AppRoot() {
             composable("settings/licenses") {
                 PageEnterEffect(enabled = motionBlur) {
                     LicensesScreen(onBack = { navController.popBackStack() })
+                }
+            }
+            composable("settings/changelog") {
+                PageEnterEffect(enabled = motionBlur) {
+                    ChangelogScreen(onBack = { navController.popBackStack() })
                 }
             }
             composable("settings/appearance") {

@@ -149,9 +149,11 @@ class NewsCrawler(
                 ?.let { blocks += ContentBlock("p", it.trim()) }
         }
 
-        val publishedAt = Regex("""发布(?:日期|时间)[：: ]*\s*(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})""")
+        val publishedAt = Regex(
+            """发布(?:日期|时间)[：: ]*\s*(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})(?:\s*(\d{1,2}):(\d{2}))?"""
+        )
             .find(doc.text())
-            ?.let { "%s-%02d-%02d".format(it.groupValues[1], it.groupValues[2].toInt(), it.groupValues[3].toInt()) }
+            ?.let { formatStamp(it) }
             ?: ""
 
         ArticleContent(
@@ -231,13 +233,26 @@ class NewsCrawler(
             link.parent()?.text(),
             link.parent()?.nextElementSibling()?.text()
         )
-        val pattern = Regex("""(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})""")
+        val pattern = Regex("""(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?""")
         for (text in candidates) {
-            pattern.find(text)?.let { m ->
-                return "%s-%02d-%02d".format(m.groupValues[1], m.groupValues[2].toInt(), m.groupValues[3].toInt())
-            }
+            pattern.find(text)?.let { return formatStamp(it) }
         }
         return ""
+    }
+
+    /**
+     * 把正则命中结果格式化为 `yyyy-MM-dd` 或 `yyyy-MM-dd HH:mm`。
+     *
+     * 时分不是每个栏目都提供，缺失时只写日期 —— 不补零时刻，避免把"不知道几点"
+     * 写成"00:00"。两种格式共用 `publishedAt` 字段，读取方按长度判断即可。
+     */
+    private fun formatStamp(m: MatchResult): String {
+        val date = "%s-%02d-%02d".format(
+            m.groupValues[1], m.groupValues[2].toInt(), m.groupValues[3].toInt()
+        )
+        val hour = m.groupValues.getOrNull(4)?.takeIf { it.isNotBlank() } ?: return date
+        val minute = m.groupValues.getOrNull(5)?.toIntOrNull() ?: return date
+        return "%s %02d:%02d".format(date, hour.toInt(), minute)
     }
 
     private fun articleId(url: String): Long? =

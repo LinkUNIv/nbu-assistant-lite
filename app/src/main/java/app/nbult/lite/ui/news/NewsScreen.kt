@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -102,11 +103,14 @@ private fun parseBlocks(json: String): List<Block> {
     }.getOrDefault(emptyList())
 }
 
-@OptIn(ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val net by vm.networkStatus.collectAsStateWithLifecycle()
+
+    // 吸顶月标题需要先分组再渲染，无法在滚动过程中临时判断
+    val monthGroups = remember(state.items) { groupByMonth(state.items) }
 
     // 来源与刷新固定在顶端，不随列表滚走：
     // 「这些内容是哪来的」「怎么再刷一次」是随时要能确认的两件事，藏进列表里等于没有。
@@ -145,11 +149,16 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
                             .pullRefresh(pullState)
                     ) {
                         LazyColumn(Modifier.fillMaxSize()) {
-                            items(state.items, key = { it.id }) { item ->
-                                NewsRow(item) { rect -> onOpen(item.id, rect) }
-                                HorizontalDivider(
-                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-                                )
+                            monthGroups.forEach { group ->
+                                stickyHeader(key = "month:${group.label}") {
+                                    MonthHeader(group.label)
+                                }
+                                items(group.items, key = { it.id }) { item ->
+                                    NewsRow(item) { rect -> onOpen(item.id, rect) }
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                    )
+                                }
                             }
                         }
                         PullRefreshIndicator(
@@ -220,52 +229,129 @@ private fun NewsHeader(
 }
 
 /**
+ * 月份分组。标签固定在滚动时吸顶，用于替代逐行日期块。
+ */
+private data class MonthGroup(val label: String, val items: List<NewsItem>)
+
+/** 从 `2026-10-24` 形式的发布时间中取出可排序的月份键；无法解析时返回 null。 */
+private fun monthKey(raw: String): String? {
+    val m = Regex("""(\d{4})-(\d{1,2})-(\d{1,2})""").find(raw) ?: return null
+    val month = m.groupValues[2].toIntOrNull() ?: return null
+    m.groupValues[3].toIntOrNull() ?: return null
+    return "%s-%02d".format(m.groupValues[1], month)
+}
+
+/** `2026-10` → `2026 年 10 月`。 */
+private fun formatMonth(key: String): String {
+    val parts = key.split("-")
+    return "%s 年 %d 月".format(parts[0], parts.getOrNull(1)?.toIntOrNull() ?: 0)
+}
+
+/**
+ * 按月份倒序分组。无法解析发布时间的条目统一归入末组，
+ * 避免它们被静默丢弃，也避免混进某个月份里造成误读。
+ */
+private fun groupByMonth(items: List<NewsItem>): List<MonthGroup> {
+    val buckets = LinkedHashMap<String, MutableList<NewsItem>>()
+    val undated = mutableListOf<NewsItem>()
+    for (item in items) {
+        val key = monthKey(item.publishedAt)
+        if (key == null) undated += item else buckets.getOrPut(key) { mutableListOf() } += item
+    }
+    val groups = buckets.entries
+        .sortedByDescending { it.key }
+        .map { MonthGroup(formatMonth(it.key), it.value) }
+    return if (undated.isEmpty()) groups else groups + MonthGroup("日期未知", undated)
+}
+
+/**
+ * 吸顶月标题。
+ *
+ * 底色必须不透明：滚动时列表内容从其下方经过，透明底会与标题文字重叠。
+ */
+@Composable
+private fun MonthHeader(label: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
  * 列表行。
  *
  * 这里**刻意不放封面图**：
  * 1. 缩略图是 Coil 异步加载的，从详情页返回时列表重新组合会重跑一次请求/解码，
  *    正是"退出详情后又看到图片在加载"的来源；
- * 2. 去掉之后每行只剩栏目 + 标题，排版更整齐，滑动也少一层解码。
- * 时间因此从右侧挪到左侧，做成日期块 —— 列表变"平"之后，左边需要一个视觉锚点。
+ * 2. 去掉之后每行只剩栏目、标题与日期，排版更整齐，滑动也少一层解码。
+ *
+ * 日期写在标题下方而非左侧方块：月份已在吸顶标题中给出，行内重复一次完整日期，
+ * 是为了让任意一行被单独截图时仍然可读。
  */
 @Composable
 private fun NewsRow(item: NewsItem, onClick: (Rect) -> Unit) {
     // 记下自己在窗口里的位置：展开动画要"从这一行长出来"
     var bounds by remember { mutableStateOf(Rect.Zero) }
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .onGloballyPositioned { bounds = it.boundsInRoot() }
             .clickable { onClick(bounds) }
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        DateStamp(item.publishedAt)
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+        Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shape = MaterialTheme.shapes.small
         ) {
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = MaterialTheme.shapes.small
-            ) {
-                Text(
-                    text = item.columnName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
             Text(
-                text = item.title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (item.readAt == null) FontWeight.Medium else FontWeight.Normal,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                text = item.columnName,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (item.readAt == null) FontWeight.Medium else FontWeight.Normal,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        // 发布日期只有日期粒度，没有时分，因此行内写"月-日"而不是完整时间
+        val dateText = remember(item.publishedAt) { rowDate(item.publishedAt) }
+        if (dateText != null) {
+            Text(
+                text = dateText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
+}
+
+/**
+ * `2026-10-29 14:20` → `10-29 14:20`；只有日期时输出 `10-29`。
+ *
+ * 时分并非每个栏目都提供，因此按存在与否分别输出，不补 `00:00`。
+ */
+private fun rowDate(raw: String): String? {
+    val m = Regex("""(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?""").find(raw) ?: return null
+    val month = m.groupValues[2].toIntOrNull() ?: return null
+    val day = m.groupValues[3].toIntOrNull() ?: return null
+    val date = "%02d-%02d".format(month, day)
+    val hour = m.groupValues.getOrNull(4)?.takeIf { it.isNotBlank() } ?: return date
+    val minute = m.groupValues.getOrNull(5)?.toIntOrNull() ?: return date
+    return "%s %02d:%02d".format(date, hour.toInt(), minute)
 }
 
 /**

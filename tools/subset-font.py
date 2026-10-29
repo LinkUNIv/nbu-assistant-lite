@@ -11,15 +11,16 @@ AOSP 是 Noto Serif、个别 ROM 的 Serif 还会回退成 Roboto（数字直接
 
 依赖：`pip install fonttools`（不需要 brotli，产物是裸 TTF）
 
-字符集是**写死**的：`ui/nav/ProgressCapsule` 的数字槽只会渲染 0-9 与「—」。
-新增字符时必须同步改 CHARS，否则上屏会出豆腐块 —— 这类问题在真机上很难一眼发现，
-因为缺字是"静默回退到系统字体"，不是报错。
+字符集是**写死**的：`ui/nav/ProgressCapsule` 的数字槽渲染 0-9 与「—」，
+资讯卡片的日期块额外需要小数点（`10.29`）。
+新增字符时必须同步修改 CHARS，否则上屏会出现字形不一致 —— 这类问题在真机上很难一眼发现，
+因为缺字是"静默回退到系统字体"，而不是报错。
 """
 
 import pathlib
 import sys
 
-CHARS = "0123456789—"
+CHARS = "0123456789—."
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "app" / "src" / "main" / "res" / "font"

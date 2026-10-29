@@ -1,6 +1,6 @@
 # 开发与发版
 
-本文件面向维护者。使用者请看 [`../README.md`](../README.md)。
+本文件面向维护者。使用者请看 [`../../README.md`](../../README.md)。
 
 ---
 
@@ -127,6 +127,6 @@ app/src/main/assets/
 
 ## 相关文档
 
-- [`../CHANGELOG.md`](../CHANGELOG.md) — 逐版本变更
+- [`../../CHANGELOG.md`](../../CHANGELOG.md) — 逐版本变更
 - [`NOTES.md`](NOTES.md) — 早期开发笔记（**含已被推翻的设计，请对照 README 的已知限制阅读**）
 - [`PENDING.md`](PENDING.md) — 路线图与未排期事项

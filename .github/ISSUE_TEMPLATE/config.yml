@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 下载最新版本
+    url: https://github.com/LinkUNIv/nbu-assistant-lite/releases
+    about: 安装包与历史版本均在此处发布
+  - name: 报告安全漏洞
+    url: https://github.com/LinkUNIv/nbu-assistant-lite/security/advisories/new
+    about: 涉及数据泄露、权限越界或依赖漏洞时请私下报告，不要提交公开 Issue
+  - name: 查看开发与发版约定
+    url: https://github.com/LinkUNIv/nbu-assistant-lite/blob/main/docs/dev/DEVELOPING.md
+    about: 版本规则、构建环境、CI 说明与代码结构

@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    # 编译器与 Kotlin 版本由 Compose 编译器匹配关系决定，自动升级会直接编译失败，
+    # 因此保持手动控制。
+    ignore:
+      - dependency-name: "org.jetbrains.kotlin*"
+      - dependency-name: "androidx.compose.compiler*"
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"

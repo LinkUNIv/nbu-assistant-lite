@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Rect
@@ -112,6 +113,9 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
     // 吸顶月标题需要先分组再渲染，无法在滚动过程中临时判断
     val monthGroups = remember(state.items) { groupByMonth(state.items) }
 
+    // 视图形态在进程内保留：切换页面再回来不应重置
+    var cardView by rememberSaveable { mutableStateOf(true) }
+
     // 来源与刷新固定在顶端，不随列表滚走：
     // 「这些内容是哪来的」「怎么再刷一次」是随时要能确认的两件事，藏进列表里等于没有。
     Column(
@@ -138,6 +142,14 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
                         )
                     }
                 } else {
+                    if (cardView) {
+                        NewsCardPager(
+                            items = state.items,
+                            onOpen = onOpen,
+                            cardView = cardView,
+                            onToggleView = { cardView = !cardView }
+                        )
+                    } else {
                     // 下拉刷新：顶部固定按钮之外再给一条手势，符合手机直觉
                     val pullState = rememberPullRefreshState(
                         refreshing = state.loading,
@@ -151,7 +163,11 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
                         LazyColumn(Modifier.fillMaxSize()) {
                             monthGroups.forEach { group ->
                                 stickyHeader(key = "month:${group.label}") {
-                                    MonthHeader(group.label)
+                                    NewsSectionHeader(
+                                        monthLabel = group.label,
+                                        cardView = false,
+                                        onToggleView = { cardView = true }
+                                    )
                                 }
                                 items(group.items, key = { it.id }) { item ->
                                     NewsRow(item) { rect -> onOpen(item.id, rect) }
@@ -168,6 +184,7 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
                             backgroundColor = MaterialTheme.colorScheme.surface,
                             contentColor = MaterialTheme.colorScheme.primary
                         )
+                    }
                     }
                 }
             }
@@ -265,28 +282,6 @@ private fun groupByMonth(items: List<NewsItem>): List<MonthGroup> {
 }
 
 /**
- * 吸顶月标题。
- *
- * 底色必须不透明：滚动时列表内容从其下方经过，透明底会与标题文字重叠。
- */
-@Composable
-private fun MonthHeader(label: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-/**
  * 列表行。
  *
  * 这里**刻意不放封面图**：
@@ -352,62 +347,6 @@ private fun rowDate(raw: String): String? {
     val hour = m.groupValues.getOrNull(4)?.takeIf { it.isNotBlank() } ?: return date
     val minute = m.groupValues.getOrNull(5)?.toIntOrNull() ?: return date
     return "%s %02d:%02d".format(date, hour.toInt(), minute)
-}
-
-/**
- * 日期块：**年贴左上、月/日贴右下**，一条从左下角到右上角的斜线把它们分开。
- *
- * 斜线画在文字**之上**，且两端刻意贴着两个数字的内侧角，
- * 于是数字各自被切掉一点点 —— 这正是想要的效果，不是画歪了。
- * 想调"切多深"，只改两个 Text 的 padding。
- */
-@Composable
-private fun DateStamp(publishedAt: String, modifier: Modifier = Modifier) {
-    val parts = remember(publishedAt) { parseStamp(publishedAt) } ?: return
-    val outline = MaterialTheme.colorScheme.outline
-    Box(
-        modifier = modifier
-            .size(56.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Text(
-            text = parts.first,
-            fontSize = 11.sp,
-            lineHeight = 13.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 7.dp, top = 4.dp)
-        )
-        Text(
-            text = parts.second,
-            fontSize = 14.sp,
-            lineHeight = 16.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 6.dp, bottom = 5.dp)
-        )
-        Canvas(Modifier.matchParentSize()) {
-            drawLine(
-                color = outline.copy(alpha = 0.55f),
-                start = Offset(0f, size.height),
-                end = Offset(size.width, 0f),
-                strokeWidth = 1.dp.toPx()
-            )
-        }
-    }
-}
-
-/** "2026-10-24" → ("2026", "10/24")；解析不出来返回 null，此时不画日期块，标题占满整行。 */
-private fun parseStamp(raw: String): Pair<String, String>? {
-    val m = Regex("""(\d{4})-(\d{1,2})-(\d{1,2})""").find(raw) ?: return null
-    val year = m.groupValues[1]
-    val month = m.groupValues[2].toIntOrNull() ?: return null
-    val day = m.groupValues[3].toIntOrNull() ?: return null
-    return year to "%02d/%02d".format(month, day)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

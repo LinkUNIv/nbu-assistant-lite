@@ -47,11 +47,22 @@ jobs:
         # 所以 CI 不需要任何 keystore 密钥
         run: ./gradlew --no-daemon --console=plain :app:assemblePreview
 
+      - name: 重命名产物
+        # Gradle 只会产出 app-preview.apk，Release 里显示成这个名字没有辨识度。
+        # 按 build.gradle.kts 的 versionName 拼成 nbu-assistant-lite-<版本>-Preview.apk
+        run: |
+          VERSION=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -1)
+          NAME="nbu-assistant-lite-${VERSION}-Preview.apk"
+          mkdir -p out
+          cp app/build/outputs/apk/preview/*.apk "out/$NAME"
+          ls -l out
+          echo "APK_NAME=$NAME" >> "$GITHUB_ENV"
+
       - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
           name: apk-preview
-          path: app/build/outputs/apk/preview/*.apk
+          path: out/*.apk
           if-no-files-found: error
 
   release:

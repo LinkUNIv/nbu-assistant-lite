@@ -1,0 +1,81 @@
+name: 问题反馈
+description: 报告可复现的缺陷或异常行为
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先确认该问题在**最新预览版本**上仍然存在。
+
+        附带工作日志可以显著缩短定位时间：应用内进入「我的 → 数据与诊断 → 工作日志」，
+        页面提供导出按钮。日志仅记录版本、周次与模块状态，不包含课程名称、教师姓名或任何账号信息。
+
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本
+      description: 见「我的 → 关于」页底部的版本号
+      placeholder: 0.30.9-Preview（3009）
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 设备与系统
+      placeholder: 小米 25042PN24C / Android 17
+    validations:
+      required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: 涉及模块
+      options:
+        - 课表
+        - 停课 / 调课
+        - 上课提醒
+        - 资讯
+        - 校历
+        - 校园入口
+        - 设置 / 外观
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 按顺序列出操作，必要时附截图
+      placeholder: |
+        1. 打开课表页
+        2. 切换到第 6 周
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 若出现崩溃，请说明是否可稳定复现
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 工作日志
+      description: 将导出的日志内容粘贴到此处，或直接作为附件附加
+      render: text
+    validations:
+      required: false

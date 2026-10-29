@@ -73,6 +73,13 @@ object CrashHandler {
                 ?.sortedByDescending { it.lastModified() }
                 ?.drop(MAX_HISTORY)
                 ?.forEach { runCatching { it.delete() } }
+            // 再抄一份到外部私有目录（/sdcard/Android/data/<pkg>/files/crash/）：
+            // 万一崩在某个页面导致应用内导不出日志，还能用 adb pull 直接取走
+            runCatching external@{
+                val external = context.getExternalFilesDir("crash") ?: return@external
+                if (!external.exists()) external.mkdirs()
+                File(external, "$stamp.txt").writeText(text)
+            }
         }
         AppLog.recordCrash(text)
     }

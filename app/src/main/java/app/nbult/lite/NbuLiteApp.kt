@@ -32,6 +32,9 @@ class AppContainer(context: Context) {
     val newsSource: NewsSource by lazy { NewsSource() }
     val newsCrawler: NewsCrawler by lazy { NewsCrawler() }
     val timeSync: TimeSync by lazy { TimeSync() }
+
+    /** 通知点击带来的"跳到第 N 周"；由 MainActivity 写入，AppRoot 消费后置空。 */
+    val pendingWeekJump = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
     val termStartResolver: TermStartResolver by lazy { TermStartResolver() }
     val timetableRepository: TimetableRepository by lazy { TimetableRepository(database, settings) }
     val calendarRepository: CalendarRepository by lazy { CalendarRepository(appContext) }

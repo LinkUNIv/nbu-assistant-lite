@@ -1,0 +1,52 @@
+{
+  "groups": [
+    {
+      "id": "font",
+      "title": "字体",
+      "items": [
+        {
+          "name": "Noto Serif",
+          "version": "2.013（子集：0-9 与破折号）",
+          "license": "SIL OFL 1.1",
+          "file": "licenses/OFL-NotoSerif.txt"
+        }
+      ]
+    },
+    {
+      "id": "runtime",
+      "title": "运行时依赖",
+      "items": [
+        {
+          "name": "AndroidX / Jetpack Compose / Room / Lifecycle / Navigation",
+          "version": "见 gradle 依赖",
+          "license": "Apache-2.0",
+          "file": "licenses/Apache-2.0.txt"
+        },
+        {
+          "name": "OkHttp",
+          "version": "见 gradle 依赖",
+          "license": "Apache-2.0",
+          "file": "licenses/Apache-2.0.txt"
+        },
+        {
+          "name": "Coil",
+          "version": "见 gradle 依赖",
+          "license": "Apache-2.0",
+          "file": "licenses/Apache-2.0.txt"
+        },
+        {
+          "name": "Kotlin / kotlinx.coroutines",
+          "version": "见 gradle 依赖",
+          "license": "Apache-2.0",
+          "file": "licenses/Apache-2.0.txt"
+        },
+        {
+          "name": "Jsoup",
+          "version": "见 gradle 依赖",
+          "license": "MIT",
+          "file": "licenses/MIT.txt"
+        }
+      ]
+    }
+  ]
+}

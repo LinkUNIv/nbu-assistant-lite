@@ -6,40 +6,52 @@ plugins {
 
 android {
     namespace = "app.nbult.lite"
-    compileSdk = 34
+    compileSdk = 36
+    // 本机只装了 34.0.0 与 36.0.0；AGP 8.9 默认要 35.0.0，显式钉死避免它去自动下载
+    buildToolsVersion = "36.0.0"
 
     defaultConfig {
         applicationId = "app.nbult.lite"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 36
         // 版本号规则：主.次.修订；小改动只递增修订号
         // versionCode = 主*10000 + 次*100 + 修订，每版必须递增，保证可覆盖安装
-        versionCode = 1800
-        versionName = "0.18.0"
+        versionCode = 3009
+        versionName = "0.30.9"
         vectorDrawables.useSupportLibrary = true
     }
 
     buildTypes {
+        // 三个包名互不覆盖：正式版 app.nbult.lite / 预览版 .preview / 调试版 .debug
+        // versionNameSuffix 区分测试版，正式版不带后缀（1.0.0 才出正式包）
         debug {
             applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
+            versionNameSuffix = "-Debug"
             isMinifyEnabled = false
-            resValue("string", "app_name", "宁大助手Lite Dev")
+            resValue("string", "app_name", "宁大助手 Debug")
+            buildConfigField("String", "BUILD_KIND", "\"debug\"")
         }
         release {
-            isMinifyEnabled = false
+            // R8 + 资源压缩。正式版 1.0.0 出包前必须验证过一整套功能。
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            resValue("string", "app_name", "宁大助手 Lite")
+            buildConfigField("String", "BUILD_KIND", "\"release\"")
         }
-        // 性能对照用：包名与 debug 相同（保留数据），但 debuggable=false，
-        // 安装时走 AOT 编译，可用来判断"卡"到底来自代码还是 debug 构建本身。
-        create("bench") {
-            initWith(getByName("debug"))
+        // 预览版：取代原来的 bench —— debuggable=false 走 AOT 编译，
+        // 性能与正式版一致，可用来做"卡顿来自代码还是 debug 构建"的对照。
+        create("preview") {
             isDebuggable = false
-            isMinifyEnabled = false
+            // 与 release 一致的 R8 配置：这样 R8 打坏东西能在出正式包之前就暴露。
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug")
-            matchingFallbacks += listOf("debug", "release")
-            versionNameSuffix = "-bench"
-            resValue("string", "app_name", "宁大助手Lite Bench")
+            applicationIdSuffix = ".preview"
+            versionNameSuffix = "-Preview"
+            resValue("string", "app_name", "宁大助手 Preview")
+            buildConfigField("String", "BUILD_KIND", "\"preview\"")
         }
     }
 
@@ -67,7 +79,7 @@ android {
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")

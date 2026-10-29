@@ -1,0 +1,71 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: 编译 Preview 包
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 装 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 装 platform 36 与 build-tools 36
+        # compileSdk / buildToolsVersion 都钉在 36，CI 上必须显式装，
+        # 否则 AGP 会因为没有对应 platform 直接失败
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: 编译
+        # preview 变体走 debug 签名（见 app/build.gradle.kts），
+        # 所以 CI 不需要任何 keystore 密钥
+        run: ./gradlew --no-daemon --console=plain :app:assemblePreview
+
+      - name: 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-preview
+          path: app/build/outputs/apk/preview/*.apk
+          if-no-files-found: error
+
+  release:
+    name: 打标签时发 Release
+    # 只在推 v* 标签时跑；二进制走 Release 分发，仓库里不入库（dist/ 已 ignore）
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk-preview
+          path: apk
+
+      - name: 生成 SHA-256
+        run: |
+          cd apk
+          for f in *.apk; do sha256sum "$f" > "$f.sha256"; done
+          cat *.sha256
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apk/*.apk
+            apk/*.sha256
+          generate_release_notes: true

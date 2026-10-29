@@ -27,6 +27,16 @@
 
 ---
 
+## 下载
+
+到 [Releases](../../releases) 下载 `-Preview` 的 APK 直接安装，无需 root、无需电脑。
+
+- 当前是 **0.x 预览阶段**，功能与数据格式都可能变，不建议当成唯一课表来源
+- `-Preview` / `-Debug` 两个测试通道与正式版**包名不同**，可以同时装在手机上
+- 覆盖安装不会丢数据（同签名 + `versionCode` 递增）；只有卸载重装才会清空
+
+---
+
 ## 数据来源与版权
 
 | 来源 | 用途 | 抓取方式 |
@@ -49,15 +59,38 @@
 | 项 | 版本 |
 |---|---|
 | JDK | 17 |
-| Android SDK | Platform 34、Build-Tools 34.x |
-| Gradle | 8.7（`gradle/wrapper` 已固定） |
-| minSdk / targetSdk | 24 / 34 |
+| Android SDK | Platform 36、Build-Tools 36.0.0 |
+| Gradle | 8.11.1（`gradle/wrapper` 已固定） |
+| AGP | 8.9.1 |
+| minSdk / targetSdk | 24 / 36 |
+
+> targetSdk 36 起系统**强制**边到边显示，内容避让由 `Scaffold` + `NavigationBar` 消费 systemBars inset，
+> 不要在根布局再叠一层 padding。系统栏图标明暗由 `MainActivity` 的 `enableEdgeToEdge()` 负责。
+>
+> 若本机 `./gradlew` 下载发行包时报 `PKIX path building failed`（JDK 的 cacerts 校验不过
+> `downloads.gradle.org`，属于网络环境问题而非项目问题），可改用独立安装的 Gradle 8.11.1
+> （如某个本地安装的 Gradle 8.11.1），wrapper 仍保留官方地址供 CI 使用。
 
 ```bash
-./gradlew :app:assembleDebug     # 调试包（applicationId 带 .debug 后缀）
-./gradlew :app:assembleRelease   # 发布包（当前未配置签名，产出 unsigned）
-tools/archive-release.sh         # 归档到 dist/archive/v<版本>/（-f 覆盖同版本）
+./gradlew :app:assemblePreview   # 预览包（日常测试用）
+./gradlew :app:assembleDebug     # 调试包（排查问题用）
+./gradlew :app:assembleRelease   # 正式包（当前未配置签名，且暂不出包）
+
+tools/archive-release.sh preview       # 归档 → dist/archive/v<版本>-Preview/
+tools/archive-release.sh debug -f      # 归档 → dist/archive/v<版本>-Debug/（-f 覆盖）
 ```
+
+### 三个通道（包名互不覆盖，可同时安装）
+
+| 通道 | 包名 | 应用名 | 图标 | debuggable | 现状 |
+|---|---|---|---|---|---|
+| 正式版 | `app.nbult.lite` | 宁大助手 Lite | 蓝 | false | **暂不出包**，1.0.0 才发 |
+| 预览版 | `app.nbult.lite.preview` | 宁大助手 Preview | 粉红 | false | 日常测试 |
+| 调试版 | `app.nbult.lite.debug` | 宁大助手 Debug | 灰 | true | 排查问题 |
+
+预览版与正式版同为 `debuggable=false`（走 AOT 编译），所以滑动/性能数据可以直接对照。
+正式包名 `app.nbult.lite` **永久固定**：包名一改，用户数据就断代。
+调试入口由 `BuildConfig.BUILD_KIND`（`release` / `preview` / `debug`）控制，不要用 `BuildConfig.DEBUG`。
 
 **路径要求**：`gradle.properties` 里有 `android.overridePathCheck=true`，用于在含非 ASCII 字符的路径下
 构建（AGP 默认会拒绝）。更稳妥的做法仍是将项目放在纯 ASCII 路径下。
@@ -77,7 +110,12 @@ tools/archive-release.sh         # 归档到 dist/archive/v<版本>/（-f 覆盖
 - **修订位**：修 bug、文案、样式、微调
 
 `versionCode = 主 × 10000 + 次 × 100 + 修订`，每版递增以保证可覆盖安装。
-每次出包由 `tools/archive-release.sh` 归档到 `dist/archive/v<版本>/`（APK + 源码快照 + SHA-256）。
+
+版本名带通道后缀：正式版 `0.20.0`、预览版 `0.20.0-Preview`、调试版 `0.20.0-Debug`。
+**带 `-Preview` / `-Debug` 的都是测试版**；正式版要等 1.0.0 正式构建并上传 GitHub 后才出。
+
+每次出包由 `tools/archive-release.sh <preview|debug>` 归档到 `dist/archive/v<版本>-<通道>/`
+（APK + 源码快照 + SHA-256）。
 **`dist/` 不入库**，构建产物通过 Release 分发。变更记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ---

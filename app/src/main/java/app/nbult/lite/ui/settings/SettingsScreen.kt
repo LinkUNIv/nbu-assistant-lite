@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.AlertDialog
@@ -25,7 +28,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -39,11 +41,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nbult.lite.BuildConfig
 import app.nbult.lite.data.SettingsStore
+import app.nbult.lite.ui.common.SmoothSwitch
+import app.nbult.lite.ui.theme.DarkMode
+import app.nbult.lite.ui.theme.SeedColor
 import app.nbult.lite.domain.AppClock
 import app.nbult.lite.domain.DateUtil
 import app.nbult.lite.domain.PeriodPresets
@@ -57,7 +63,12 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     timetableVm: TimetableViewModel,
-    onOpenDebug: () -> Unit
+    onOpenDebug: () -> Unit,
+    onOpenAppearance: () -> Unit,
+    onNavigateSection: (String) -> Unit = {},
+    onBack: () -> Unit = {},
+    /** null = 入口列表；否则只渲染对应那一段。 */
+    section: String? = null
 ) {
     val state by timetableVm.state.collectAsStateWithLifecycle()
     val container = LocalAppContainer.current
@@ -80,7 +91,19 @@ fun SettingsScreen(
     var showFactoryReset by remember { mutableStateOf(false) }
     var resetting by remember { mutableStateOf(false) }
     var resetMessage by remember { mutableStateOf<String?>(null) }
-    val motionBlur by settings.motionBlur.collectAsStateWithLifecycle(initialValue = false)
+    val motionBlur by settings.motionBlur.collectAsStateWithLifecycle(
+        initialValue = settings.lastKnownMotionBlur
+    )
+    // 入口页的「状态回显」用：不点进去也要能看出当前是什么设置
+    val reminderOn by settings.classReminder.collectAsStateWithLifecycle(
+        initialValue = settings.lastKnownClassReminder
+    )
+    val themeColor by settings.themeColor.collectAsStateWithLifecycle(initialValue = "blue")
+    val darkModeId by settings.darkMode.collectAsStateWithLifecycle(initialValue = "system")
+    val campusPreset by settings.campusPreset.collectAsStateWithLifecycle(initialValue = "main")
+    var showClearConfirm by remember { mutableStateOf(false) }
+
+    val totalWeeks = (state.term?.totalWeeks ?: 20).coerceAtLeast(1)
 
     LaunchedEffect(Unit) {
         timeOffset = container.settings.timeOffset.first()
@@ -93,12 +116,59 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            // 顶部 22dp = 原 16 + 6：与右侧圆钮的中线对齐
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 22.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("我的", style = MaterialTheme.typography.headlineSmall)
+        if (section == null) {
+            Text("我的", style = MaterialTheme.typography.headlineSmall)
 
-        SettingCard(title = "学期设置") {
+            // 概览三个数字，回答「现在第几周 / 本周几节课 / 提醒开没开」——
+            // 之前这三件事都得点进去才知道，设置页最容易缺的就是这一层
+            SettingsOverview(
+                week = state.week,
+                totalWeeks = totalWeeks,
+                weekSections = state.currentWeekEntries.size,
+                reminderOn = reminderOn
+            )
+
+            // 右侧一律显示当前值：设置项只有带上状态才像「设置」，
+            // 否则六张一模一样的白卡读起来像六个按钮，分不出轻重
+            SettingsEntry(
+                title = "外观",
+                subtitle = "主题色、深浅模式、背景、课表布局",
+                trailing = "${SeedColor.of(themeColor).label} · ${DarkMode.of(darkModeId).label}"
+            ) { onOpenAppearance() }
+            SettingsEntry(
+                title = "学期",
+                subtitle = "开学日期、总周数、来源",
+                trailing = "第 ${state.week} / $totalWeeks 周"
+            ) { onNavigateSection("term") }
+            SettingsEntry(
+                title = "上课提醒",
+                subtitle = "课前提醒、课堂常驻",
+                trailing = if (reminderOn) "已开启" else "未开启"
+            ) { onNavigateSection("reminder") }
+            SettingsEntry(
+                title = "时间与作息",
+                subtitle = "校时、上下课时间",
+                trailing = if (campusPreset == "meishan") "梅山校区" else "主校区"
+            ) { onNavigateSection("time") }
+            SettingsEntry(
+                title = "数据与诊断",
+                subtitle = "清空课表、恢复出厂、工作日志",
+                trailing = "$logCount 条日志"
+            ) { onNavigateSection("more") }
+            SettingsEntry(
+                title = "关于",
+                subtitle = "开源许可、调试面板",
+                trailing = "v${BuildConfig.VERSION_NAME}"
+            ) { onNavigateSection("about") }
+        } else {
+            SettingsSectionHeader(title = sectionTitle(section), onBack = onBack)
+
+            if (section == "term") {
+SettingCard(title = "学期设置") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -176,53 +246,19 @@ fun SettingsScreen(
                 )
             }
         }
-
-        SettingCard(title = "数据") {
-            TextButton(onClick = { timetableVm.clearAll() }) {
-                Text("清空当前课表", color = MaterialTheme.colorScheme.error)
-            }
-        }
-
-        SettingCard(title = "存储与重置") {
-            Text(
-                text = "清除本机全部数据，回到首次安装状态。",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            TextButton(onClick = { showFactoryReset = true }, enabled = !resetting) {
-                Text(
-                    text = if (resetting) "正在恢复…" else "恢复出厂设置",
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-            resetMessage?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
-        }
-
-        SettingCard(title = "高级") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("精致动效（切页高斯模糊）", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = "关闭时切页仅左右横移，高刷屏更流畅；开启会增加一帧离屏渲染",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = motionBlur,
-                    onCheckedChange = { scope.launch { settings.setMotionBlur(it) } }
-                )
             }
 
-        }
+            if (section == "reminder") {
 
-        SettingCard(title = "时间与时区") {
+        ReminderCard()
+
+        LiveUpdateStateCard()
+
+        BackgroundRunCard()
+            }
+
+            if (section == "time") {
+SettingCard(title = "时间与时区") {
             Text(
                 text = "设备时区：${AppClock.deviceZoneId()}${if (AppClock.deviceIsShanghai()) "（东八区）" else "（非东八区）"}",
                 style = MaterialTheme.typography.bodySmall
@@ -279,8 +315,10 @@ fun SettingsScreen(
                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+            }
 
-        SettingCard(title = "作息时间") {
+            if (section == "time") {
+SettingCard(title = "作息时间") {
             Text(
                 text = "当前 ${state.periods.size} 节：",
                 style = MaterialTheme.typography.labelSmall,
@@ -292,6 +330,9 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            TextButton(onClick = { onNavigateSection("schedule") }) {
+                Text("逐节编辑")
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = {
@@ -307,22 +348,69 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+            }
 
-        SettingCard(title = "关于") {
+            if (section == "more") {
+SettingCard(title = "数据") {
             Text(
-                text = "宁大助手 Lite 是非官方第三方工具，与宁波大学无隶属关系。应用不收集个人信息、不需要登录、不保存账号密码。资讯内容来自宁波大学新闻网公开发布内容，仅展示标题、摘要与原文链接，版权归原作者与学校所有。",
-                style = MaterialTheme.typography.bodySmall,
+                text = "只删除课表本身，作息、提醒、外观等设置都会保留。",
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-
-        if (BuildConfig.DEBUG) {
-            SettingCard(title = "调试") {
-                TextButton(onClick = onOpenDebug) { Text("打开调试面板") }
+            TextButton(onClick = { showClearConfirm = true }) {
+                Text("清空当前课表", color = MaterialTheme.colorScheme.error)
             }
         }
+            }
 
-        SettingCard(title = "工作日志") {
+            if (section == "more") {
+SettingCard(title = "存储与重置") {
+            Text(
+                text = "清除本机全部数据，回到首次安装状态。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = { showFactoryReset = true }, enabled = !resetting) {
+                Text(
+                    text = if (resetting) "正在恢复…" else "恢复出厂设置",
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            resetMessage?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+        }
+            }
+
+            if (section == "more") {
+SettingCard(title = "高级") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("精致动效（切页淡入缩放）", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = "关闭时切页仅左右横移，高刷屏更流畅；开启会叠加淡入与轻微缩放。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                SmoothSwitch(
+                    checked = motionBlur,
+                    onCheckedChange = { on ->
+                        AppLog.log("Settings", "精致动效=$on")
+                        scope.launch { settings.setMotionBlur(on) }
+                    }
+                )
+            }
+
+        }
+            }
+
+            if (section == "more") {
+SettingCard(title = "工作日志") {
             Text(
                 text = "记录网络状态、解析结果与网页加载过程，用于排查问题。当前 $logCount 条；日志与导出文件保留 3 天、最多 5 个文件，超期自动删除。",
                 style = MaterialTheme.typography.labelSmall,
@@ -350,12 +438,88 @@ fun SettingsScreen(
                 }) { Text("清空") }
             }
         }
+            }
 
-        Text(
-            text = "版本 ${BuildConfig.VERSION_NAME}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
+            if (section == "about") {
+SettingCard(title = "关于") {
+            Text(
+                text = "宁大助手 Lite 是非官方第三方工具，与宁波大学无隶属关系。应用不收集个人信息、不需要登录、不保存账号密码。资讯内容来自宁波大学新闻网公开发布内容，仅展示标题、摘要与原文链接，版权归原作者与学校所有。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            // 许可全文随包分发（OFL 要求"用户可轻易查看"），入口进独立页。
+            // 摘要不再重复写在这里 —— 两处都写，换字体时必然改一处忘一处
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateSection("licenses") }
+                    .padding(top = 8.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("开源许可", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = "字体与运行时依赖的许可全文",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            // 版本号放在「关于」页里，因为用户反馈问题时常被要求「报一下版本」，
+            // 截图这一页最方便。入口列表里显示在「关于」行右侧，两处不在同一屏，不算重复
+            Text(
+                text = "版本 ${BuildConfig.VERSION_NAME}（${BuildConfig.VERSION_CODE}）",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+        }
+            }
+
+            if (section == "about") {
+SettingCard(title = "调试") {
+                TextButton(onClick = onOpenDebug) { Text("打开调试面板") }
+            }
+            }
+        }
+
+
+        // 版本号只保留在「关于」行右侧一处。原来这里还有一行「版本 0.30.x」，
+        // 和右侧重复了 —— 同一个信息出现两次，读者会以为其中一个是别的东西
+    }
+
+    // 清空课表要确认：它和「恢复出厂」一样不可撤销，但入口更靠前、更容易误触
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("清空当前课表？") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("将删除全部课程，以及基于它们做的调课与停课记录，无法撤销。")
+                    Text(
+                        text = "作息、提醒、外观等设置会保留。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    AppLog.log("Settings", "清空课表（已确认）")
+                    showClearConfirm = false
+                    timetableVm.clearAll()
+                }) {
+                    Text("清空", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("取消") }
+            }
         )
     }
 
@@ -466,7 +630,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingCard(title: String, content: @Composable () -> Unit) {
+internal fun SettingCard(title: String, content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -476,4 +640,132 @@ private fun SettingCard(title: String, content: @Composable () -> Unit) {
             content()
         }
     }
+}
+
+/**
+ * 入口行。整行可点，右侧显示「当前值 + 箭头」。
+ *
+ * 带 trailing 是为了让六条设置读起来是「设置」而不是「六个按钮」：
+ * 不点进去也能看出主题色是什么、提醒开没开。
+ */
+@Composable
+private fun SettingsEntry(
+    title: String,
+    subtitle: String,
+    trailing: String? = null,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onClick() }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // 右侧带了值之后可用宽度变窄，副标题必须单行省略，
+                    // 否则「调试面板」会被折成两行、把整行撑高
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (trailing != null) {
+                Text(
+                    text = trailing,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.padding(end = 6.dp)
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * 入口页顶部概览。
+ *
+ * 三个数字回答三件最常被问的事：现在第几周、本周几节课、提醒开没开。
+ * 用 `primaryContainer` 是为了和下面六张白卡拉开层级 —— 它是"信息"，
+ * 下面那些是"入口"。
+ */
+@Composable
+private fun SettingsOverview(week: Int, totalWeeks: Int, weekSections: Int, reminderOn: Boolean) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OverviewStat("第 $week 周", "共 $totalWeeks 周")
+            OverviewStat("$weekSections 节", "本周课程")
+            OverviewStat(if (reminderOn) "已开启" else "未开启", "上课提醒")
+        }
+    }
+}
+
+@Composable
+private fun OverviewStat(value: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+        )
+    }
+}
+
+@Composable
+private fun SettingsSectionHeader(title: String, onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
+        }
+        Text(title, style = MaterialTheme.typography.headlineSmall)
+    }
+}
+
+private fun sectionTitle(section: String): String = when (section) {
+    "term" -> "学期"
+    "reminder" -> "上课提醒"
+    "time" -> "时间与作息"
+    "more" -> "数据与诊断"
+    "about" -> "关于"
+    else -> "设置"
 }

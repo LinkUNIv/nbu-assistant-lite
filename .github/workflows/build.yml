@@ -102,8 +102,18 @@ jobs:
           fi
           echo "BODY_PATH=$BODY" >> "$GITHUB_ENV"
 
+          # 标题去掉前缀 v，并把 -Preview 显示为空格分隔：v0.31.0-Preview → 0.31.0 Preview
+          TITLE="${GITHUB_REF_NAME#v}"
+          echo "RELEASE_TITLE=${TITLE/-/ }" >> "$GITHUB_ENV"
+          case "$GITHUB_REF_NAME" in
+            *-*) echo "PRERELEASE=true" >> "$GITHUB_ENV" ;;
+            *)   echo "PRERELEASE=false" >> "$GITHUB_ENV" ;;
+          esac
+
       - uses: softprops/action-gh-release@v2
         with:
+          name: ${{ env.RELEASE_TITLE }}
+          prerelease: ${{ env.PRERELEASE == 'true' }}
           body_path: ${{ env.BODY_PATH }}
           files: |
             apk/*.apk

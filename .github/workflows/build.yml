@@ -27,13 +27,20 @@ jobs:
         # 不用 android-actions/setup-android：它内部会跑 sdkmanager "tools"，
         # 而新版 SDK 仓库已删除 legacy `tools` 包，直接以
         # 「Failed to find package 'tools'」退出（本仓库首次 CI 就栽在这里）。
-        # ubuntu-latest runner 自带 Android SDK 与 sdkmanager，装缺的组件即可。
         #
-        # compileSdk / buildToolsVersion 都钉在 36，必须显式装，
-        # 否则 AGP 会因为没有对应 platform 直接失败。
+        # 也不能直接调 sdkmanager：runner 上 cmdline-tools 不在 PATH（换过 JAVA_HOME
+        # 之后更明显），第二次 CI 报 `sdkmanager: command not found`。
+        # 所以先按 ANDROID_SDK_ROOT 找到它，再写回 GITHUB_ENV 给后续的 Gradle 用。
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMGR=$(find "$SDK" -name sdkmanager -type f 2>/dev/null | head -1)
+          echo "SDK_ROOT=$SDK"
+          echo "SDKMANAGER=$SDKMGR"
+          if [ -z "$SDKMGR" ]; then echo "未找到 sdkmanager，runner 镜像可能变了"; exit 1; fi
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" "platforms;android-36" "build-tools;36.0.0"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
 
       - name: 编译
         # preview 变体走 debug 签名（见 app/build.gradle.kts），

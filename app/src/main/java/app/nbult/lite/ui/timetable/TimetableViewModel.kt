@@ -19,6 +19,7 @@ import app.nbult.lite.parser.TimetableParser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -33,18 +34,62 @@ data class TimetableUiState(
     val week: Int = 1,
     val todayEntries: List<TimetableEntry> = emptyList(),
     val todayIsTomorrow: Boolean = false,
+    /** 置顶卡是否把「停课」「已调走」的块也列出来（偏好存在 DataStore，跨进程有效）。 */
+    val showInactiveToday: Boolean = false,
+    /** 课表布局：true = 显示全部（7 天 + 满节次），false = 显示部分。 */
+    val showFullTimetable: Boolean = false,
     val preview: ParseResult? = null,
     val previewError: String? = null,
     val importing: Boolean = false,
     val message: String? = null,
     val selected: TimetableEntry? = null,
     /** 非空表示有调课在等用户处理冲突。 */
-    val pendingMove: PendingMove? = null
+    val pendingMove: PendingMove? = null,
+    /**
+     * 调课面板内的即时错误（例如"此时段已有这节课"）。
+     *
+     * 不能只靠 [message]：那条走的是课表页的 SnackbarHost，而调课面板是独立的
+     * ModalBottomSheet 窗口，Snackbar 会被 scrim 和抽屉整个挡住，用户根本看不见。
+     */
+    val moveError: String? = null
 ) {
     val isEmpty: Boolean get() = entries.isEmpty()
-    val totalSections: Int get() = ScheduleService.totalSections(entries, overrides)
+    /**
+     * 要画多少行。
+     *
+     * 显示全部：沿用原来的 `minimum = 10`，也就是"至少十行"。
+     * 显示部分：只画到**最晚有课的那一节**，下限 4 ——
+     * 早间四节始终保留（第一节课在下午的人也要有纵向锚点），
+     * 空周也不至于只剩一行看起来像坏了。
+     */
+    val totalSections: Int
+        get() = ScheduleService.totalSections(
+            entries,
+            overrides,
+            minimum = if (showFullTimetable) 10 else 4
+        )
     val currentWeekEntries: List<TimetableEntry>
         get() = weeks.getOrElse(week - 1) { emptyList() }
+
+    /**
+     * 课表要显示的星期，升序。
+     *
+     * **按当前周算**，不是整学期。之前按学期聚合（`weeks` 全展开），
+     * 于是把某一节调到周六之后，那两列被整学期保留 ——
+     * 第 8 周有课、第 7 周没课，第 7 周也会多出一列空白周六。
+     *
+     * 代价是跨"有周末课的那周"时列数会变，宽度要重算；
+     * 但所有周次变化都只在 pager 落位后提交（`settledPage` → `setWeek`），
+     * 手滑、箭头、「本周」三条路径次序一致 —— 变化永远发生在翻页结束之后。
+     * （0.30.4 之前箭头和「本周」是直接改 week，动画与翻页并行，5↔6 列时会卡一下。）
+     */
+    val visibleDays: List<Int>
+        get() {
+            // 还没加载完时先按满 7 列画，避免开屏先从 5 列跳到 6 列
+            if (showFullTimetable || weeks.isEmpty()) return listOf(1, 2, 3, 4, 5, 6, 7)
+            val used = currentWeekEntries.mapTo(HashSet()) { it.slot.dayOfWeek }
+            return (1..7).filter { it <= 5 || it in used }
+        }
 }
 
 /** 调课冲突：目标周的那一段已被哪门课占了。 */
@@ -69,13 +114,6 @@ data class PendingMove(
     val room: String,
     /** 正在被修改的那条 override；0 表示新建。再次调课时用它做"改哪一条"的依据。 */
     val editingOverrideId: Long,
-    /**
-     * 目标周本来就有这一节（同一条排课）。
-     *
-     * 这时有两种处理：补课（那周上两次）或替换（那周只上一次）。
-     * 以前这里硬编码成"补课"，于是用户看到两节以为是重复。
-     */
-    val sameSlotInTarget: Boolean,
     val conflicts: List<MoveConflict>
 )
 
@@ -93,7 +131,16 @@ class TimetableViewModel(
 
     init {
         viewModelScope.launch {
-            repository.observeSnapshot().collect { snapshot ->
+            // 开关存在 DataStore，和课表快照一起组合进来：
+            // 这样"杀进程重开"之后卡片仍然按上次的选择渲染
+            combine(
+                repository.observeSnapshot(),
+                settings.showInactiveInToday,
+                settings.showFullTimetable
+            ) { snapshot, showInactive, showFull ->
+                Triple(snapshot, showInactive, showFull)
+            }
+                .collect { (snapshot, showInactive, showFull) ->
                 val week = snapshot.term?.let { ScheduleService.currentWeek(it) } ?: 1
                 val totalWeeks = (snapshot.term?.totalWeeks ?: 20).coerceAtLeast(1)
                 // 每周的课程在这里一次算好（含停课/调课），滑动时不再重复过滤，也不重复查覆盖表
@@ -104,7 +151,8 @@ class TimetableViewModel(
                     snapshot.entries,
                     snapshot.term,
                     snapshot.periods,
-                    snapshot.overrides
+                    snapshot.overrides,
+                    includeInactive = showInactive
                 )
                 val current = (_state.value.week).coerceIn(1, totalWeeks)
                 _state.value = _state.value.copy(
@@ -116,7 +164,9 @@ class TimetableViewModel(
                     weeks = weeks,
                     week = if (weekPickedByUser) current else week.coerceIn(1, totalWeeks),
                     todayEntries = plan.entries,
-                    todayIsTomorrow = plan.isTomorrow
+                    todayIsTomorrow = plan.isTomorrow,
+                    showInactiveToday = showInactive,
+                    showFullTimetable = showFull
                 )
             }
         }
@@ -185,26 +235,19 @@ class TimetableViewModel(
         }
     }
 
-    fun shiftWeek(delta: Int) {
-        val term = _state.value.term ?: return
-        val target = (_state.value.week + delta).coerceIn(1, term.totalWeeks)
-        weekPickedByUser = true
-        _state.value = _state.value.copy(week = target)
-    }
-
-    /** 供左右滑动直接设置周次（越界自动收敛）。 */
+    /**
+     * 周次的**唯一**提交点：pager 落位后由 `settledPage` 调用（越界自动收敛）。
+     *
+     * 0.30.4 删掉了 `shiftWeek` / `jumpToCurrentWeek` —— 它们会被顶栏按钮直接调，
+     * 当帧就改 `week`，于是列宽/行高动画和翻页动画并行播放。
+     * 现在按钮只改屏幕层的 `navTarget`，翻页停稳后再落到这里。
+     */
     fun setWeek(week: Int) {
         val term = _state.value.term ?: return
         val target = week.coerceIn(1, term.totalWeeks.coerceAtLeast(1))
         if (target == _state.value.week) return
         weekPickedByUser = true
         _state.value = _state.value.copy(week = target)
-    }
-
-    fun jumpToCurrentWeek() {
-        val term = _state.value.term ?: return
-        weekPickedByUser = false
-        _state.value = _state.value.copy(week = ScheduleService.currentWeek(term))
     }
 
     fun preview(raw: String) {
@@ -331,7 +374,14 @@ class TimetableViewModel(
     }
 
     fun select(entry: TimetableEntry?) {
-        _state.value = _state.value.copy(selected = entry)
+        _state.value = _state.value.copy(selected = entry, moveError = null)
+    }
+
+    /** 用户改了目标时间：旧的即时错误立刻作废，别让上一句提示赖在面板里。 */
+    fun clearMoveError() {
+        if (_state.value.moveError != null) {
+            _state.value = _state.value.copy(moveError = null)
+        }
     }
 
     fun saveSlot(
@@ -381,6 +431,16 @@ class TimetableViewModel(
         }
     }
 
+    /** 置顶卡开关。写 DataStore，不是界面瞬时状态。 */
+    fun setShowInactiveToday(enabled: Boolean) {
+        viewModelScope.launch { settings.setShowInactive(enabled) }
+    }
+
+    /** 课表布局开关（列与行同时生效）。同样写 DataStore。 */
+    fun setShowFullTimetable(enabled: Boolean) {
+        viewModelScope.launch { settings.setShowFullTimetable(enabled) }
+    }
+
     /** 停课：只作用于当前这一周的这一节，不动课程本身的排课。 */
     fun suspendCurrent() {
         val week = _state.value.week
@@ -420,14 +480,16 @@ class TimetableViewModel(
             null
         }
 
-        // 选的时间正好压在那一节上：没有可调的空间，直接说清楚
+        // 只禁「和原时段一模一样」这一种：那等于原地调课，没有任何意义。
+        // 3-3 / 4-4 这类与原时段部分重叠的选法要放行 —— 它至少是个不同的目标。
         if (sameSlotBlock != null &&
             sameSlotBlock.slot.dayOfWeek == day &&
-            sameSlotBlock.slot.startSection <= end &&
-            sameSlotBlock.slot.endSection >= start
+            sameSlotBlock.slot.startSection == start &&
+            sameSlotBlock.slot.endSection == end
         ) {
             _state.value = _state.value.copy(
-                message = "第 $safeTarget 周的这个时段本来就有这节课，换个时间再试"
+                // 用 moveError 而不是 message：抽屉是独立窗口，Snackbar 会被它挡死
+                moveError = "第 $safeTarget 周的此时段已有这节课，请换个时间再试"
             )
             return
         }
@@ -444,7 +506,6 @@ class TimetableViewModel(
                     end = end,
                     room = room.trim(),
                     editingOverrideId = entry.overrideId,
-                    sameSlotInTarget = sameSlotBlock != null,
                     conflicts = conflicts
                 )
             )
@@ -459,10 +520,7 @@ class TimetableViewModel(
             start = start,
             end = end,
             room = room,
-            editingOverrideId = entry.overrideId,
-            // 目标周已有这一节 → 直接按"只上一次"处理，不再追问。
-            // 换课本来的意思就是把课换到那个时间，问一次反而多一步。
-            replaceTarget = sameSlotBlock != null
+            editingOverrideId = entry.overrideId
         )
     }
 
@@ -492,16 +550,6 @@ class TimetableViewModel(
         }
     }
 
-    /** 目标周已有这一节时选「补课」：那周上两次，第二次是调过去的。 */
-    fun confirmMoveKeepBoth() {
-        commitPendingMove(replaceTarget = false)
-    }
-
-    /** 目标周已有这一节时选「替换」：那周只上一次，时间用调过去的。 */
-    fun confirmMoveReplaceTarget() {
-        commitPendingMove(replaceTarget = true)
-    }
-
     /** 与其他课程冲突时选「替换原课程」：先把那些课在目标周停掉，再落本次调课。 */
     fun confirmMoveWithReplace() {
         val pending = _state.value.pendingMove ?: return
@@ -516,9 +564,8 @@ class TimetableViewModel(
                     )
                 )
             }
-            // 走到这里必然存在其它课程冲突；同一条排课的情况按"补课"处理，
-            // 用户在弹窗里看到的就是这个结果（提示里已写明目标周本来就有这节）。
-            writeMove(pending, replaceTarget = false)
+            // 走到这里必然存在其它课程冲突（同一条排课不会进这个弹窗）。
+            writeMove(pending)
         }
     }
 
@@ -562,9 +609,36 @@ class TimetableViewModel(
         }
     }
 
-    private fun commitPendingMove(replaceTarget: Boolean) {
-        val pending = _state.value.pendingMove ?: return
-        viewModelScope.launch { writeMove(pending, replaceTarget) }
+    /**
+     * 跳到这门课「原来应该在的位置」。
+     *
+     * 调整过的位置不提供整门课编辑（改课程名/教师/周次会影响所有时段），
+     * 所以给一个动作把人送回源周的原时段块 —— 那里编辑的才是课程本身。
+     *
+     * 周内调整时源周就是当前周，此时会选中同一周里的「原位置」块（灰块），
+     * 不会重新打开刚才那一块，所以不存在"点了又弹回来"的循环。
+     */
+    fun openOrigin() {
+        val entry = _state.value.selected ?: return
+        val totalWeeks = (_state.value.term?.totalWeeks ?: 20).coerceAtLeast(1)
+        val sourceWeek = (entry.sourceWeek.takeIf { it > 0 } ?: _state.value.week)
+            .coerceIn(1, totalWeeks)
+        val candidates = _state.value.weeks.getOrElse(sourceWeek - 1) { emptyList() }
+        val originBlock = candidates.firstOrNull {
+            // 原位块的 slot 就是 originSlot（调走后留下的灰块也满足这一条）
+            it.originSlot.id == entry.originSlot.id && it.slot.id == entry.originSlot.id
+        } ?: candidates.firstOrNull { it.originSlot.id == entry.originSlot.id }
+
+        if (originBlock == null) {
+            _state.value = _state.value.copy(message = "没找到这一节原来的位置")
+            return
+        }
+        weekPickedByUser = true
+        _state.value = _state.value.copy(
+            week = sourceWeek,
+            selected = originBlock,
+            moveError = null
+        )
     }
 
     /**
@@ -574,18 +648,18 @@ class TimetableViewModel(
      * 不是"再叠一条"。不删的话，源周与目标周各留一条 override，
      * 两条都能命中渲染，于是同一周出现两个块。
      */
-    private suspend fun writeMove(pending: PendingMove, replaceTarget: Boolean) {
+    private suspend fun writeMove(pending: PendingMove) {
         if (pending.editingOverrideId > 0L) {
             repository.clearOverride(pending.editingOverrideId)
         }
         repository.setOverride(
             SlotOverride(
                 slotId = pending.slotId,
-                kind = if (replaceTarget) {
-                    SlotOverride.KIND_MOVE_REPLACE
-                } else {
-                    SlotOverride.KIND_MOVE
-                },
+                // 一律 KIND_MOVE：目标周原本那一节必须留着。
+                // KIND_MOVE_REPLACE 会把目标周同一 slot 的原块藏掉 —— 那样"把第 7 周这节
+                // 调到第 10 周周四"会连带吃掉第 10 周周二那节原课，属于误删。
+                // 老版本落库的 MOVE_REPLACE 记录仍按原样渲染（兼容分支保留在 ScheduleService）。
+                kind = SlotOverride.KIND_MOVE,
                 weekMask = WeekMask.bit(pending.sourceWeek),
                 toWeek = pending.toWeek,
                 toDay = pending.day,
@@ -598,13 +672,13 @@ class TimetableViewModel(
         _state.value = _state.value.copy(
             pendingMove = null,
             selected = null,
+            moveError = null,
             message = moveMessage(
                 pending.sourceWeek,
                 pending.toWeek,
                 pending.day,
                 pending.start,
-                pending.end,
-                replaceTarget
+                pending.end
             )
         )
     }
@@ -617,8 +691,7 @@ class TimetableViewModel(
         start: Int,
         end: Int,
         room: String,
-        editingOverrideId: Long,
-        replaceTarget: Boolean
+        editingOverrideId: Long
     ) {
         commitPendingMoveLike(
             PendingMove(
@@ -630,15 +703,13 @@ class TimetableViewModel(
                 end = end,
                 room = room.trim(),
                 editingOverrideId = editingOverrideId,
-                sameSlotInTarget = false,
                 conflicts = emptyList()
-            ),
-            replaceTarget
+            )
         )
     }
 
-    private fun commitPendingMoveLike(pending: PendingMove, replaceTarget: Boolean) {
-        viewModelScope.launch { writeMove(pending, replaceTarget) }
+    private fun commitPendingMoveLike(pending: PendingMove) {
+        viewModelScope.launch { writeMove(pending) }
     }
 
     private fun moveMessage(
@@ -646,14 +717,13 @@ class TimetableViewModel(
         toWeek: Int,
         day: Int,
         start: Int,
-        end: Int,
-        replaceTarget: Boolean
+        end: Int
     ): String {
         val dayName = DateUtil.dayNames.getOrNull(day - 1).orEmpty()
-        return when {
-            toWeek == sourceWeek -> "已调到本周 $dayName $start-$end 节"
-            replaceTarget -> "第 $sourceWeek 周这节课已取代第 $toWeek 周那节（$dayName $start-$end 节）"
-            else -> "第 $sourceWeek 周这节课已调至第 $toWeek 周 $dayName $start-$end 节"
+        return if (toWeek == sourceWeek) {
+            "已调到本周 $dayName $start-$end 节"
+        } else {
+            "第 $sourceWeek 周这节课已调至第 $toWeek 周 $dayName $start-$end 节"
         }
     }
 

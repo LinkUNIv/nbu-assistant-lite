@@ -20,10 +20,10 @@ local.properties
 dist/
 
 # ---- 真实数据样本（含个人信息）----
-# samples/reference/ 是本人从教务系统导出的真实课表（含课程、教师，可能含姓名学号），
-# 保留在本地用于校准解析器，但严禁入库或公开。
-# 内置的虚构样例在 app/src/main/assets/samples/，那部分可以入库。
-samples/reference/
+# docs/samples/reference/ 是从教务系统导出的真实课表（含课程、教师，可能含姓名与学号），
+# 保留在本地用于校准解析器，禁止入库或公开。
+# 内置的虚构样例位于 app/src/main/assets/samples/，该部分可以入库。
+docs/samples/reference/
 
 # ---- 其他 ----
 .DS_Store

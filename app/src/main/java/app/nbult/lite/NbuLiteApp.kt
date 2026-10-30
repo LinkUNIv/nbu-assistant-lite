@@ -19,6 +19,8 @@ import app.nbult.lite.util.CrashHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import androidx.glance.appwidget.updateAll
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -71,6 +73,20 @@ class NbuLiteApp : Application() {
             AppLog.houseKeeping(applicationContext)
             val savedOffset = container.settings.timeOffset.first()
             AppClock.setOffset(savedOffset)
+        }
+
+        // 课表变化后刷新小组件。
+        //
+        // 用观察而不是在每个写入口插一行 updateAll：导入、清空、调课、停课分散在
+        // 多个地方，逐个插漏一个就不刷新，症状是「改了课表但桌面还是旧的」且难以察觉。
+        // 先 drop(1) 跳过订阅时的首帧，delay 用来合并一次写入引发的多次发射。
+        appScope.launch {
+            container.timetableRepository.observeSnapshot()
+                .drop(1)
+                .collect {
+                    kotlinx.coroutines.delay(800)
+                    app.nbult.lite.widget.NextClassWidget().updateAll(this@NbuLiteApp)
+                }
         }
     }
 }

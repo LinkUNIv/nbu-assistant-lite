@@ -54,6 +54,20 @@
             </intent-filter>
         </receiver>
 
+
+        <!-- 桌面小组件。exported=true 是 launcher 绑定 widget 的前提 -->
+        <receiver
+            android:name=".widget.NextClassReceiver"
+            android:exported="true"
+            android:label="@string/widget_next_class_desc">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/next_class_widget_info" />
+        </receiver>
+
     </application>
 
 </manifest>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  2×2 下一节课。
+
+  updatePeriodMillis 取 1800000（系统下限 30 分钟）：widget 不能在后台精确定时刷新，
+  倒计时因此只给到分钟。真正的刷新由应用内的数据变更与上下课闹钟驱动，
+  这个周期只是「进程被杀、闹钟丢失」时的兜底。
+
+  targetCellWidth/Height 需要 API 31+，旧版本读 minWidth/minHeight，
+  两者同时给出才能在各版本上都落在 2×2 的格位上。
+
+  resizeMode 放开：MIUI 会把小组件放进自己的格位，锁死尺寸反而被拉长；
+  允许拖动后，用户能把它调回 2×2。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_next_class_desc"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

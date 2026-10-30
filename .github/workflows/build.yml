@@ -110,11 +110,23 @@ jobs:
             *)   echo "PRERELEASE=false" >> "$GITHUB_ENV" ;;
           esac
 
+      # 先建成 draft 再发布。
+      #
+      # GitHub 现在把已发布的 release 视为 immutable，不允许再上传资产；
+      # 而 action 的内部顺序是「创建 → 上传」，release 一旦立刻发布，
+      # 后面的 APK 就一定传不上去（v0.32.2 就是这样失败的）。
+      # draft 状态下可以上传，传完再用 gh 发布。
       - uses: softprops/action-gh-release@v2
         with:
           name: ${{ env.RELEASE_TITLE }}
+          draft: true
           prerelease: ${{ env.PRERELEASE == 'true' }}
           body_path: ${{ env.BODY_PATH }}
           files: |
             apk/*.apk
             apk/*.sha256
+
+      - name: 发布
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false

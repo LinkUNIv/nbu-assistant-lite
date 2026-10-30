@@ -4,7 +4,7 @@
 
 ---
 
-## v0.32.2-Preview — 2026-10-30
+## v0.32.3-Preview — 2026-10-30
 
 **小组件字号调整，新增今日课程列表**
 
@@ -13,7 +13,7 @@
 - 新增「今日课程」列表组件，每行含起止时间、课程名、教室与节次
 - 列表提供 4×2、2×4、4×4 三种尺寸，与「下一节课」分别添加
 
-详见 [`docs/releases/v0.32.2-Preview.md`](docs/releases/v0.32.2-Preview.md)。
+详见 [`docs/releases/v0.32.3-Preview.md`](docs/releases/v0.32.2-Preview.md)。
 
 ---
 

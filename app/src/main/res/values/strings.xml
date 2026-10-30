@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">宁大助手 Lite</string>
     <string name="widget_next_class_desc">下一节课</string>
+    <string name="widget_today_list_desc">今日课程</string>
 </resources>

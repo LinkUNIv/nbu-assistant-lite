@@ -53,8 +53,13 @@ import app.nbult.lite.data.changelog.ChangelogVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** 首屏展开的版本数。更早的默认折叠成一行，避免一页铺满上百个版本。 */
-private const val RECENT_VERSIONS = 6
+/**
+ * 首屏展开的版本数。
+ *
+ * 只放最新一版：多数人打开这一页只想确认「刚更新的这版改了什么」，
+ * 其余收成单行，需要时再点开。
+ */
+private const val RECENT_VERSIONS = 1
 
 /**
  * 更新日志页。
@@ -213,7 +218,9 @@ private fun VersionCard(
                 }
             }
 
-            if (version.headline.isNotBlank()) {
+            // 折叠态不显示标题：折叠行是两行高，九十个版本叠起来仍然过长。
+            // 版本号与日期足够定位，点开就能看到内容
+            if (version.headline.isNotBlank() && (expanded || !expandable)) {
                 Text(
                     text = inline(version.headline),
                     style = MaterialTheme.typography.bodyMedium,

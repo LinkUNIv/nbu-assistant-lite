@@ -1,6 +1,7 @@
 package app.nbult.lite.ui.news
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,9 +41,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -52,7 +57,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.nbult.lite.R
 import app.nbult.lite.data.db.NewsItem
-import java.util.Calendar
 import kotlin.math.absoluteValue
 
 /** 卡片视图中的一天。`date` 形如 `2026-10-29`，`items` 已按发布时间倒序。 */
@@ -78,49 +82,12 @@ internal fun dateKey(raw: String): String? {
     return "%s-%02d-%02d".format(m.groupValues[1], month, day)
 }
 
-private fun dayMillis(date: String): Long? {
-    val parts = date.split("-")
-    if (parts.size != 3) return null
-    val y = parts[0].toIntOrNull() ?: return null
-    val m = parts[1].toIntOrNull() ?: return null
-    val d = parts[2].toIntOrNull() ?: return null
-    return Calendar.getInstance().apply {
-        clear()
-        set(y, m - 1, d)
-    }.timeInMillis
-}
-
 /**
- * 相对日期标签。
+ * 日期块：年份在上、细分隔线居中、月日在下。
  *
- * 只用于卡片头部的辅助说明；超过一周不再给出「N 天前」，
- * 因为此时读者关心的是具体日期，而不是相差天数。
- */
-internal fun relativeDayLabel(date: String): String {
-    if (date.isBlank()) return "日期未知"
-    val target = dayMillis(date) ?: return ""
-    val now = Calendar.getInstance()
-    val y = now.get(Calendar.YEAR)
-    val m = now.get(Calendar.MONTH)
-    val d = now.get(Calendar.DAY_OF_MONTH)
-    val today = Calendar.getInstance().apply {
-        clear()
-        set(y, m, d)
-    }.timeInMillis
-    val diff = ((today - target) / 86_400_000L).toInt()
-    return when {
-        diff == 0 -> "今天"
-        diff == 1 -> "昨天"
-        diff in 2..7 -> "$diff 天前"
-        else -> ""
-    }
-}
-
-/**
- * 日期块：年份在上、细分隔线居中、月日在下，整体左对齐。
- *
- * `size` 由调用方按卡片宽度推算（卡内宽的四分之一），不提供默认值 ——
- * 写死一个尺寸会在窄屏上超出预留区域。
+ * 排版是定稿的，只调字号：`size` 由调用方给定，年份占 0.20、月日占 0.40。
+ * 块内左对齐 —— 年份、分隔线、月日的左端对齐成一条竖线，比居中更稳，
+ * 切页时数字宽度变化也不会让整块左右晃动。
  */
 @Composable
 internal fun DateStamp(date: String, size: Dp, modifier: Modifier = Modifier) {
@@ -133,9 +100,9 @@ internal fun DateStamp(date: String, size: Dp, modifier: Modifier = Modifier) {
 
     val family = FontFamily(Font(R.font.noto_serif_subset))
     val density = LocalDensity.current
-    val yearSize = with(density) { (size.value * 0.18f).sp }
-    val dateSize = with(density) { (size.value * 0.33f).sp }
-    val padding = with(density) { (size.value * 0.10f).dp }
+    val yearSize = with(density) { (size.value * 0.20f).sp }
+    val dateSize = with(density) { (size.value * 0.40f).sp }
+    val padding = with(density) { (size.value * 0.06f).dp }
 
     // 分隔线宽度跟随年份实际宽度，避免「2026」与「1999」下方线条长度不一
     val measurer = rememberTextMeasurer()
@@ -185,6 +152,12 @@ internal fun DateStamp(date: String, size: Dp, modifier: Modifier = Modifier) {
  *
  * 相邻卡片按当前页偏移连续缩放与淡出，形成「一叠牌被推开」的观感；
  * 不做相互遮挡，因为 pager 的页面并列排布，无法实现真正叠压。
+ *
+ * 卡片默认居中于「顶栏与次级行之下的剩余区域」，那个区域的中心比整屏中心低。
+ * 上移量取「pager 顶部在窗口中的位置 + 次级行高度」的一半。
+ *
+ * 这里不能用「顶栏高度」代替代替顶部位置 —— 顶栏之上还有状态栏，
+ * 用高度算会正好漏掉状态栏的一半，卡片仍偏下十几 dp。
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -199,53 +172,86 @@ internal fun NewsCardPager(
     if (groups.isEmpty()) return
     val pagerState = rememberPagerState(pageCount = { groups.size })
 
-    Column(modifier.fillMaxSize()) {
-        val currentMonth = remember(pagerState.currentPage, groups) {
-            val date = groups.getOrNull(pagerState.currentPage)?.date ?: ""
-            if (date.length >= 7) "%s 年 %d 月".format(date.substring(0, 4), date.substring(5, 7).toIntOrNull() ?: 0)
-            else "资讯"
-        }
-        NewsSectionHeader(currentMonth, cardView, onToggleView)
-    Box(Modifier.fillMaxSize()) {
-        HorizontalPager(
-            state = pagerState,
-            contentPadding = PaddingValues(horizontal = 32.dp),
-            pageSpacing = 12.dp,
-            beyondBoundsPageCount = 1,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
-            val offset = ((pagerState.currentPage - page) +
-                pagerState.currentPageOffsetFraction).absoluteValue
-            val scale = 1f - (offset.coerceIn(0f, 1f) * 0.08f)
-            val alpha = 1f - (offset.coerceIn(0f, 1f) * 0.45f)
-            // 卡片保持垂直居中：上下留白对称，比顶部对齐更稳
-            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-            DayCard(
-                group = groups[page],
-                onOpen = onOpen,
-                modifier = Modifier.padding(top = 12.dp).graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    this.alpha = alpha
-                    translationY = offset.coerceIn(0f, 1f) * 10.dp.toPx()
-                }
-            )
-            }
-        }
+    // pager 顶部在窗口中的绝对位置：含状态栏与顶栏，正好是可用区域的上界
+    var pagerTopPx by remember { mutableStateOf(0f) }
+    val headerRowHeightPx = with(LocalDensity.current) { HEADER_ROW_HEIGHT.toPx() }
+    val centerOffset = -(pagerTopPx + headerRowHeightPx) / 2f
 
-        SwipeHint(
-            visibleTrigger = pagerState.currentPage to pagerState.isScrollInProgress,
+    Column(
+        modifier
+            .fillMaxSize()
+            .onGloballyPositioned { pagerTopPx = it.positionInRoot().y }
+    ) {
+        // 卡片视图不显示左侧年月：卡片本身已经给出日期，重复一次只会挤占空间
+        Row(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp)
-        )
-    }
+                .fillMaxWidth()
+                .height(HEADER_ROW_HEIGHT)
+                .padding(end = 12.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ViewSwitchInline(cardView = cardView, onToggle = onToggleView)
+        }
+        Box(Modifier.fillMaxSize()) {
+            HorizontalPager(
+                state = pagerState,
+                contentPadding = PaddingValues(horizontal = 32.dp),
+                pageSpacing = 12.dp,
+                beyondBoundsPageCount = 1,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val offset = ((pagerState.currentPage - page) +
+                    pagerState.currentPageOffsetFraction).absoluteValue
+                val scale = 1f - (offset.coerceIn(0f, 1f) * 0.08f)
+                val alpha = 1f - (offset.coerceIn(0f, 1f) * 0.45f)
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                    DayCard(
+                        group = groups[page],
+                        onOpen = onOpen,
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            this.alpha = alpha
+                            translationY = centerOffset + offset.coerceIn(0f, 1f) * 10.dp.toPx()
+                        }
+                    )
+                }
+            }
+
+            SwipeHint(
+                visibleTrigger = pagerState.currentPage to pagerState.isScrollInProgress,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 24.dp)
+            )
+        }
     }
 }
 
 /** 卡片头高度与单行条目高度。行高统一，卡片高度才能只由条目数决定。 */
-private val CARD_HEADER_HEIGHT = 124.dp
-private val CARD_ROW_HEIGHT = 84.dp
+private val CARD_HEADER_HEIGHT = 132.dp
+private val CARD_ROW_HEIGHT = 62.dp
+
+/**
+ * 日期块尺寸。固定值，不随条目数缩放 —— 切页时字号跳动比「单条日显得空」更难接受。
+ *
+ * 头部 132dp：日期块实测约 86dp 高，上下各留 23dp。
+ * 再高会让日期块与第一条之间空出一大块，再低则日期块贴到卡片边缘。
+ */
+private val CARD_STAMP_SIZE = 108.dp
+
+/** 卡片视图与列表视图共用的次级行高度。月份隐藏后仍要给这一行高度，否则间距会塌。 */
+private val HEADER_ROW_HEIGHT = 40.dp
+
+/** 卡内条目之间的间距。卡片高度必须把它算进去，否则三条会差几 dp 放不下。 */
+private val CARD_ROW_SPACING = 2.dp
+
+/** 卡内列表底部留白。最后一条不贴卡片下沿。 */
+private val CARD_LIST_BOTTOM = 12.dp
+
+/** 卡内列表底部渐隐带的高度。 */
+private val CARD_FADE_HEIGHT = 40.dp
 
 /** 卡片最多展示的条目数，超出部分在卡内滚动。 */
 private const val CARD_MAX_ROWS = 3
@@ -321,7 +327,13 @@ private fun DayCard(
 ) {
     val scheme = MaterialTheme.colorScheme
     val visibleRows = group.items.size.coerceAtMost(CARD_MAX_ROWS)
-    val cardHeight = CARD_HEADER_HEIGHT + CARD_ROW_HEIGHT * visibleRows
+    // 高度 = 头部 + 各行 + 行间距 + 底部留白。
+    // 早先只算了「行高 × 行数」，漏掉间距，于是三条的日期也差几 dp，
+    // 明明没有第四条却仍被判为可滚动，底部渐隐就盖住了最后一条
+    val cardHeight = CARD_HEADER_HEIGHT +
+        CARD_ROW_HEIGHT * visibleRows +
+        CARD_ROW_SPACING * (visibleRows - 1).coerceAtLeast(0) +
+        CARD_LIST_BOTTOM
 
     Surface(
         modifier = modifier
@@ -349,37 +361,62 @@ private fun DayCard(
             )
         ) {
             Column(Modifier.fillMaxSize()) {
-                Row(
+                // 日期块占满头部并左对齐。原来右侧还有一列相对日期，
+                // 与块内月日重复，去掉后头部只剩日期本身
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.Top
+                        .height(CARD_HEADER_HEIGHT)
+                        .padding(start = 16.dp),
+                    contentAlignment = Alignment.CenterStart
                 ) {
-                    val stampSize = 84.dp
-                    DateStamp(date = group.date, size = stampSize)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.padding(top = 6.dp)) {
-                        val relative = remember(group.date) { relativeDayLabel(group.date) }
-                        val shortDate = remember(group.date) {
-                            if (group.date.length >= 10) group.date.substring(5) else "未标注"
-                        }
-                        Text(
-                            text = if (relative.isBlank()) shortDate else "$relative · $shortDate",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onSurfaceVariant
-                        )
-                    }
+                    DateStamp(date = group.date, size = CARD_STAMP_SIZE)
                 }
-                LazyColumn(
+
+                val listState = rememberLazyListState()
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .weight(1f)
                 ) {
-                    items(group.items, key = { it.id }) { item ->
-                        DayCardRow(item, onOpen)
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            bottom = CARD_LIST_BOTTOM
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(CARD_ROW_SPACING)
+                    ) {
+                        items(group.items, key = { it.id }) { item ->
+                            DayCardRow(item, onOpen)
+                        }
                     }
+
+                    // 底部渐隐：只在还能继续滚动时出现，提示下面还有内容。
+                    // 用 alpha 过渡而不是 AnimatedVisibility —— 后者会改变布局高度，
+                    // 列表内容会跟着抖一下
+                    val canScroll by remember {
+                        derivedStateOf { listState.canScrollForward }
+                    }
+                    val fadeAlpha by animateFloatAsState(
+                        targetValue = if (canScroll) 1f else 0f,
+                        animationSpec = tween(180),
+                        label = "cardFade"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(CARD_FADE_HEIGHT)
+                            .graphicsLayer { alpha = fadeAlpha }
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, scheme.surface)
+                                )
+                            )
+                    )
                 }
             }
         }
@@ -395,7 +432,9 @@ private fun DayCardRow(item: NewsItem, onOpen: (Long, Rect) -> Unit) {
             .height(CARD_ROW_HEIGHT)
             .onGloballyPositioned { bounds = it.boundsInRoot() }
             .clickable { onOpen(item.id, bounds) },
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        // 栏目名与标题之间只留 2dp：两者是同一条资讯的两行，
+        // 留多了会让人误以为是两条
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Text(
             text = item.columnName,

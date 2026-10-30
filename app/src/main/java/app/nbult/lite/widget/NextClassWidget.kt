@@ -20,6 +20,7 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.height
 import androidx.glance.layout.width
@@ -185,6 +186,12 @@ private fun stripCourseCode(name: String): String {
 @Composable
 private fun WidgetBody(state: WidgetState) {
     val colors = state.colors
+    // 数字与单位分成两行。
+    //
+    // 同一行放下时，三位数加「分钟后」正好占满 90dp 的内容宽，字号最多到 32sp；
+    // 换成上下两行后数字可以到 42sp，上半区才被倒计时填满
+    val numberSize = 42.sp
+    val unitSize = 11.sp
     val detail = listOf(state.timeRange, state.room)
         .filter { it.isNotBlank() }
         .joinToString(" · ")
@@ -195,75 +202,74 @@ private fun WidgetBody(state: WidgetState) {
             .background(ColorProvider(colors.background))
             .cornerRadius(20.dp)
             .clickable(actionStartActivity<MainActivity>())
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        contentAlignment = Alignment.CenterStart
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        contentAlignment = Alignment.TopStart
     ) {
-        Column(
-            modifier = GlanceModifier.fillMaxSize(),
-            verticalAlignment = Alignment.Vertical.CenterVertically
-        ) {
-            // 上半：倒计时。标签与数字分两行，数字单独放大并用红色，
-            // 一眼就能看出「还有多久」
-            if (state.label.isNotBlank()) {
-                Text(
-                    text = state.label,
-                    style = TextStyle(
-                        color = ColorProvider(colors.accent),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    ),
-                    maxLines = 1
-                )
-            }
-            if (state.countValue.isNotBlank()) {
-                Row(
-                    modifier = GlanceModifier.wrapContentHeight(),
-                    verticalAlignment = Alignment.Vertical.CenterVertically
-                ) {
+        Column(GlanceModifier.fillMaxSize()) {
+            // 上半区贴顶。倒计时是这张卡第一眼要看到的东西，位置不随课名长短浮动
+            Column(
+                modifier = GlanceModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Vertical.Top
+            ) {
+                if (state.label.isNotBlank()) {
                     Text(
-                        text = state.countValue,
+                        text = state.label,
                         style = TextStyle(
-                            color = ColorProvider(colors.alert),
-                            fontSize = 26.sp,
+                            color = ColorProvider(colors.title),
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         ),
                         maxLines = 1
                     )
-                    Spacer(GlanceModifier.width(4.dp))
+                }
+                if (state.countValue.isNotBlank()) {
+                    Text(
+                        text = state.countValue,
+                        style = TextStyle(
+                            color = ColorProvider(colors.alert),
+                            fontSize = numberSize,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        maxLines = 1
+                    )
                     Text(
                         text = state.countUnit,
                         style = TextStyle(
                             color = ColorProvider(colors.body),
-                            fontSize = 12.sp
+                            fontSize = unitSize
                         ),
                         maxLines = 1
                     )
                 }
             }
 
-            // 上下两块之间留出距离，避免「下一节 238 分钟后」与课名连成一句
-            Spacer(GlanceModifier.height(8.dp))
+            // 中间吃掉剩余高度，把下面这块推到底部。
+            // Glance 的 fillMaxHeight 没有比例重载，用权重间隔是等效做法，
+            // 且不受 widget 被拖成多高影响
+            Spacer(GlanceModifier.defaultWeight())
 
-            // 下半：课程本身
-            Text(
-                text = state.courseName,
-                style = TextStyle(
-                    color = ColorProvider(colors.title),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                ),
-                maxLines = 2
-            )
-            if (detail.isNotBlank()) {
-                Spacer(GlanceModifier.height(2.dp))
+            // 下半区贴底：课程信息贴近卡片下沿，与上方倒计时各占一头
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
                 Text(
-                    text = detail,
+                    text = state.courseName,
                     style = TextStyle(
-                        color = ColorProvider(colors.body),
-                        fontSize = 9.sp
+                        color = ColorProvider(colors.title),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
                     ),
                     maxLines = 2
                 )
+                if (detail.isNotBlank()) {
+                    Spacer(GlanceModifier.height(2.dp))
+                    Text(
+                        text = detail,
+                        style = TextStyle(
+                            color = ColorProvider(colors.body),
+                            fontSize = 8.sp
+                        ),
+                        maxLines = 2
+                    )
+                }
             }
         }
     }

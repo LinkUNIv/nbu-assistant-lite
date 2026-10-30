@@ -123,6 +123,12 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
+    // 桌面小组件：Glance 用 Compose 语法写 RemoteViews。
+    // 选它而不是手写 XML，是因为三个尺寸要共用同一套行式布局，
+    // XML 方案得为每种尺寸各写一份，改一处要改三处
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+    implementation("androidx.glance:glance-material3:1.1.1")
+
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jsoup:jsoup:1.17.2")

@@ -135,11 +135,12 @@
 
 ### 落点
 
-- [ ] `app/build.gradle.kts`：`androidx.glance:glance-appwidget:1.1.1`
-      + `androidx.glance:glance-material3:1.1.1`
-- [ ] `NbuLiteApp.kt`：`AppContainer` 加进程级单例 `AppContainer.get(context)`
-      —— 现在 `MainActivity` 里 new 的实例 widget 根本拿不到，而 widget 每次刷新都新建
-      一个 Room + DataStore 连接是浪费
+- [x] `app/build.gradle.kts`：`glance-appwidget:1.1.1` + `glance-material3:1.1.1`
+      已引入并编译通过。Kotlin 1.9.24 + Compose 编译器 1.5.14 与 Glance 1.1.1 无冲突，
+      包体 2.12 → 2.33 MB（+210 KB，低于预估的 300–500 KB）
+- [x] ~~`AppContainer` 加进程级单例~~ —— **已有**：`NbuLiteApp.container` 建在 Application 上，
+      `MainActivity` 通过 `(application as NbuLiteApp).container` 取用，
+      widget 里同样能取到。此项作废
 - [ ] `widget/NextClassWidget.kt`（`GlanceAppWidget`）+ `NextClassReceiver`（`GlanceAppWidgetReceiver`）
 - [ ] `widget/WidgetRow.kt`：`WidgetRow(wide: Boolean)` —— `wide=true` 给 4×2
       （318dp 宽、行高 45、右侧多一节次/教师列），`false` 给 2×4（138dp 宽、行高 58、
@@ -149,8 +150,10 @@
       只有行高与可见行数不同；2×4 的周进度条固定在列表外（`Column` 底部），不参与滚动
 - [ ] `itemId = courseId * 100 + 当日序号`：两张列表都要给，不稳定 itemId 会让每次
       update 回到顶部
-- [ ] `ScheduleService.kt` 加 `remainingToday(now)`：剔除已结束条目，
-      返回 `(已上课时数, 剩余列表)`，widget 与 2×2 共用
+- [x] ~~`ScheduleService.kt` 加 `remainingToday(now)`~~ —— **已有**：`planForToday`
+      已经按 `endMinutes > nowMinutes` 剔除已结束条目，并返回 `DayPlan(remaining, isTomorrow)`，
+      当天没课自动顺延到次日在同一次调用里完成。widget 直接复用，
+      只差「已上节数」这一个派生值（`总数 - remaining.size`），不必新开函数
 - [ ] `res/xml/*_widget_info.xml`（每尺寸一份）：`targetCellWidth/Height`（31+）、
       `minWidth = 70n - 30`（旧版）、`resizeMode="horizontal|vertical"`、
       `updatePeriodMillis = 1800000`、`widgetCategory="home_screen"`；
@@ -195,8 +198,8 @@ widget 跑在 launcher 进程，**没有 ViewModel、没有 Compose 状态**，
 
 ### 排期与前置
 
-- 排在 **0.31.0**，前置是 0.30.0 验收完 —— widget 要读 `showFullTimetable`（行数/列数）
-  和主题色，这两样都在 0.30.0 定型
+- 排在 **0.32.0**。依赖（Glance）、容器单例、今日剩余筛选三项前置已完成，
+  只差组件本身与尺寸配置
 - 按 **2×2 → 4×2 → 2×4** 的顺序出，每张单独可装可验：
   2×2 是"能不能做"的最小切片（不带列表、固定浅色底），4×2 才引入 `LazyColumn` 与行式布局，
   2×4 复用同一个骨架、只换行高与宽度，基本是白送

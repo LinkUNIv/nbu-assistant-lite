@@ -42,10 +42,35 @@ jobs:
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
 
+      - name: 还原签名密钥
+        # 必须有固定密钥。曾用 debug 签名，而 debug keystore 是「首次构建时按机器生成」的，
+        # runner 每次都是全新的机器 —— 于是每个版本的证书都不同，新包装不上旧版本
+        # （INSTALL_FAILED_UPDATE_INCOMPATIBLE，界面提示「与已安装应用签名不同」）。
+        # 缺密钥时宁可直接失败，也不要产出一个盖不上任何既有安装的包。
+        env:
+          KEYSTORE_BASE64: ${{ secrets.NBULT_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.NBULT_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "缺少 secrets.NBULT_KEYSTORE_BASE64，无法用固定密钥签名" >&2
+            exit 1
+          fi
+          store="$RUNNER_TEMP/nbult-preview.jks"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$store"
+          echo "NBULT_STORE_FILE=$store" >> "$GITHUB_ENV"
+          echo "NBULT_STORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "NBULT_KEY_ALIAS=nbult" >> "$GITHUB_ENV"
+
       - name: 编译
-        # preview 变体走 debug 签名（见 app/build.gradle.kts），
-        # 所以 CI 不需要任何 keystore 密钥
         run: ./gradlew --no-daemon --console=plain :app:assemblePreview
+
+      - name: 校验签名
+        # 把证书指纹打进日志。签名一旦退回 debug，这行会立刻显示
+        # 「CN=Android Debug」而不是「CN=NBU Assistant Lite」，不必等装机才发现
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | head -1)
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/preview/*.apk \
+            | grep -E "certificate DN|certificate SHA-256"
 
       - name: 重命名产物
         # Gradle 只会产出 app-preview.apk，Release 里显示成这个名字没有辨识度。

@@ -30,3 +30,8 @@ docs/samples/reference/
 Thumbs.db
 *.log
 *.hprof
+
+# 签名密钥不入库。固定密钥放在仓库之外的 keystore/ 目录，
+# CI 通过 GitHub Secrets 传入
+*.jks
+*.keystore

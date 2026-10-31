@@ -100,6 +100,36 @@ tools/archive-release.sh debug -f      # → dist/archive/v<版本>-Debug/（-f 
 
 ---
 
+## 签名
+
+**所有版本使用同一份固定证书，不许退回 `debug` 签名。**
+
+背景：`debug` 签名的密钥是 AGP 在「首次构建」时按机器生成的。CI 每次都跑在全新 runner 上，
+于是每次构建都是一把新钥匙 —— 实测 0.33.0 与 0.33.1 的证书 SHA-256 完全不同。
+表现是装好一个版本后再装下一个，系统直接拒绝：`INSTALL_FAILED_UPDATE_INCOMPATIBLE`，
+界面只显示「安装失败(-7)」和一句「与已安装应用签名不同」。应用内更新器因此从未成功过。
+
+密钥位置与生效路径：
+
+| 环境 | 来源 |
+|---|---|
+| 本机 | `local.properties` 的 `nbult.storeFile` / `storePassword` / `keyAlias` / `keyPassword` |
+| CI | Secrets `NBULT_KEYSTORE_BASE64` / `NBULT_KEYSTORE_PASSWORD`，workflow 里还原到 `$RUNNER_TEMP` |
+
+密钥文件放在**仓库之外**（工作区根目录的 `keystore/nbult-preview.jks`，密码在同目录 `password.txt`），
+`.gitignore` 已挡掉 `*.jks`。两边必须是同一把钥匙，否则本地装的包与线上包互相盖不上。
+
+密钥缺失时 `preview` 与 `release` 会退回 `debug` 签名，并在构建日志里打出警告，
+CI 则直接失败（`还原签名密钥` 那一步）—— 宁可不出包，也不要出一个盖不上任何既有安装的包。
+
+`CI` 的「校验签名」步骤会把证书指纹打进日志，正常应显示
+`CN=NBU Assistant Lite`；若出现 `CN=Android Debug`，说明密钥没生效。
+
+**换密钥等于让所有既有安装无法更新。** 真要换，先确认接受「所有人卸载重装、数据清空」，
+并在发布说明里写明。`versionCode` 只能递增，证书不能随便换重新签名同一个版本号。
+
+---
+
 ## 变更记录
 
 `CHANGELOG.md` 是唯一的变更记录来源，同时也是应用内「更新日志」页的正文：

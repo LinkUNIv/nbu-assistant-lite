@@ -668,7 +668,11 @@ private fun UpdateEntry() {
                             val apk = AppUpdateChecker.download(context, current.info) { percent ->
                                 state = UpdateUi.Downloading(percent, current.info)
                             }
-                            if (!ApkInstaller.install(context, apk)) {
+                            // 系统只会给出「安装失败(-7)」，不说人话。
+                            // 签名不同是唯一无法靠设置解决的情形，必须单独提示
+                            if (ApkInstaller.signatureMismatch(context, apk)) {
+                                state = UpdateUi.Error("与已安装版本签名不同，需先卸载再安装")
+                            } else if (!ApkInstaller.install(context, apk)) {
                                 state = UpdateUi.Error("请在系统设置中允许安装未知应用")
                             }
                         }.onFailure {

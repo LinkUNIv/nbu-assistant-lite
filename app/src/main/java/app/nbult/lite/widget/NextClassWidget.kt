@@ -4,10 +4,12 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.LocalContext
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -41,26 +43,41 @@ import app.nbult.lite.ui.theme.SeedColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.util.Calendar
 
 /**
- * 课表小组件，三种形态共用同一个 provider。
+ * 课表小组件的三种状态。
  *
- * - 2×2：只显示下一节课（倒计时 + 课程）
- * - 4×2：今日剩余课程列表，宽行，右侧带节次
- * - 2×4：同上但窄列，教室放在课名下
+ * 从 `planForToday` 的结果里拆出来，而不是直接看 `isTomorrow`：
+ * 那个函数把「今天还有课正在上」与「今天已结束、顺延到明天」放进同一个列表，
+ * 只看它无法区分「正在上课」与「下一节还没开始」。
+ */
+internal enum class WidgetMode {
+    /** 今天还有课没开始 */
+    NEXT,
+
+    /** 此刻正在某节课的时间区间内 */
+    ONGOING,
+
+    /** 今天的课都结束了，列表里其实是明天的课 */
+    FINISHED
+}
+
+/**
+ * 课表小组件，2×2。
  *
- * 形态由 `LocalSize` 判断，不为每种尺寸单独注册 receiver ——
- * 那样面板里会出现三个名字相近的条目，用户反而不知道该加哪个。
+ * 视觉参数以对话里的 SVG 草图为准：无描边、圆角 22dp、内边距 14dp、
+ * 右上角时间胶囊、红色分钟数占卡片约四成高度。
  */
 class NextClassWidget : GlanceAppWidget() {
 
     /**
      * 只声明一档 2×2。
      *
-     * 曾经试过「四档 + LocalSize 分支」在同一个 provider 里区分卡片与列表，
-     * 但 MIUI 只按自己选中的档位请求内容，实际拉伸后的尺寸与档位不一致，
+     * 曾试过「四档 + LocalSize 分支」在同一个 provider 里区分卡片与列表，
+     * 但 MIUI 只按自己选中的档位请求内容，拉伸后的尺寸与档位不一致，
      * `LocalSize` 拿到的仍是档位值，形态判断会失效。列表因此独立成
-     * [TodayListWidget] 这个 provider。
+     * [TodayListWidget]。
      */
     override val sizeMode: SizeMode = SizeMode.Responsive(setOf(DpSize(110.dp, 110.dp)))
 
@@ -85,32 +102,36 @@ internal data class TodayRow(
 
 internal data class WidgetState(
     val colors: WidgetColors,
-    val label: String,
+    val mode: WidgetMode,
+    /** 右上角胶囊：NEXT 显示下一节开始时间，ONGOING 显示当前时间，FINISHED 不显示 */
+    val clock: String,
+    val countValue: String,
+    val countUnit: String,
     val courseName: String,
     val timeRange: String,
     val room: String,
-    /** 倒计时的数值部分（`238`）。与单位分开，是为了单独放大。 */
-    val countValue: String,
-    /** 倒计时的单位部分（`分钟后` / `上课`）。 */
-    val countUnit: String,
+    /** FINISHED 时下方的一句提示，避免卡片只剩四个字 */
+    val hint: String,
     val today: List<TodayRow>,
     val isTomorrow: Boolean
 )
 
 /**
- * 从磁盘读一次数据，同时算出「下一节」与「今日剩余列表」。
+ * 从磁盘读一次数据，同时算出三种状态与今日列表。
  *
  * 不能依赖任何内存缓存：进程被 launcher 杀掉之后，widget 仍然要能画出来。
  */
 internal suspend fun loadState(context: Context): WidgetState {
     val fallback = WidgetState(
         colors = widgetColors(SeedColor.Blue.id, isDarkNow(context, "system")),
-        label = "下一节",
+        mode = WidgetMode.NEXT,
+        clock = "",
+        countValue = "",
+        countUnit = "",
         courseName = "暂无课表",
         timeRange = "",
         room = "",
-        countValue = "",
-        countUnit = "",
+        hint = "",
         today = emptyList(),
         isTomorrow = false
     )
@@ -126,11 +147,11 @@ internal suspend fun loadState(context: Context): WidgetState {
             container.timetableRepository.observeSnapshot().first()
         }
         if (snapshot.term == null) {
-            return@runCatching fallback.copy(colors = colors, courseName = "尚未导入课表", label = "")
+            return@runCatching fallback.copy(colors = colors, courseName = "尚未导入课表")
         }
 
         val now = AppClock.now()
-        // planForToday 已经剔除已结束的课，并且当天没课时会顺延到次日
+        // planForToday 已经剔除已结束的课；当天没课时会顺延到次日
         val plan = ScheduleService.planForToday(
             entries = snapshot.entries,
             term = snapshot.term,
@@ -138,11 +159,32 @@ internal suspend fun loadState(context: Context): WidgetState {
             overrides = snapshot.overrides,
             nowMillis = now
         )
-        val next = plan.entries.firstOrNull()
-            ?: return@runCatching fallback.copy(colors = colors, courseName = "没有课了", label = "")
+        val first = plan.entries.firstOrNull()
+            ?: return@runCatching fallback.copy(
+                colors = colors,
+                mode = WidgetMode.FINISHED,
+                courseName = "",
+                hint = "明天没有课"
+            )
 
         fun timeOf(section: Int) =
             snapshot.periods.firstOrNull { it.idx == section }?.let { it.startTime to it.endTime }
+
+        val nowMin = ScheduleService.minutesOfDay(now)
+
+        // 正在上课：今天某节课的区间包含此刻。
+        // plan 已剔除已结束的课，正在上的那节一定还在列表里
+        val ongoing = if (plan.isTomorrow) null else plan.entries.firstOrNull { entry ->
+            val start = timeOf(entry.slot.startSection)?.first?.let { minutesOf(it) }
+            val end = timeOf(entry.slot.endSection)?.second?.let { minutesOf(it) }
+            start != null && end != null && nowMin in start until end
+        }
+
+        val mode = when {
+            plan.isTomorrow -> WidgetMode.FINISHED
+            ongoing != null -> WidgetMode.ONGOING
+            else -> WidgetMode.NEXT
+        }
 
         // 列表最多取 8 条：再多也滚不完，只会让每次更新的 RemoteViews 更大
         val today = plan.entries.take(8).map { entry ->
@@ -160,18 +202,34 @@ internal suspend fun loadState(context: Context): WidgetState {
             )
         }
 
-        val startTime = timeOf(next.slot.startSection)?.first.orEmpty()
-        val endTime = timeOf(next.slot.endSection)?.second.orEmpty()
-        val count = countdown(startTime, now)
+        // 结束态的提示：下一节其实是明天的第一节，写清楚是明天几点
+        val tomorrowStart = if (plan.isTomorrow) timeOf(first.slot.startSection)?.first else null
+        val hint = if (plan.isTomorrow) {
+            if (tomorrowStart.isNullOrBlank()) "明天没有课"
+            else "明天 $tomorrowStart ${stripCourseCode(first.course.name)}"
+        } else {
+            ""
+        }
+
+        val display = ongoing ?: first
+        val startTime = timeOf(display.slot.startSection)?.first.orEmpty()
+        val endTime = timeOf(display.slot.endSection)?.second.orEmpty()
+        val count = if (mode == WidgetMode.NEXT) countdown(startTime, now) else ("" to "")
 
         WidgetState(
             colors = colors,
-            label = if (plan.isTomorrow) "明天" else "下一节",
-            courseName = stripCourseCode(next.course.name),
-            timeRange = if (startTime.isNotEmpty() && endTime.isNotEmpty()) "$startTime – $endTime" else "",
-            room = next.slot.room,
+            mode = mode,
+            clock = when (mode) {
+                WidgetMode.NEXT -> startTime
+                WidgetMode.ONGOING -> clockOf(now)
+                WidgetMode.FINISHED -> ""
+            },
             countValue = count.first,
             countUnit = count.second,
+            courseName = stripCourseCode(display.course.name),
+            timeRange = if (startTime.isNotEmpty() && endTime.isNotEmpty()) "$startTime – $endTime" else "",
+            room = display.slot.room,
+            hint = hint,
             today = today,
             isTomorrow = plan.isTomorrow
         )
@@ -187,21 +245,25 @@ internal fun minutesOf(time: String): Int? {
     return hour * 60 + minute
 }
 
+/** 毫秒时间戳 → `HH:mm`（东八区，与应用内一致）。 */
+private fun clockOf(millis: Long): String {
+    val calendar = Calendar.getInstance(AppClock.ZONE).apply { timeInMillis = millis }
+    return "%02d:%02d".format(
+        calendar.get(Calendar.HOUR_OF_DAY),
+        calendar.get(Calendar.MINUTE)
+    )
+}
+
 /**
  * 距离上课还有多久，拆成数值与单位两部分返回。
  *
- * 只给到分钟：widget 最快也要 30 分钟才刷新一次，精确到秒既刷不出来，
- * 也会让人以为它在实时走。
+ * 只算分钟数，不再判断「正在上课」—— 那是 [WidgetMode] 的职责。
  */
 internal fun countdown(startTime: String, nowMillis: Long): Pair<String, String> {
     val start = minutesOf(startTime) ?: return "" to ""
     val current = ScheduleService.minutesOfDay(nowMillis)
     val diff = start - current
-    return when {
-        diff in -120..0 -> "正在" to "上课"
-        diff in 1..600 -> "$diff" to "分钟后"
-        else -> "" to ""
-    }
+    return if (diff in 1..600) "$diff" to "分钟后" else "" to ""
 }
 
 /**
@@ -217,10 +279,26 @@ internal fun stripCourseCode(name: String): String {
 }
 
 /**
- * 2×2 形态：只显示下一节课。
+ * 固定像素字号。
  *
- * 倒计时贴顶、课程信息贴底，中间用权重间隔推开 —— 两块各占一头，
- * 任何高度下都不会挤成一段。
+ * `sp` 会跟随系统字号设置放大，而小组件的尺寸由 launcher 决定，并不跟着变。
+ * 系统把字体调到 1.3 倍时，46sp 就变成实打实的 60sp，卡片装不下。
+ * 除以 fontScale 后实际像素恒定，布局才可控。
+ *
+ * 代价是不再响应系统的无障碍字号设置 —— 在这个只有一张卡片、高度固定的场景里，
+ * 排布稳定比跟随放大更重要。
+ */
+@Composable
+internal fun fixedSp(value: Float): TextUnit {
+    val scale = LocalContext.current.resources.configuration.fontScale.coerceAtLeast(0.5f)
+    return (value / scale).sp
+}
+
+/**
+ * 2×2 形态。
+ *
+ * 三种状态共用一套骨架：顶部标签与时间胶囊、中部主信息、底部课程。
+ * 状态只改变中部的内容与颜色，卡片结构不变 —— 跨过上课时刻时不会整体重排。
  */
 @Composable
 private fun NextClassBody(state: WidgetState) {
@@ -233,31 +311,56 @@ private fun NextClassBody(state: WidgetState) {
         modifier = GlanceModifier
             .fillMaxSize()
             .background(ColorProvider(colors.background))
-            .cornerRadius(20.dp)
+            .cornerRadius(22.dp)
             .clickable(actionStartActivity<MainActivity>())
-            .padding(horizontal = 8.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 14.dp),
         contentAlignment = Alignment.TopStart
     ) {
         Column(GlanceModifier.fillMaxSize()) {
-            Column(modifier = GlanceModifier.fillMaxWidth()) {
-                if (state.label.isNotBlank()) {
+            Row(
+                modifier = GlanceModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Vertical.CenterVertically
+            ) {
+                if (state.mode == WidgetMode.NEXT) {
                     Text(
-                        text = state.label,
+                        text = "下一节",
                         style = TextStyle(
-                            color = ColorProvider(colors.title),
-                            fontSize = 10.sp,
+                            color = ColorProvider(colors.body),
+                            fontSize = fixedSp(11f),
                             fontWeight = FontWeight.Medium
                         ),
                         maxLines = 1
                     )
                 }
-                if (state.countValue.isNotBlank()) {
-                    // 48sp 是 94dp 内容宽下三位数的安全上限；单位另起一行才放得下
+                Spacer(GlanceModifier.defaultWeight())
+                if (state.clock.isNotBlank()) {
+                    Box(
+                        modifier = GlanceModifier
+                            .cornerRadius(12.dp)
+                            .background(ColorProvider(colors.title.copy(alpha = 0.07f)))
+                            .padding(horizontal = 7.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = state.clock,
+                            style = TextStyle(
+                                color = ColorProvider(colors.body),
+                                fontSize = fixedSp(11f)
+                            ),
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
+            Spacer(GlanceModifier.height(6.dp))
+
+            when (state.mode) {
+                WidgetMode.NEXT -> {
                     Text(
                         text = state.countValue,
                         style = TextStyle(
                             color = ColorProvider(colors.alert),
-                            fontSize = 48.sp,
+                            fontSize = fixedSp(46f),
                             fontWeight = FontWeight.Bold
                         ),
                         maxLines = 1
@@ -266,38 +369,69 @@ private fun NextClassBody(state: WidgetState) {
                         text = state.countUnit,
                         style = TextStyle(
                             color = ColorProvider(colors.body),
-                            fontSize = 10.sp
+                            fontSize = fixedSp(14f)
                         ),
                         maxLines = 1
                     )
                 }
+
+                WidgetMode.ONGOING -> Text(
+                    text = "正在上课",
+                    style = TextStyle(
+                        color = ColorProvider(colors.alert),
+                        fontSize = fixedSp(20f),
+                        fontWeight = FontWeight.Bold
+                    ),
+                    maxLines = 1
+                )
+
+                WidgetMode.FINISHED -> Text(
+                    text = "课程结束",
+                    style = TextStyle(
+                        color = ColorProvider(colors.info),
+                        fontSize = fixedSp(20f),
+                        fontWeight = FontWeight.Bold
+                    ),
+                    maxLines = 1
+                )
             }
 
             Spacer(GlanceModifier.defaultWeight())
 
             Column(modifier = GlanceModifier.fillMaxWidth()) {
-                Text(
-                    text = state.courseName,
-                    style = TextStyle(
-                        color = ColorProvider(colors.title),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    maxLines = 2
-                )
+                if (state.courseName.isNotBlank()) {
+                    Text(
+                        text = state.courseName,
+                        style = TextStyle(
+                            color = ColorProvider(colors.title),
+                            fontSize = fixedSp(16f),
+                            fontWeight = FontWeight.Bold
+                        ),
+                        maxLines = 2
+                    )
+                }
                 if (detail.isNotBlank()) {
                     Spacer(GlanceModifier.height(2.dp))
                     Text(
                         text = detail,
                         style = TextStyle(
                             color = ColorProvider(colors.body),
-                            fontSize = 9.sp
+                            fontSize = fixedSp(12f)
                         ),
                         maxLines = 2
                     )
                 }
-                // 课程块整体上移 4dp，不贴着卡片下沿
-                Spacer(GlanceModifier.height(4.dp))
+                // 结束态没有课程可显示，用一句提示占住底部，避免卡片下半截全空
+                if (state.mode == WidgetMode.FINISHED && state.hint.isNotBlank()) {
+                    Text(
+                        text = state.hint,
+                        style = TextStyle(
+                            color = ColorProvider(colors.body),
+                            fontSize = fixedSp(12f)
+                        ),
+                        maxLines = 2
+                    )
+                }
             }
         }
     }
@@ -306,32 +440,33 @@ private fun NextClassBody(state: WidgetState) {
 /**
  * 列表形态：今日剩余课程。
  *
- * `wide` 为真时是 4×2（宽行，右侧带教室与节次）；为假时是 2×4（窄列，教室放在课名下）。
- * 两种尺寸共用同一套行结构，只有列宽、行高与右侧列不同。
+ * `wide` 为真时是 4×2（宽行，一屏 2 行）；为假时是 2×4（窄列，一屏 3 行）。
+ * 行高按可用高度反推：4×2 减去内边距与标题后只剩 66dp，45dp 的行高放 1.4 行，
+ * 所以压到 38dp。
  */
 @Composable
 internal fun TodayListBody(state: WidgetState, wide: Boolean) {
     val colors = state.colors
-    val rowHeight = if (wide) 45.dp else 58.dp
+    val rowHeight = if (wide) 38.dp else 58.dp
 
     Box(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(ColorProvider(colors.background))
-            .cornerRadius(20.dp)
+            .cornerRadius(22.dp)
             .clickable(actionStartActivity<MainActivity>())
-            .padding(horizontal = if (wide) 12.dp else 8.dp, vertical = 8.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Column(GlanceModifier.fillMaxSize()) {
             Row(
-                modifier = GlanceModifier.fillMaxWidth().padding(bottom = 4.dp),
+                modifier = GlanceModifier.fillMaxWidth().padding(bottom = 2.dp),
                 verticalAlignment = Alignment.Vertical.CenterVertically
             ) {
                 Text(
                     text = if (state.isTomorrow) "明天" else "今天",
                     style = TextStyle(
                         color = ColorProvider(colors.title),
-                        fontSize = 10.sp,
+                        fontSize = fixedSp(11f),
                         fontWeight = FontWeight.Medium
                     ),
                     maxLines = 1
@@ -341,7 +476,7 @@ internal fun TodayListBody(state: WidgetState, wide: Boolean) {
                     text = "还剩 ${state.today.size} 节",
                     style = TextStyle(
                         color = ColorProvider(colors.body),
-                        fontSize = 10.sp
+                        fontSize = fixedSp(10f)
                     ),
                     maxLines = 1
                 )
@@ -349,10 +484,10 @@ internal fun TodayListBody(state: WidgetState, wide: Boolean) {
 
             if (state.today.isEmpty()) {
                 Text(
-                    text = "今天没有课了",
+                    text = if (state.isTomorrow) "明天没有课" else "今天没有课了",
                     style = TextStyle(
                         color = ColorProvider(colors.body),
-                        fontSize = 11.sp
+                        fontSize = fixedSp(11f)
                     ),
                     maxLines = 1
                 )
@@ -390,7 +525,7 @@ internal fun CourseRow(
                     text = row.startTime,
                     style = TextStyle(
                         color = ColorProvider(colors.title),
-                        fontSize = 12.sp,
+                        fontSize = fixedSp(12f),
                         fontWeight = FontWeight.Medium
                     ),
                     maxLines = 1
@@ -399,7 +534,7 @@ internal fun CourseRow(
                     text = row.endTime,
                     style = TextStyle(
                         color = ColorProvider(colors.body),
-                        fontSize = 9.sp
+                        fontSize = fixedSp(9f)
                     ),
                     maxLines = 1
                 )
@@ -410,7 +545,7 @@ internal fun CourseRow(
                     text = row.startTime,
                     style = TextStyle(
                         color = ColorProvider(colors.title),
-                        fontSize = 11.sp,
+                        fontSize = fixedSp(11f),
                         fontWeight = FontWeight.Medium
                     ),
                     maxLines = 1
@@ -418,14 +553,12 @@ internal fun CourseRow(
             }
         }
 
-        // 竖色条：左侧一条主题色，用来区分相邻两门课。
-        // 用 Spacer 而不是 Box —— Glance 的 Box 必须带 content，
-        // 纯装饰的空盒子写不出来
+        // 竖色条跟随主题色。用 Spacer 而不是 Box —— Glance 的 Box 必须带 content
         Spacer(
             modifier = GlanceModifier
                 .width(3.dp)
                 .fillMaxHeight()
-                .padding(vertical = 6.dp)
+                .padding(vertical = if (wide) 5.dp else 8.dp)
                 .background(ColorProvider(colors.accent))
                 .cornerRadius(2.dp)
         )
@@ -436,7 +569,7 @@ internal fun CourseRow(
                 text = row.courseName,
                 style = TextStyle(
                     color = ColorProvider(colors.title),
-                    fontSize = if (wide) 13.sp else 12.sp,
+                    fontSize = fixedSp(if (wide) 13f else 12f),
                     fontWeight = FontWeight.Medium
                 ),
                 maxLines = 1
@@ -446,7 +579,7 @@ internal fun CourseRow(
                     text = row.room,
                     style = TextStyle(
                         color = ColorProvider(colors.body),
-                        fontSize = 9.sp
+                        fontSize = fixedSp(9f)
                     ),
                     maxLines = 1
                 )
@@ -459,7 +592,7 @@ internal fun CourseRow(
                     text = row.room,
                     style = TextStyle(
                         color = ColorProvider(colors.body),
-                        fontSize = 9.sp
+                        fontSize = fixedSp(9f)
                     ),
                     maxLines = 1
                 )
@@ -469,7 +602,7 @@ internal fun CourseRow(
                 text = row.sections,
                 style = TextStyle(
                     color = ColorProvider(colors.body),
-                    fontSize = 9.sp
+                    fontSize = fixedSp(9f)
                 ),
                 maxLines = 1
             )

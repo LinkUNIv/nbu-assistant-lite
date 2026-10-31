@@ -18,7 +18,9 @@ internal data class WidgetColors(
     val body: Color,
     val accent: Color,
     /** 倒计时数字。与主题色分开：它表示「快要上课了」，需要独立于主题的紧迫感。 */
-    val alert: Color
+    val alert: Color,
+    /** 「课程结束」这类中性状态。蓝=无事发生，与红色的紧迫感分开。 */
+    val info: Color
 )
 
 internal fun widgetColors(seedId: String, dark: Boolean): WidgetColors {
@@ -29,7 +31,8 @@ internal fun widgetColors(seedId: String, dark: Boolean): WidgetColors {
             title = Color(0xFFE6E1E5),
             body = Color(0xFFA8A4AE),
             accent = seed.dark,
-            alert = Color(0xFFFF8A80)
+            alert = Color(0xFFFF8A80),
+            info = Color(0xFF8FB8FF)
         )
     } else {
         WidgetColors(
@@ -37,7 +40,8 @@ internal fun widgetColors(seedId: String, dark: Boolean): WidgetColors {
             title = Color(0xFF1B1B1F),
             body = Color(0xFF5F5E5A),
             accent = seed.light,
-            alert = Color(0xFFD93F3C)
+            alert = Color(0xFFD93F3C),
+            info = Color(0xFF2F6FE0)
         )
     }
 }

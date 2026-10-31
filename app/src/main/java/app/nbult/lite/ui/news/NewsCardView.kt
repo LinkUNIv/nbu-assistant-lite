@@ -100,8 +100,9 @@ internal fun DateStamp(date: String, size: Dp, modifier: Modifier = Modifier) {
 
     val family = FontFamily(Font(R.font.noto_serif_subset))
     val density = LocalDensity.current
-    val yearSize = with(density) { (size.value * 0.20f).sp }
-    val dateSize = with(density) { (size.value * 0.40f).sp }
+    // 除以 fontScale：卡片高度是固定的 dp，字号若跟着系统放大就会把下半截挤掉
+    val yearSize = with(density) { (size.value * 0.20f / density.fontScale).sp }
+    val dateSize = with(density) { (size.value * 0.40f / density.fontScale).sp }
     val padding = with(density) { (size.value * 0.06f).dp }
 
     // 分隔线宽度跟随年份实际宽度，避免「2026」与「1999」下方线条长度不一
@@ -423,6 +424,19 @@ private fun DayCard(
     }
 }
 
+/**
+ * 固定像素字号：除以系统 fontScale，让文字不随系统字号设置放大。
+ *
+ * 卡片的行高与头部高度都是写死的 dp（62dp / 132dp），字号一旦跟着系统放大，
+ * 条目就会被挤出行外、整块内容溢出卡片。代价是不再响应无障碍字号设置，
+ * 但「内容被裁掉」比「字没变大」更糟。
+ */
+@Composable
+private fun fixedSp(value: Float): androidx.compose.ui.unit.TextUnit {
+    val scale = LocalDensity.current.fontScale.coerceAtLeast(0.5f)
+    return (value / scale).sp
+}
+
 @Composable
 private fun DayCardRow(item: NewsItem, onOpen: (Long, Rect) -> Unit) {
     var bounds by remember { mutableStateOf(Rect.Zero) }
@@ -438,12 +452,12 @@ private fun DayCardRow(item: NewsItem, onOpen: (Long, Rect) -> Unit) {
     ) {
         Text(
             text = item.columnName,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = fixedSp(11f)),
             color = MaterialTheme.colorScheme.primary
         )
         Text(
             text = item.title,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = fixedSp(14f)),
             fontWeight = if (item.readAt == null) FontWeight.Medium else FontWeight.Normal,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis

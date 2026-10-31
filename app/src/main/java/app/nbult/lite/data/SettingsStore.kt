@@ -32,6 +32,16 @@ class SettingsStore(private val context: Context) {
     private val keyDarkMode = stringPreferencesKey("dark_mode")
     private val keyBackdrop = stringPreferencesKey("backdrop")
 
+    // 更新提醒。这几个值只用于「要不要亮红点 / 要不要弹窗」，
+    // 不能拿去替代真实的版本比对 —— 真正的判断永远以 BuildConfig.VERSION_CODE 为准
+    private val keyUpdateCheckedAt = longPreferencesKey("update_checked_at")
+    private val keyUpdateLatestCode = longPreferencesKey("update_latest_code")
+    private val keyUpdateLatestName = stringPreferencesKey("update_latest_name")
+    private val keyUpdateDismissed = longPreferencesKey("update_dismissed_code")
+    // 资源包：用户已确认看到的版本 / 发现但还没生效的版本
+    private val keyPackAck = longPreferencesKey("pack_ack_version")
+    private val keyPackPending = longPreferencesKey("pack_pending_version")
+
     val lastNewsRefresh: Flow<Long> =
         context.settingsDataStore.data.map { it[keyLastNewsRefresh] ?: 0L }
 
@@ -141,6 +151,52 @@ class SettingsStore(private val context: Context) {
     }
 
     /** 清空全部设置，回到默认值（恢复出厂设置时使用）。 */
+    /** 上次检查版本的时间。 */
+    val updateCheckedAt: Flow<Long> =
+        context.settingsDataStore.data.map { it[keyUpdateCheckedAt] ?: 0L }
+
+    /** 远端最新版本号；0 表示还没成功查过。 */
+    val updateLatestCode: Flow<Long> =
+        context.settingsDataStore.data.map { it[keyUpdateLatestCode] ?: 0L }
+
+    val updateLatestName: Flow<String> =
+        context.settingsDataStore.data.map { it[keyUpdateLatestName] ?: "" }
+
+    /** 用户点过「以后再说」的版本，同版本不再弹窗。 */
+    val updateDismissedCode: Flow<Long> =
+        context.settingsDataStore.data.map { it[keyUpdateDismissed] ?: 0L }
+
+    /** 资源包：用户已经看过的版本，红点据此熄灭。 */
+    val packAckVersion: Flow<Long> =
+        context.settingsDataStore.data.map { it[keyPackAck] ?: 0L }
+
+    /** 资源包：已发现但没生效的版本（例如被最低应用版本挡住）。 */
+    val packPendingVersion: Flow<Long> =
+        context.settingsDataStore.data.map { it[keyPackPending] ?: 0L }
+
+    suspend fun setUpdateChecked(at: Long, latestCode: Long, latestName: String) {
+        context.settingsDataStore.edit {
+            it[keyUpdateCheckedAt] = at
+            it[keyUpdateLatestCode] = latestCode
+            it[keyUpdateLatestName] = latestName
+        }
+    }
+
+    suspend fun setUpdateDismissed(code: Long) {
+        context.settingsDataStore.edit { it[keyUpdateDismissed] = code }
+    }
+
+    suspend fun setPackAck(version: Long) {
+        context.settingsDataStore.edit {
+            it[keyPackAck] = version
+            it[keyPackPending] = 0L
+        }
+    }
+
+    suspend fun setPackPending(version: Long) {
+        context.settingsDataStore.edit { if (version > 0L) it[keyPackPending] = version }
+    }
+
     suspend fun resetAll() {
         context.settingsDataStore.edit { it.clear() }
     }

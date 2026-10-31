@@ -27,6 +27,15 @@ object ResourcePackStore {
     private const val ROOT = "pack"
     private const val STATE = "state.json"
 
+    /**
+     * 状态变更的版本号，供 UI 观察。
+     *
+     * `state.json` 本身是文件，Compose 看不见它的变化。界面读的是「当前生效哪一版」，
+     * 所以每次写入后把计数加一，UI 以此为 key 重读一次 —— 比把整份状态塞进 DataStore 轻。
+     */
+    private val revisionsFlow = kotlinx.coroutines.flow.MutableStateFlow(0L)
+    val revisions: kotlinx.coroutines.flow.StateFlow<Long> = revisionsFlow
+
     fun state(context: Context): PackState {
         val file = stateFile(context)
         if (!file.isFile) return PackState()
@@ -101,6 +110,7 @@ object ResourcePackStore {
             )
         )
         purgeOldVersions(context, keep = manifest.version)
+        revisionsFlow.value += 1
         AppLog.log("Pack", "已应用 v${manifest.version}（${payload.size} 个文件）")
         return true
     }
@@ -117,6 +127,7 @@ object ResourcePackStore {
     /** 恢复出厂设置时清掉下载的包，重新回到内置资源。 */
     fun clear(context: Context) {
         runCatching { root(context).deleteRecursively() }
+        revisionsFlow.value += 1
         AppLog.log("Pack", "已清除下载的资源包")
     }
 

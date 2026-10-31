@@ -28,11 +28,28 @@ object ResourcePackChecker {
     /** 单个文件上限。资源包是几十 KB 级的 JSON，超过这个量级说明文件不对。 */
     private const val MAX_FILE_BYTES = 512 * 1024
 
-    // 顺序有讲究：GitHub raw 与 App 更新走的是同一家、同一个仓库，网络通的时候它最快；
-    // jsDelivr 在国内通常更稳，但它按分支缓存（最长十几小时），刚发的包可能还没同步。
-    // 所以先试 raw，失败再退镜像 —— 连接超时压到 6 秒，坏掉的那条不会让检查卡半分钟
-    private val BASES = listOf(
+    /**
+     * 清单地址走 API，**不走 CDN**。
+     *
+     * 这里踩过一次：jsDelivr 对分支内容做长缓存（实测十几小时），
+     * 新包 13:16 就发布了，14:45 检查仍拿到 11:35 那份清单，
+     * 版本号与本地相同 → 界面显示「已是最新」。文件带版本号可以缓存，
+     * 但「现在最新是第几版」这件事必须实时。
+     */
+    private const val API_MANIFEST =
+        "https://api.github.com/repos/LinkUNIv/nbu-assistant-lite/contents/latest.json?ref=packs"
+
+    /**
+     * 文件来源。都是同一仓库的不同边缘节点，路径里带版本号（`<version>/...`），
+     * 内容不可变，缓存反而是好事。
+     *
+     * 一次检查里，某个源命中后剩余文件优先用它（见 [downloadFile]），
+     * 不逐个文件从头试起。
+     */
+    private val FILE_BASES = listOf(
         "https://raw.githubusercontent.com/LinkUNIv/nbu-assistant-lite/packs",
+        "https://fastly.jsdelivr.net/gh/LinkUNIv/nbu-assistant-lite@packs",
+        "https://gcore.jsdelivr.net/gh/LinkUNIv/nbu-assistant-lite@packs",
         "https://cdn.jsdelivr.net/gh/LinkUNIv/nbu-assistant-lite@packs"
     )
 
@@ -42,7 +59,10 @@ object ResourcePackChecker {
         .build()
 
     /** 检查并应用。任何异常都吞掉 —— 资源更新的失败不该影响启动。 */
-    suspend fun checkAndApply(context: Context): PackCheckResult = withContext(Dispatchers.IO) {
+    suspend fun checkAndApply(
+        context: Context,
+        settings: app.nbult.lite.data.SettingsStore
+    ): PackCheckResult = withContext(Dispatchers.IO) {
         runCatching {
             val now = System.currentTimeMillis()
             val hit = fetchManifest() ?: return@runCatching fail(now, "清单不可达或格式错误")
@@ -65,6 +85,8 @@ object ResourcePackChecker {
                 // 资源不向下兼容：整体跳过，不做部分应用。只记日志，不串到版本更新界面
                 manifest.minAppVersion > BuildConfig.VERSION_CODE -> {
                     ResourcePackStore.markChecked(context, now)
+                    // 记下「有更新但没生效」，关于页据此亮红点
+                    settings.setPackPending(manifest.version)
                     AppLog.log(
                         "Pack",
                         "跳过 v${manifest.version}：要求 App ${manifest.minAppVersion}，" +
@@ -73,7 +95,11 @@ object ResourcePackChecker {
                     PackCheckResult.Blocked(manifest.minAppVersion)
                 }
 
-                else -> applyNew(context, base, manifest, now)
+                else -> {
+                // 先记 pending：哪怕后面下载失败，用户也该知道「有更新」
+                settings.setPackPending(manifest.version)
+                applyNew(context, base, manifest, now)
+            }
             }
         }.getOrElse {
             AppLog.log("Pack", "检查异常：${it.message}")
@@ -88,9 +114,12 @@ object ResourcePackChecker {
         now: Long
     ): PackCheckResult {
         val payload = HashMap<String, String>(manifest.files.size)
+        var preferred = FILE_BASES.indexOf(base).coerceAtLeast(0)
         for (file in manifest.files) {
-            val bytes = getBytes("$base/${manifest.version}/${file.path}")
+            val hit = downloadFile(manifest.version, file.path, preferred)
                 ?: return reject(context, manifest, "下载失败 ${file.path}")
+            val (bytes, usedIndex) = hit
+            preferred = usedIndex
             if (bytes.size > MAX_FILE_BYTES) {
                 return reject(context, manifest, "${file.path} 超出 ${MAX_FILE_BYTES} 字节")
             }
@@ -138,20 +167,42 @@ object ResourcePackChecker {
         return PackCheckResult.Failed(reason)
     }
 
-    /** 逐个源试，第一个能解析的清单为准。 */
+    /**
+     * 取清单：先问 API（实时），再退镜像（可能延迟）。
+     *
+     * 返回的 String 只是「文件该从哪个源起试」的提示，不参与版本判断 ——
+     * 版本永远以清单里的 `version` 为准。
+     */
     private fun fetchManifest(): Pair<String, PackManifest>? {
-        for (base in BASES) {
+        getText(API_MANIFEST, raw = true)?.let { text ->
+            PackManifest.parse(text)?.let { return FILE_BASES.first() to it }
+        }
+        AppLog.log("Pack", "API 清单不可用，退回镜像（可能延迟）")
+        for (base in FILE_BASES) {
             val text = getText("$base/latest.json") ?: continue
-            val manifest = PackManifest.parse(text) ?: continue
-            return base to manifest
+            PackManifest.parse(text)?.let { return base to it }
         }
         return null
     }
 
-    private fun getText(url: String): String? = getBytes(url)?.let { String(it, Charsets.UTF_8) }
+    /** 下一个文件从 [preferred] 起试，失败再按顺序换源。 */
+    private fun downloadFile(version: Long, path: String, preferred: Int): Pair<ByteArray, Int>? {
+        val order = listOf(preferred) + FILE_BASES.indices.filter { it != preferred }
+        for (index in order) {
+            val bytes = getBytes("${FILE_BASES[index]}/$version/$path") ?: continue
+            return bytes to index
+        }
+        return null
+    }
 
-    private fun getBytes(url: String): ByteArray? = runCatching {
-        val request = Request.Builder().url(url).build()
+    private fun getText(url: String, raw: Boolean = false): String? =
+        getBytes(url, raw)?.let { String(it, Charsets.UTF_8) }
+
+    private fun getBytes(url: String, raw: Boolean = false): ByteArray? = runCatching {
+        val builder = Request.Builder().url(url)
+        // API 默认返回 JSON 包装，加这个头才拿到文件原文
+        if (raw) builder.header("Accept", "application/vnd.github.raw")
+        val request = builder.build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return null
             val declared = response.body?.contentLength() ?: -1L

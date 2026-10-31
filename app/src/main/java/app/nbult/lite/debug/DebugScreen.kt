@@ -261,7 +261,7 @@ fun DebugScreen(onBack: () -> Unit) {
                     Button(onClick = {
                         scope.launch {
                             packLog = "检查中…"
-                            val result = ResourcePackChecker.checkAndApply(context)
+                            val result = ResourcePackChecker.checkAndApply(context, container.settings)
                             packState = ResourcePackStore.state(context)
                             packLog = when (result) {
                                 is PackCheckResult.Applied -> "已应用 v${formatPackVersion(result.version)}"

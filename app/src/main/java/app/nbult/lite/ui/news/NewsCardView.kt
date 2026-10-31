@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.items
@@ -115,8 +116,13 @@ internal fun DateStamp(date: String, size: Dp, modifier: Modifier = Modifier) {
     }
 
     Column(
+        // 宽度自适应，不写死 size。
+        //
+        // 「10.31」在 43sp 下约 108dp，而固定 108dp 减去内边距只剩 95dp 可用，
+        // softWrap=false 又没有省略号，末位数字就被直接裁掉了。
+        // 右侧那列相对日期早已删除，放宽不会挤到任何东西；极窄屏由父布局约束兜底。
         modifier = modifier
-            .width(size)
+            .widthIn(min = size)
             .padding(padding),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -163,10 +164,12 @@ fun SettingsScreen(
                 subtitle = "清空课表、恢复出厂、工作日志",
                 trailing = "$logCount 条日志"
             ) { onNavigateSection("more") }
+            val badges = rememberUpdateBadges()
             SettingsEntry(
                 title = "关于",
-                subtitle = "开源许可、调试面板",
-                trailing = "v${BuildConfig.VERSION_NAME}"
+                subtitle = if (badges.any) "有可用更新" else "版本、资源、开源许可",
+                trailing = "v${BuildConfig.VERSION_NAME}",
+                badge = badges.any
             ) { onNavigateSection("about") }
         } else {
             SettingsSectionHeader(title = sectionTitle(section), onBack = onBack)
@@ -445,7 +448,25 @@ SettingCard(title = "工作日志") {
             }
 
             if (section == "about") {
-SettingCard(title = "关于") {
+            val badges = rememberUpdateBadges()
+SettingCard(title = "版本") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("宁大助手 Lite", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "版本 ${BuildConfig.VERSION_NAME}（${BuildConfig.VERSION_CODE}）",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (badges.version) RedDot()
+            }
+            VersionEntry(badge = false)
+        }
+SettingCard(title = "资源") {
+            PackEntry()
+        }
+SettingCard(title = "文档") {
             Text(
                 text = "宁大助手 Lite 是非官方第三方工具，与宁波大学无隶属关系。应用不收集个人信息、不需要登录、不保存账号密码。资讯内容来自宁波大学新闻网公开发布内容，仅展示标题、摘要与原文链接，版权归原作者与学校所有。",
                 style = MaterialTheme.typography.bodySmall,
@@ -462,15 +483,6 @@ SettingCard(title = "关于") {
                 title = "更新日志",
                 subtitle = "各版本的改动说明，最新在前",
                 onClick = { onNavigateSection("changelog") }
-            )
-            UpdateEntry()
-            // 版本号放在「关于」页里，因为用户反馈问题时常被要求「报一下版本」，
-            // 截图这一页最方便。入口列表里显示在「关于」行右侧，两处不在同一屏，不算重复
-            Text(
-                text = "版本 ${BuildConfig.VERSION_NAME}（${BuildConfig.VERSION_CODE}）",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp)
             )
         }
             }
@@ -623,81 +635,6 @@ SettingCard(title = "调试") {
     }
 }
 
-/** 「检查更新」在界面上要表达的状态。 */
-private sealed interface UpdateUi {
-    data object Idle : UpdateUi
-    data object Checking : UpdateUi
-    data object Latest : UpdateUi
-    data class Found(val info: UpdateInfo) : UpdateUi
-    data class Downloading(val percent: Int, val info: UpdateInfo) : UpdateUi
-    data class Error(val message: String) : UpdateUi
-}
-
-/**
- * 检查更新。
- *
- * 一个入口承担「检查 → 下载 → 交给安装器」三步：这三步是同一件事的三个阶段，
- * 拆成三个按钮只会让用户在中间态无所适从。
- *
- * 下载前不弹二次确认 —— 用户点「发现新版本」这个动作本身就是要装。
- */
-@Composable
-private fun UpdateEntry() {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var state by remember { mutableStateOf<UpdateUi>(UpdateUi.Idle) }
-
-    val (title, subtitle) = when (val current = state) {
-        UpdateUi.Idle -> "检查更新" to "当前 v${BuildConfig.VERSION_NAME}"
-        UpdateUi.Checking -> "检查更新" to "正在检查…"
-        UpdateUi.Latest -> "检查更新" to "已是最新版本"
-        is UpdateUi.Found -> "发现 v${current.info.versionName}" to "点击下载并安装"
-        is UpdateUi.Downloading -> "正在下载 v${current.info.versionName}" to "${current.percent}%"
-        is UpdateUi.Error -> "检查更新" to current.message
-    }
-
-    LinkRow(
-        title = title,
-        subtitle = subtitle,
-        onClick = {
-            when (val current = state) {
-                is UpdateUi.Found -> {
-                    state = UpdateUi.Downloading(0, current.info)
-                    scope.launch {
-                        runCatching {
-                            val apk = AppUpdateChecker.download(context, current.info) { percent ->
-                                state = UpdateUi.Downloading(percent, current.info)
-                            }
-                            // 系统只会给出「安装失败(-7)」，不说人话。
-                            // 签名不同是唯一无法靠设置解决的情形，必须单独提示
-                            if (ApkInstaller.signatureMismatch(context, apk)) {
-                                state = UpdateUi.Error("与已安装版本签名不同，需先卸载再安装")
-                            } else if (!ApkInstaller.install(context, apk)) {
-                                state = UpdateUi.Error("请在系统设置中允许安装未知应用")
-                            }
-                        }.onFailure {
-                            state = UpdateUi.Error(it.message ?: "下载失败")
-                        }
-                    }
-                }
-
-                UpdateUi.Checking, is UpdateUi.Downloading -> Unit
-
-                else -> {
-                    state = UpdateUi.Checking
-                    scope.launch {
-                        state = when (val result = AppUpdateChecker.check()) {
-                            is UpdateState.Available -> UpdateUi.Found(result.info)
-                            UpdateState.UpToDate -> UpdateUi.Latest
-                            is UpdateState.Failed -> UpdateUi.Error(result.message)
-                        }
-                    }
-                }
-            }
-        }
-    )
-}
-
 /**
  * 跳转到子页面的行：左侧标题与说明，右侧箭头。
  *
@@ -705,9 +642,14 @@ private fun UpdateEntry() {
  * 复制一份出来改，早晚会有一条忘了改内边距。
  */
 @Composable
-private fun LinkRow(title: String, subtitle: String, onClick: () -> Unit) {
+internal fun LinkRow(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(top = 8.dp, bottom = 2.dp),
@@ -753,6 +695,7 @@ private fun SettingsEntry(
     title: String,
     subtitle: String,
     trailing: String? = null,
+    badge: Boolean = false,
     onClick: () -> Unit
 ) {
     Card(
@@ -781,6 +724,10 @@ private fun SettingsEntry(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+            if (badge) {
+                Spacer(Modifier.width(8.dp))
+                RedDot()
             }
             if (trailing != null) {
                 Text(

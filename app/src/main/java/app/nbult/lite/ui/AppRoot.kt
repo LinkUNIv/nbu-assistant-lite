@@ -34,6 +34,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.nbult.lite.data.update.UpdateCenter
+import app.nbult.lite.data.update.UpdateInfo
+import app.nbult.lite.data.update.UpdateState
+import app.nbult.lite.ui.settings.UpdateDialog
+import kotlinx.coroutines.flow.first
 import app.nbult.lite.BuildConfig
 import app.nbult.lite.data.notify.ClassReminderScheduler
 import app.nbult.lite.debug.DebugScreen
@@ -121,6 +126,26 @@ fun AppRoot() {
     )
 
     val navController = rememberNavController()
+
+    // 启动后自动检查版本：延迟 12 秒，避开首屏；24 小时内最多一次。
+    // 查到新版且用户没对同一版本点过「以后再说」，就弹窗。
+    var pendingUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(12_000)
+        val lastCheck = container.settings.updateCheckedAt.first()
+        if (UpdateCenter.due(lastCheck)) {
+            val result = UpdateCenter.refresh(container.settings)
+            if (result is UpdateState.Available) {
+                val dismissed = container.settings.updateDismissedCode.first()
+                if (dismissed != result.info.versionCode.toLong()) {
+                    pendingUpdate = result.info
+                }
+            }
+        }
+    }
+    pendingUpdate?.let { info ->
+        UpdateDialog(info = info, onDismiss = { pendingUpdate = null })
+    }
     // 侧栏进度、作息编辑都要读它，提到导航图之前只收一次
     val timetableState by timetableVm.state.collectAsStateWithLifecycle()
     // 通知点击 → 切到课表并跳到那一周（等学期加载完再 setWeek，否则会被静默忽略）

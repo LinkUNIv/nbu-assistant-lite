@@ -40,12 +40,13 @@ if ! git clone --quiet --branch packs --depth 1 "$REMOTE" "$WORK/packs" 2>/dev/n
 fi
 
 DEST="$WORK/packs/$VERSION"
-mkdir -p "$DEST/calendar" "$DEST/portal"
+mkdir -p "$DEST/calendar" "$DEST/portal" "$DEST/news"
 
 # 需要外置的文件清单。新增一类资源时在这里加一行，
 # 并让对应的读取处改走 ResourcePackStore.readText()
 cp app/src/main/assets/calendar/nbu_calendar.json "$DEST/calendar/"
 cp app/src/main/assets/portal/entries.json       "$DEST/portal/"
+cp app/src/main/assets/news/sources.json         "$DEST/news/"
 
 echo "==> 生成清单"
 python - "$WORK/packs" "$VERSION" <<'PY'

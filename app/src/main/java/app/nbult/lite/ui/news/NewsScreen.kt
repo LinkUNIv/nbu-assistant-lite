@@ -201,6 +201,8 @@ private fun NewsHeader(
     lastSyncAt: Long,
     onRefresh: () -> Unit
 ) {
+    // 来源名来自配置（内置 + 资源包），所以要拿 context 读一次
+    val context = LocalContext.current
     val syncLabel = remember(lastSyncAt) {
         if (lastSyncAt <= 0L) "" else {
             java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.US)
@@ -217,7 +219,7 @@ private fun NewsHeader(
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                text = "内容来源：" + NewsColumns.sources.joinToString(" · ") {
+                text = "内容来源：" + NewsColumns.sources(context).joinToString(" · ") {
                     it.removePrefix("宁波大学")
                 },
                 style = MaterialTheme.typography.titleSmall,

@@ -108,8 +108,18 @@ object ResourcePackChecker {
             }
         }
 
+        // 资讯配置与入口链接一样要过闸门：它能决定应用去请求哪些地址
+        payload["news/sources.json"]?.let { text ->
+            PackGuards.validateNewsSources(context, text)?.let { reason ->
+                PackGuards.logReject(manifest.version, reason)
+                return reject(context, manifest, reason)
+            }
+        }
+
         ResourcePackStore.markChecked(context, now)
         return if (ResourcePackStore.apply(context, manifest, payload, now)) {
+            // 配置换了就要让资讯那边丢掉缓存，否则要等下次冷启动才生效
+            app.nbult.lite.data.news.NewsSources.invalidate()
             PackCheckResult.Applied(manifest.version)
         } else {
             reject(context, manifest, "写入失败")

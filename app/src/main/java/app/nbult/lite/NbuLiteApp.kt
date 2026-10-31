@@ -33,16 +33,16 @@ class AppContainer(context: Context) {
     val settings: SettingsStore by lazy { SettingsStore(appContext) }
     val networkMonitor: NetworkMonitor by lazy { NetworkMonitor(appContext) }
     val newsSource: NewsSource by lazy { NewsSource() }
-    val newsCrawler: NewsCrawler by lazy { NewsCrawler() }
+    val newsCrawler: NewsCrawler by lazy { NewsCrawler(appContext) }
     val timeSync: TimeSync by lazy { TimeSync() }
 
     /** 通知点击带来的"跳到第 N 周"；由 MainActivity 写入，AppRoot 消费后置空。 */
     val pendingWeekJump = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
-    val termStartResolver: TermStartResolver by lazy { TermStartResolver() }
+    val termStartResolver: TermStartResolver by lazy { TermStartResolver(appContext) }
     val timetableRepository: TimetableRepository by lazy { TimetableRepository(database, settings) }
     val calendarRepository: CalendarRepository by lazy { CalendarRepository(appContext) }
     val newsRepository: NewsRepository by lazy {
-        NewsRepository(database, newsSource, newsCrawler, networkMonitor)
+        NewsRepository(appContext, database, newsSource, newsCrawler, networkMonitor)
     }
 
     /** 恢复出厂设置：课表、资讯、设置、网页数据、日志一并清空。 */
@@ -74,6 +74,8 @@ class NbuLiteApp : Application() {
             AppLog.houseKeeping(applicationContext)
             val savedOffset = container.settings.timeOffset.first()
             AppClock.setOffset(savedOffset)
+            // 预热资讯配置：资讯页首帧会读它，放在这里避免那一帧去读文件
+            app.nbult.lite.data.news.NewsSources.load(applicationContext)
         }
 
         // 课表变化后刷新小组件。

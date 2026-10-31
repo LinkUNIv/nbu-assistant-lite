@@ -102,8 +102,16 @@ tools/archive-release.sh debug -f      # → dist/archive/v<版本>-Debug/（-f 
 
 ## 资源包
 
-校历与入口配置不只存在于 APK 里：`filesDir/pack/<版本>/` 可以放一份下载来的覆盖版，
+校历、入口配置、资讯抓取规则不只存在于 APK 里：`filesDir/pack/<版本>/` 可以放一份下载来的覆盖版，
 读取时优先用它，没有就退回 `assets/`。这样改数据不必发版。
+
+目前纳入资源包的三份文件：
+
+| 文件 | 内容 | 读取处 |
+|---|---|---|
+| `calendar/nbu_calendar.json` | 学年、学期起止、作息模板 | `CalendarRepository` |
+| `portal/entries.json` | 入口链接与分类 | `PortalCatalog` |
+| `news/sources.json` | 资讯栏目与抓取规则 | `NewsSources` |
 
 | 项 | 位置 |
 |---|---|
@@ -131,8 +139,10 @@ tools/archive-release.sh debug -f      # → dist/archive/v<版本>-Debug/（-f 
 - **`minAppVersion` 是硬门槛**。包里用了旧版读不懂的结构就抬高它，旧版整体跳过，不做部分应用
 - **读取一律走 `ResourcePackStore.readText()`**。直接 `context.assets.open()` 会绕开资源包，
   远程更新对该文件就无效了
-- **入口链接文件单独设卡**（`PackGuards`）。不允许引入内置清单里没有的域名，非 https 一律拒绝。
-  远程包能把用户导到站外，这是内容外置唯一真正危险的地方
+- **入口链接与资讯配置单独设卡**（`PackGuards`）。都不允许引入内置清单里没有的域名，
+  非 https 一律拒绝。入口能带用户去站外，资讯配置能让应用去请求任意地址 —— 这两处必须卡
+- **抓取规则只放「往哪找」，不放「怎么算」**。`news/sources.json` 里只有选择器、正则与阈值，
+  挑正文根节点、去重、日期格式化这些判断留在 `NewsCrawler`。远程包能改的是参数，不是逻辑
 
 失败处理：校验不过、解析不过、写入失败 → 记 `failedVersion`，同版本不再重试，退回内置资源。
 网络不通不记版本，下次启动还能再试。

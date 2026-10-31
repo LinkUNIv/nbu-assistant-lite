@@ -51,6 +51,33 @@ internal object PackGuards {
         return null
     }
 
+    /**
+     * 资讯抓取配置的闸门。
+     *
+     * 比入口宽松一点：这里不限制「必须是已有域名」之外的东西 —— 但域名仍然要卡。
+     * 抓取配置能把请求指向任意地址，等于让远程包指挥应用去访问谁；把 host 收在内置集合里，
+     * 至少保证它不会拿用户设备去扫内网或访问第三方。
+     *
+     * 正则能否编译由 [app.nbult.lite.data.news.NewsSources.parse] 负责，这里只查域名。
+     */
+    fun validateNewsSources(context: Context, text: String): String? {
+        val config = app.nbult.lite.data.news.NewsSources.parse(text)
+            ?: return "news/sources.json 结构不合格"
+        val builtin = runCatching {
+            val raw = context.assets.open("news/sources.json").bufferedReader().use { it.readText() }
+            app.nbult.lite.data.news.NewsSources.parse(raw)?.columns.orEmpty()
+        }.getOrDefault(emptyList())
+        if (builtin.isEmpty()) return null
+
+        val allowed = builtin.mapNotNull { Uri.parse(it.listUrl).host }.toSet()
+        for (column in config.columns) {
+            val host = Uri.parse(column.listUrl).host
+                ?: return "栏目「${column.name}」的链接无法解析"
+            if (host !in allowed) return "栏目「${column.name}」引入了新域名：$host"
+        }
+        return null
+    }
+
     private fun builtinUrls(context: Context): List<String> = runCatching {
         val raw = context.assets.open("portal/entries.json").bufferedReader().use { it.readText() }
         val array = JSONObject(raw).optJSONArray("entries") ?: return emptyList()

@@ -13,6 +13,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class NewsRepository(
+    private val context: android.content.Context,
     database: AppDatabase,
     private val source: NewsSource,
     private val crawler: NewsCrawler,
@@ -26,7 +27,7 @@ class NewsRepository(
     suspend fun refresh(): Result<Int> = runCatching {
         var total = 0
         var succeeded = 0
-        for (column in NewsColumns.ALL) {
+        for (column in NewsColumns.all(context)) {
             val run = runCatching { crawler.fetchList(column) }
             run.onSuccess { items ->
                 if (items.isNotEmpty()) {

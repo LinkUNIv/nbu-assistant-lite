@@ -1,5 +1,8 @@
 package app.nbult.lite.data.remote
 
+import android.content.Context
+import app.nbult.lite.data.news.NewsRules
+import app.nbult.lite.data.news.NewsSources
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.Charset
@@ -29,25 +32,21 @@ data class NewsColumn(
     val idOffset: Long = 0L
 )
 
+/**
+ * 栏目列表来自 `news/sources.json`（内置 + 资源包覆盖），不再写死在代码里。
+ *
+ * 学校给栏目改名、换 `.htm` 地址、加一个新栏目，都属于「数据变了」而不是「程序变了」。
+ * 以前这类改动要发版，现在推一个资源包就行。
+ *
+ * 教务处通告仍然和新闻网混成一条时间线 —— 教务类信息（教学任务、考试、培养方案）
+ * 才是学生真正要盯的，这条设计不随配置变化。
+ */
 object NewsColumns {
-    val ALL = listOf(
-        NewsColumn(1003, "宁大要闻", "https://news.nbu.edu.cn/ndyw.htm"),
-        NewsColumn(1004, "校园动态", "https://news.nbu.edu.cn/xydt.htm"),
-        NewsColumn(1005, "媒体宁大", "https://news.nbu.edu.cn/mtnd.htm"),
-        NewsColumn(1008, "风华人物", "https://news.nbu.edu.cn/fhrw.htm"),
-        // 教务处通知公告：与新闻网混合成一条时间线，教务类信息（教学任务、考试、培养方案）
-        // 才是学生真正要盯的，之前完全缺席。
-        NewsColumn(
-            id = 2001,
-            name = "教务处通告",
-            listUrl = "https://jwc.nbu.edu.cn/tzgg1.htm",
-            source = "宁波大学教务处",
-            idOffset = 3_000_000_000L
-        )
-    )
+
+    fun all(context: Context): List<NewsColumn> = NewsSources.load(context).columns
 
     /** 列表页顶部展示的来源名（去重后按出现顺序）。 */
-    val sources: List<String> = ALL.map { it.source }.distinct()
+    fun sources(context: Context): List<String> = NewsSources.load(context).sources
 }
 
 data class CrawledItem(
@@ -69,12 +68,16 @@ data class ArticleContent(
 )
 
 class NewsCrawler(
+    private val context: Context,
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
 ) {
+
+    /** 每次抓取都重新取一次配置：资源包可能刚被应用，缓存由 NewsSources 自己管。 */
+    private val rules: NewsRules get() = NewsSources.load(context).rules
 
     suspend fun fetchList(column: NewsColumn): List<CrawledItem> = withContext(Dispatchers.IO) {
         val html = get(column.listUrl)
@@ -85,13 +88,13 @@ class NewsCrawler(
         // `content.jsp?urltype=news.NewsContentUrl&wbtreeid=..&wbnewsid=18266`。
         // 后者是同一批文章在栏目页里的另一种写法，漏了会少抓一批。
         // 属性值含 "=" 时必须加引号，否则 CSS 选择器解析会有歧义
-        for (link in doc.select("""a[href*="info/"], a[href*="wbnewsid="]""")) {
+        for (link in doc.select(rules.linkSelector)) {
             val abs = link.absUrl("href")
             if (abs.isBlank()) continue
             val raw = articleId(abs) ?: continue
             val id = column.idOffset + raw
             val title = link.text().trim()
-            if (title.length < 4) continue
+            if (title.length < rules.minTitleLength) continue
 
             val candidate = CrawledItem(
                 id = id,
@@ -124,7 +127,7 @@ class NewsCrawler(
         val images = mutableListOf<String>()
 
         if (root != null) {
-            for (element in root.select("h2, h3, p, img, div.img-desc")) {
+            for (element in root.select(rules.contentBlockSelector)) {
                 when (element.tagName()) {
                     "img" -> imageUrl(element)?.let {
                         blocks += ContentBlock("img", it)
@@ -132,7 +135,7 @@ class NewsCrawler(
                     }
                     else -> {
                         val text = element.text().trim()
-                        if (text.length >= 2) blocks += ContentBlock("p", text)
+                        if (text.length >= rules.minBlockChars) blocks += ContentBlock("p", text)
                         element.select("img").forEach { img ->
                             imageUrl(img)?.let {
                                 blocks += ContentBlock("img", it)
@@ -149,9 +152,7 @@ class NewsCrawler(
                 ?.let { blocks += ContentBlock("p", it.trim()) }
         }
 
-        val publishedAt = Regex(
-            """发布(?:日期|时间)[：: ]*\s*(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})(?:\s*(\d{1,2}):(\d{2}))?"""
-        )
+        val publishedAt = rules.publishedRegex
             .find(doc.text())
             ?.let { formatStamp(it) }
             ?: ""
@@ -164,24 +165,17 @@ class NewsCrawler(
     }
 
     private fun pickContentRoot(doc: Document): Element? {
-        val preferred = listOf(
-            "#vsb_content",
-            "div.v_news_content",
-            "div.conlis div.cen",
-            "div.cen",
-            "div.conlis",
-            "article"
-        )
+        val preferred = rules.contentRoots
         for (selector in preferred) {
             val element = doc.selectFirst(selector) ?: continue
-            if (element.text().trim().length >= 30 || element.select("img").isNotEmpty()) {
+            if (element.text().trim().length >= rules.minRootChars || element.select("img").isNotEmpty()) {
                 return element
             }
         }
 
-        val candidates: List<Element> = doc.select("div, article, section").toList()
+        val candidates: List<Element> = doc.select(rules.bodyCandidateSelector).toList()
         return candidates
-            .filter { it.select("p").size >= 2 }
+            .filter { it.select("p").size >= rules.minBodyParagraphs }
             .filterNot { isNoiseBlock(it) }
             .maxWithOrNull(
                 compareBy<Element> { element ->
@@ -192,7 +186,7 @@ class NewsCrawler(
 
     private fun isNoiseBlock(element: Element): Boolean {
         val marker = (element.id() + " " + element.className()).lowercase()
-        return NOISE_KEYWORDS.any { marker.contains(it) }
+        return rules.noiseKeywords.any { marker.contains(it) }
     }
 
     private fun isNoiseAncestor(element: Element): Boolean =
@@ -219,7 +213,7 @@ class NewsCrawler(
 
         if (!src.contains("/__local/")) {
             val path = src.substringAfter("nbu.edu.cn", src)
-            if (path.contains("/images/") || DECORATIVE_NAMES.any { path.contains(it) }) return true
+            if (path.contains("/images/") || rules.decorativeNames.any { path.contains(it) }) return true
         }
 
         val alt = element.attr("alt")
@@ -233,9 +227,8 @@ class NewsCrawler(
             link.parent()?.text(),
             link.parent()?.nextElementSibling()?.text()
         )
-        val pattern = Regex("""(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?""")
         for (text in candidates) {
-            pattern.find(text)?.let { return formatStamp(it) }
+            rules.dateRegex.find(text)?.let { return formatStamp(it) }
         }
         return ""
     }
@@ -255,19 +248,11 @@ class NewsCrawler(
         return "%s %02d:%02d".format(date, hour.toInt(), minute)
     }
 
-    private fun articleId(url: String): Long? =
-        Regex("""/info/\d+/(\d+)\.htm""").find(url)?.groupValues?.get(1)?.toLongOrNull()
-            ?: Regex("""[?&]wbnewsid=(\d+)""").find(url)?.groupValues?.get(1)?.toLongOrNull()
-
-    companion object {
-        private val NOISE_KEYWORDS = listOf(
-            "cenr", "side", "right", "recommend", "related", "share", "fx",
-            "footer", "foot", "nav", "crumb", "dqwz", "banner", "tjlist"
-        )
-
-        private val DECORATIVE_NAMES = listOf(
-            "index_", "ad_", "foot_logo", "logo", "qq2017", "qrcode", "share"
-        )
+    private fun articleId(url: String): Long? {
+        for (pattern in rules.articleIdRegex) {
+            pattern.find(url)?.groupValues?.getOrNull(1)?.toLongOrNull()?.let { return it }
+        }
+        return null
     }
 
     private fun get(url: String): String {

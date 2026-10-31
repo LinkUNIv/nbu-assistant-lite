@@ -21,6 +21,7 @@ data class TermStartGuess(
 )
 
 class TermStartResolver(
+    private val context: android.content.Context,
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -35,7 +36,7 @@ class TermStartResolver(
 
             val candidates = mutableListOf<Triple<String, String, String>>()
 
-            for (column in NewsColumns.ALL) {
+            for (column in NewsColumns.all(context)) {
                 val html = runCatching { get(column.listUrl) }.getOrNull() ?: continue
                 val doc = Jsoup.parse(html, column.listUrl)
                 for (link in doc.select("a[href*=info/]")) {

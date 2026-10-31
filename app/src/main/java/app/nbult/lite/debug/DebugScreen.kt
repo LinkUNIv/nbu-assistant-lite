@@ -33,12 +33,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nbult.lite.data.pack.PackCheckResult
+import app.nbult.lite.data.pack.ResourcePackChecker
+import app.nbult.lite.data.pack.ResourcePackStore
+import app.nbult.lite.data.pack.formatPackVersion
 import app.nbult.lite.domain.DateUtil
 import app.nbult.lite.net.NetStatus
 import app.nbult.lite.parser.ParseResult
 import app.nbult.lite.parser.TimetableParser
 import app.nbult.lite.ui.LocalAppContainer
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,6 +61,8 @@ fun DebugScreen(onBack: () -> Unit) {
     var slotCount by remember { mutableStateOf(0) }
     var newsCount by remember { mutableStateOf(0) }
     var log by remember { mutableStateOf<String?>(null) }
+    var packState by remember { mutableStateOf(ResourcePackStore.state(context)) }
+    var packLog by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         slotCount = container.timetableRepository.slotCount()
@@ -223,6 +232,52 @@ fun DebugScreen(onBack: () -> Unit) {
                 }
             }
 
+            // 资源包是独立于 App 版本的另一条更新通道：不弹窗、静默生效，
+            // 所以它的状态只在这里露出，让反馈时能一眼看出「用的是内置还是远端那一版」
+            DebugCard("资源包") {
+                Text(
+                    text = if (packState.isRemote) {
+                        "当前：远端 v${formatPackVersion(packState.version)}"
+                    } else {
+                        "当前：内置"
+                    },
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Text(
+                    text = "上次检查：${formatCheckTime(packState.lastCheckAt)}",
+                    style = MaterialTheme.typography.labelSmall
+                )
+                if (packState.notes.isNotBlank()) {
+                    Text(packState.notes, style = MaterialTheme.typography.labelSmall)
+                }
+                if (packState.failedVersion > 0L) {
+                    Text(
+                        text = "v${formatPackVersion(packState.failedVersion)} 应用失败，已跳过",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        scope.launch {
+                            packLog = "检查中…"
+                            val result = ResourcePackChecker.checkAndApply(context)
+                            packState = ResourcePackStore.state(context)
+                            packLog = when (result) {
+                                is PackCheckResult.Applied -> "已应用 v${formatPackVersion(result.version)}"
+                                PackCheckResult.UpToDate -> "已是最新"
+                                PackCheckResult.Skipped -> "该版本此前失败过，已跳过"
+                                is PackCheckResult.Blocked -> "需要 App ${result.minAppVersion} 及以上"
+                                is PackCheckResult.Failed -> "失败：${result.reason}"
+                            }
+                        }
+                    }) { Text("立即检查资源包") }
+                }
+                packLog?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                }
+            }
+
             DebugCard("环境") {
                 Text("包名：${context.packageName}", style = MaterialTheme.typography.labelSmall)
                 Text("构建：${app.nbult.lite.BuildConfig.BUILD_KIND}（${app.nbult.lite.BuildConfig.VERSION_NAME}）", style = MaterialTheme.typography.labelSmall)
@@ -230,6 +285,12 @@ fun DebugScreen(onBack: () -> Unit) {
             }
         }
     }
+}
+
+/** 0 表示从没检查过，别显示成 1970 年。 */
+private fun formatCheckTime(millis: Long): String {
+    if (millis <= 0L) return "从未"
+    return SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(millis))
 }
 
 @Composable

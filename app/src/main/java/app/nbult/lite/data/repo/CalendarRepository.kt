@@ -8,6 +8,7 @@ import app.nbult.lite.domain.CalendarSemester
 import app.nbult.lite.domain.CalendarYear
 import app.nbult.lite.domain.PeriodTable
 import app.nbult.lite.domain.PeriodTableItem
+import app.nbult.lite.data.pack.ResourcePackStore
 import app.nbult.lite.domain.SchoolCalendar
 import app.nbult.lite.util.AppLog
 import kotlinx.coroutines.Dispatchers
@@ -17,9 +18,9 @@ import org.json.JSONObject
 /**
  * 校历数据源。
  *
- * 现阶段是「内置结构化数据 + 手动更新」：学校按学年以通知/图片形式发布校历，
- * 没有可机读接口，因此把校历整理成 `assets/calendar/nbu_calendar.json` 随包发布，
- * 每年两次人工更新即可；后续可改为从远端拉同一份 JSON 覆盖。
+ * 数据来源有两处：APK 内置的 `assets/calendar/nbu_calendar.json`，
+ * 以及下载到 `filesDir/pack/` 的资源包（路径相同，优先使用）。
+ * 校历每学年必变，走资源包更新可以不必发版 —— 学校按学年发通知，改数据比改 APK 快得多。
  */
 class CalendarRepository(private val context: Context) {
 
@@ -28,7 +29,9 @@ class CalendarRepository(private val context: Context) {
 
     suspend fun load(): SchoolCalendar = withContext(Dispatchers.IO) {
         cached?.let { return@withContext it }
-        val text = context.assets.open(ASSET_PATH).bufferedReader().use { it.readText() }
+        // 先看有没有下载的资源包，没有再读内置。内置那份永远能跑，这是底线
+        val text = ResourcePackStore.readText(context, ASSET_PATH)
+            ?: error("校历数据缺失：$ASSET_PATH")
         val parsed = parse(text)
         cached = parsed
         AppLog.log("Calendar", "校历加载完成：${parsed.years.size} 个学年，${parsed.periods.size} 套作息")

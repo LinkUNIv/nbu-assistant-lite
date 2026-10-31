@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import app.nbult.lite.data.SettingsStore
 import app.nbult.lite.data.db.AppDatabase
+import app.nbult.lite.data.pack.ResourcePackChecker
 import app.nbult.lite.data.remote.NewsCrawler
 import app.nbult.lite.data.remote.NewsSource
 import app.nbult.lite.data.remote.TermStartResolver
@@ -80,6 +81,15 @@ class NbuLiteApp : Application() {
         // 用观察而不是在每个写入口插一行 updateAll：导入、清空、调课、停课分散在
         // 多个地方，逐个插漏一个就不刷新，症状是「改了课表但桌面还是旧的」且难以察觉。
         // 先 drop(1) 跳过订阅时的首帧，delay 用来合并一次写入引发的多次发射。
+        // 资源包检查：启动后延迟 10 秒，避开首屏合成与资讯抓取。
+        //
+        // 与版本检查是两条独立通道：这条不弹窗、不打扰，成功即静默生效。
+        // 失败也只是退回内置资源 —— 内置那份永远能跑。
+        appScope.launch {
+            kotlinx.coroutines.delay(10_000)
+            ResourcePackChecker.checkAndApply(this@NbuLiteApp)
+        }
+
         appScope.launch {
             container.timetableRepository.observeSnapshot()
                 .drop(1)

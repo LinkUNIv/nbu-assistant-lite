@@ -20,6 +20,8 @@ object AppReset {
         withContext(Dispatchers.IO) {
             runCatching { clearDatabase() }
             runCatching { resetSettings() }
+            // 下载的资源包也清掉，否则「恢复出厂」之后校历、入口还是远端那一版
+            runCatching { app.nbult.lite.data.pack.ResourcePackStore.clear(context) }
             runCatching {
                 AppLog.clear()
                 AppLog.logDir(context).listFiles()?.forEach { it.delete() }

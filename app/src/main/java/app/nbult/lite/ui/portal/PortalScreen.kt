@@ -1,6 +1,7 @@
 package app.nbult.lite.ui.portal
 
 import android.content.Context
+import app.nbult.lite.data.pack.ResourcePackStore
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -318,10 +319,13 @@ object PortalCatalog {
 
     /** 返回 (入口列表, 页脚提示)。读不到时返回空列表，页面显示为空而不是崩溃。 */
     fun load(context: Context): Pair<List<PortalEntry>, String> {
-        val raw = context.assets.open("portal/entries.json")
-            .bufferedReader()
-            .use { it.readText() }
-        val root = JSONObject(raw)
+        // 优先读下载的资源包。远程内容不可控，解析整体包在 runCatching 里 ——
+        // 页面留空也比抛异常强
+        val raw = ResourcePackStore.readText(context, "portal/entries.json")
+            ?: return emptyList<PortalEntry>() to ""
+        val root = runCatching { JSONObject(raw) }.getOrNull()
+            ?: return emptyList<PortalEntry>() to ""
+
         val array = root.optJSONArray("entries") ?: return emptyList<PortalEntry>() to ""
         val list = ArrayList<PortalEntry>(array.length())
         for (i in 0 until array.length()) {

@@ -100,6 +100,45 @@ tools/archive-release.sh debug -f      # → dist/archive/v<版本>-Debug/（-f 
 
 ---
 
+## 资源包
+
+校历与入口配置不只存在于 APK 里：`filesDir/pack/<版本>/` 可以放一份下载来的覆盖版，
+读取时优先用它，没有就退回 `assets/`。这样改数据不必发版。
+
+| 项 | 位置 |
+|---|---|
+| 发布源 | 仓库的 `packs` 分支（**不是 main**，否则每次发资源都会触发一次 APK 构建） |
+| 客户端地址 | 写死在 `ResourcePackChecker.BASES`：GitHub raw → jsDelivr |
+| 清单 | `packs/latest.json`；文件在 `packs/<version>/<path>` |
+| 落地 | `filesDir/pack/<version>/`，`state.json` 记录当前生效版本 |
+| 发布 | `tools/publish-pack.sh [版本号]` |
+
+清单格式：
+
+```json
+{
+  "version": 202610311135,
+  "updatedAt": "2026-10-31T11:35:53+08:00",
+  "notes": "这次改了什么，会显示在调试面板里",
+  "minAppVersion": 3400,
+  "files": [{ "path": "portal/entries.json", "sha256": "…" }]
+}
+```
+
+四条不能改的规则：
+
+- **版本号只升不降**。`yyyyMMddHHmm`，客户端拒绝比本地旧的包
+- **`minAppVersion` 是硬门槛**。包里用了旧版读不懂的结构就抬高它，旧版整体跳过，不做部分应用
+- **读取一律走 `ResourcePackStore.readText()`**。直接 `context.assets.open()` 会绕开资源包，
+  远程更新对该文件就无效了
+- **入口链接文件单独设卡**（`PackGuards`）。不允许引入内置清单里没有的域名，非 https 一律拒绝。
+  远程包能把用户导到站外，这是内容外置唯一真正危险的地方
+
+失败处理：校验不过、解析不过、写入失败 → 记 `failedVersion`，同版本不再重试，退回内置资源。
+网络不通不记版本，下次启动还能再试。
+
+---
+
 ## 签名
 
 **所有版本使用同一份固定证书，不许退回 `debug` 签名。**

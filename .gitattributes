@@ -1,18 +1,17 @@
-# 统一换行：仓库内一律 LF，避免 Windows/Linux 之间产生无意义的全文件 diff
+# 一律以 LF 存进仓库。
+#
+# 起因：本机是 Windows，编辑工具写出的是 CRLF，而通过 GitHub API 直推时
+# 绕过了 git 的换行转换，于是仓库里混进了 CRLF 文件 —— 本地 core.autocrlf=true
+# 会把它当成「每行都改了」，且 tools/*.sh 带 CRLF 在 Linux 上无法执行。
+#
+# text=auto 让 git 按内容判断文本，eol=lf 固定存储格式；
+# 检出时的换行由本机 core.autocrlf 决定，不影响仓库。
 * text=auto eol=lf
 
-# Windows 批处理必须是 CRLF，否则 cmd 解析会出错
-*.bat text eol=crlf
-*.cmd text eol=crlf
-
-# 二进制文件：不做换行转换，也不做文本 diff
-*.jar binary
-*.apk binary
-*.aab binary
-*.zip binary
-*.so binary
-*.ttf binary
 *.png binary
 *.jpg binary
 *.jpeg binary
 *.webp binary
+*.apk binary
+*.jks binary
+*.keystore binary

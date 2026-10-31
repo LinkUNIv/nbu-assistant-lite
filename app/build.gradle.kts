@@ -54,8 +54,8 @@ android {
         targetSdk = 36
         // 版本号规则：主.次.修订；小改动只递增修订号
         // versionCode = 主*10000 + 次*100 + 修订，每版必须递增，保证可覆盖安装
-        versionCode = 3500
-        versionName = "0.35.0"
+        versionCode = 3501
+        versionName = "0.35.1"
         vectorDrawables.useSupportLibrary = true
     }
 

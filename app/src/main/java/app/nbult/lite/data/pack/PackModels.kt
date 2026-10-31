@@ -83,8 +83,12 @@ data class PackState(
     val appliedAt: Long = 0L,
     val lastCheckAt: Long = 0L,
     val notes: String = "",
-    /** 应用失败过的版本，同版本不再重试，避免每次启动都卡一次。 */
-    val failedVersion: Long = 0L
+    /** 每次尝试检查都会更新，界面上「上次检查」用它。 */
+    val lastAttemptAt: Long = 0L,
+    /** 应用失败过的版本。只记「内容不合格」，网络失败不记 —— 见 failedRetryable。 */
+    val failedVersion: Long = 0L,
+    val failedAt: Long = 0L,
+    val failedReason: String = ""
 ) {
     val isRemote: Boolean get() = version > 0L && source == "remote"
 }
@@ -100,8 +104,18 @@ sealed interface PackCheckResult {
     /** 包要求的 App 版本高于当前，整体跳过；只记日志，不串到版本更新界面。 */
     data class Blocked(val minAppVersion: Int) : PackCheckResult
 
-    /** 该版本此前失败过，本次不再尝试。 */
+    /** 该版本此前失败过，且还没到重试时间。 */
     data object Skipped : PackCheckResult
 
-    data class Failed(val reason: String) : PackCheckResult
+    /**
+     * 失败。
+     *
+     * `retryable = true` 表示这次没成功是网络或临时原因（下载中断、源不可达），
+     * **不拉黑版本**，下次启动或手动重试就会再来一遍；
+     * `false` 表示内容本身不合格（sha 不符、闸门拒绝、写入失败），才记进 `failedVersion`。
+     *
+     * 这个区分是 0.35.1 补的：此前一次 CDN 抖动就被当成「这个包是坏的」永久拉黑，
+     * 用户从此再也拿不到那个资源包，界面上只剩一句「已跳过」，无处可查也无处可退。
+     */
+    data class Failed(val reason: String, val retryable: Boolean = false) : PackCheckResult
 }

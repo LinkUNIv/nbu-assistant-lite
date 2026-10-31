@@ -180,8 +180,9 @@ internal fun PackEntry() {
             text = if (state.isRemote) "当前：远端 v${formatPackVersion(state.version)}" else "当前：内置",
             style = MaterialTheme.typography.bodyMedium
         )
+        // 显示「上次尝试」而不是「上次成功」：后者会让人以为根本没查过
         Text(
-            text = "上次检查：${formatCheckTime(state.lastCheckAt)}",
+            text = "上次检查：${formatCheckTime(if (state.lastAttemptAt > 0L) state.lastAttemptAt else state.lastCheckAt)}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -193,8 +194,11 @@ internal fun PackEntry() {
             )
         }
         if (state.failedVersion > 0L) {
+            // 把原因原样显示出来。只写「失败」等于让用户带着一个问号来反馈，
+            // 而这句话恰好就是上一次定位问题丢掉的那条信息
             Text(
-                text = "v${formatPackVersion(state.failedVersion)} 应用失败，已跳过",
+                text = "v${formatPackVersion(state.failedVersion)} 应用失败：" +
+                    state.failedReason.ifBlank { "未知原因" },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error
             )
@@ -204,7 +208,9 @@ internal fun PackEntry() {
             onClick = {
                 busy = true
                 scope.launch {
-                    log = when (val result = ResourcePackChecker.checkAndApply(context, settings)) {
+                    // 手动检查一律 force：绕过 1 小时间隔与「此前失败」标记，
+                    // 否则用户点了按钮也只会再看到一次「已跳过」
+                    log = when (val result = ResourcePackChecker.checkAndApply(context, settings, force = true)) {
                         is PackCheckResult.Applied -> "已应用 v${formatPackVersion(result.version)}"
                         PackCheckResult.UpToDate -> "已是最新"
                         PackCheckResult.Skipped -> "该版本此前失败过，已跳过"
@@ -214,7 +220,15 @@ internal fun PackEntry() {
                     busy = false
                 }
             }
-        ) { Text(if (busy) "检查中…" else "立即检查资源包") }
+        ) {
+            Text(
+                when {
+                    busy -> "检查中…"
+                    state.failedVersion > 0L -> "重试"
+                    else -> "立即检查资源包"
+                }
+            )
+        }
 
         log?.let {
             Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)

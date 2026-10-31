@@ -27,6 +27,9 @@ object ResourcePackStore {
     private const val ROOT = "pack"
     private const val STATE = "state.json"
 
+    /** 最近一次失败原因的落盘文件名。 */
+    private const val ERROR_FILE = "last-error.txt"
+
     /**
      * 状态变更的版本号，供 UI 观察。
      *
@@ -48,7 +51,10 @@ object ResourcePackStore {
                 appliedAt = o.optLong("appliedAt", 0L),
                 lastCheckAt = o.optLong("lastCheckAt", 0L),
                 notes = o.optString("notes", ""),
-                failedVersion = o.optLong("failedVersion", 0L)
+                lastAttemptAt = o.optLong("lastAttemptAt", 0L),
+                failedVersion = o.optLong("failedVersion", 0L),
+                failedAt = o.optLong("failedAt", 0L),
+                failedReason = o.optString("failedReason", "")
             )
         }.getOrDefault(PackState())
     }
@@ -106,7 +112,9 @@ object ResourcePackStore {
                 lastCheckAt = now,
                 notes = manifest.notes,
                 // 应用成功才清掉失败记录，否则同版本还会被跳过
-                failedVersion = 0L
+                failedVersion = 0L,
+                failedAt = 0L,
+                failedReason = ""
             )
         )
         purgeOldVersions(context, keep = manifest.version)
@@ -119,9 +127,45 @@ object ResourcePackStore {
         writeState(context, state(context).copy(lastCheckAt = at))
     }
 
-    fun markFailed(context: Context, version: Long, reason: String) {
-        writeState(context, state(context).copy(failedVersion = version))
-        AppLog.log("Pack", "回退 版本=$version 原因=$reason")
+    /**
+     * 记录「这个版本的内容不合格」。
+     *
+     * 只有内容问题才走这里（sha 不符、闸门拒绝、写入失败）。网络失败不许调 ——
+     * 那会把一次抖动变成永久拉黑，0.34.x 就是这么把 13:16 那版钉死的。
+     */
+    fun markFailed(context: Context, version: Long, reason: String, at: Long) {
+        writeState(
+            context,
+            state(context).copy(failedVersion = version, failedAt = at, failedReason = reason)
+        )
+        recordError(context, "版本=$version 原因=$reason")
+        revisionsFlow.value += 1
+    }
+
+    /** 每次尝试检查都记一次，界面上的「上次检查」读它。 */
+    fun markAttempt(context: Context, at: Long) {
+        writeState(context, state(context).copy(lastAttemptAt = at))
+    }
+
+    /** 手动重试前调用：清掉失败标记，让同一个版本号还能再试。 */
+    fun clearFailure(context: Context) {
+        writeState(context, state(context).copy(failedVersion = 0L, failedAt = 0L, failedReason = ""))
+        revisionsFlow.value += 1
+    }
+
+    /**
+     * 把最近一次失败原因落成一个文件。
+     *
+     * `AppLog` 是内存环形缓冲，进程一重启就没了 —— 上次就是这样丢掉了唯一的定位线索。
+     * 这一行跨进程可读，用户在反馈里贴出来就能直接看出是哪一步断的。
+     */
+    fun recordError(context: Context, text: String) {
+        AppLog.log("Pack", text)
+        runCatching {
+            val root = root(context)
+            if (!root.exists() && !root.mkdirs()) return@runCatching
+            File(root, ERROR_FILE).writeText("${System.currentTimeMillis()}  $text\n")
+        }
     }
 
     /** 恢复出厂设置时清掉下载的包，重新回到内置资源。 */
@@ -148,7 +192,10 @@ object ResourcePackStore {
             put("appliedAt", state.appliedAt)
             put("lastCheckAt", state.lastCheckAt)
             put("notes", state.notes)
+            put("lastAttemptAt", state.lastAttemptAt)
             put("failedVersion", state.failedVersion)
+            put("failedAt", state.failedAt)
+            put("failedReason", state.failedReason)
         }.toString()
 
         // 先写临时文件再改名：改名是原子的，进程被杀也不会留下半截 JSON

@@ -110,6 +110,35 @@ jobs:
             *)   echo "PRERELEASE=false" >> "$GITHUB_ENV" ;;
           esac
 
+      # 应用内更新器读的就是这个文件。
+      #
+      # 放在 Release 资产里，而不是仓库里的某个文件：仓库文件会随 main 分支变，
+      # 但「最新版本」应当以已经发布的那份为准 —— main 上可能刚改完还没出包。
+      # `releases/latest/download/manifest.json` 这个路径永远指向最新一版的资产。
+      - name: 生成 manifest.json
+        run: |
+          python3 - <<'PY'
+          import glob, json, os, re
+          gradle = open('app/build.gradle.kts', encoding='utf-8').read()
+          code = int(re.search(r'versionCode = (\d+)', gradle).group(1))
+          name = re.search(r'versionName = "([^"]+)"', gradle).group(1)
+          apk = glob.glob('apk/*.apk')[0]
+          sha = open(glob.glob('apk/*.sha256')[0], encoding='utf-8').read().split()[0]
+          tag = os.environ['GITHUB_REF_NAME']
+          base = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}"
+          notes_path = f"docs/releases/{tag}.md"
+          manifest = {
+              "versionCode": code,
+              "versionName": name,
+              "apkUrl": f"{base}/{os.path.basename(apk)}",
+              "sha256": sha,
+              "notes": open(notes_path, encoding="utf-8").read() if os.path.exists(notes_path) else "",
+          }
+          with open('apk/manifest.json', 'w', encoding='utf-8') as f:
+              json.dump(manifest, f, ensure_ascii=False, indent=2)
+          print(json.dumps(manifest, ensure_ascii=False)[:160])
+          PY
+
       # 先建成 draft 再发布。
       #
       # GitHub 现在把已发布的 release 视为 immutable，不允许再上传资产；
@@ -125,6 +154,7 @@ jobs:
           files: |
             apk/*.apk
             apk/*.sha256
+            apk/manifest.json
 
       - name: 发布
         env:

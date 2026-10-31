@@ -360,7 +360,7 @@ MAA 能"不重装就更新"的根本原因：**它的资源是 `resource/` 目�
 - [ ] 只接受 https；`entries.json` 里出现 http 链接一律拒绝该条
 - [ ] 远程包不能引入新的 host（域名白名单仍以内置清单为准）
 
-### A 的落点（应用内更新器）
+### A 的落点（应用内更新器，0.33.0 已发布）
 
 - [ ] `manifest.json` 放 GitHub Release：`{versionCode, versionName, apkUrl, sha256, notes}`
 - [ ] 「关于」页加「检查更新」→ 下载到 `cacheDir` → `PackageInstaller` 安装

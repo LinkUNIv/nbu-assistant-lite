@@ -45,6 +45,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nbult.lite.data.update.AppUpdateChecker
+import app.nbult.lite.data.update.UpdateInfo
+import app.nbult.lite.data.update.UpdateState
+import app.nbult.lite.util.ApkInstaller
 import app.nbult.lite.BuildConfig
 import app.nbult.lite.data.SettingsStore
 import app.nbult.lite.ui.common.SmoothSwitch
@@ -459,6 +463,7 @@ SettingCard(title = "关于") {
                 subtitle = "各版本的改动说明，最新在前",
                 onClick = { onNavigateSection("changelog") }
             )
+            UpdateEntry()
             // 版本号放在「关于」页里，因为用户反馈问题时常被要求「报一下版本」，
             // 截图这一页最方便。入口列表里显示在「关于」行右侧，两处不在同一屏，不算重复
             Text(
@@ -616,6 +621,77 @@ SettingCard(title = "调试") {
             DatePicker(state = pickerState)
         }
     }
+}
+
+/** 「检查更新」在界面上要表达的状态。 */
+private sealed interface UpdateUi {
+    data object Idle : UpdateUi
+    data object Checking : UpdateUi
+    data object Latest : UpdateUi
+    data class Found(val info: UpdateInfo) : UpdateUi
+    data class Downloading(val percent: Int, val info: UpdateInfo) : UpdateUi
+    data class Error(val message: String) : UpdateUi
+}
+
+/**
+ * 检查更新。
+ *
+ * 一个入口承担「检查 → 下载 → 交给安装器」三步：这三步是同一件事的三个阶段，
+ * 拆成三个按钮只会让用户在中间态无所适从。
+ *
+ * 下载前不弹二次确认 —— 用户点「发现新版本」这个动作本身就是要装。
+ */
+@Composable
+private fun UpdateEntry() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var state by remember { mutableStateOf<UpdateUi>(UpdateUi.Idle) }
+
+    val (title, subtitle) = when (val current = state) {
+        UpdateUi.Idle -> "检查更新" to "当前 v${BuildConfig.VERSION_NAME}"
+        UpdateUi.Checking -> "检查更新" to "正在检查…"
+        UpdateUi.Latest -> "检查更新" to "已是最新版本"
+        is UpdateUi.Found -> "发现 v${current.info.versionName}" to "点击下载并安装"
+        is UpdateUi.Downloading -> "正在下载 v${current.info.versionName}" to "${current.percent}%"
+        is UpdateUi.Error -> "检查更新" to current.message
+    }
+
+    LinkRow(
+        title = title,
+        subtitle = subtitle,
+        onClick = {
+            when (val current = state) {
+                is UpdateUi.Found -> {
+                    state = UpdateUi.Downloading(0, current.info)
+                    scope.launch {
+                        runCatching {
+                            val apk = AppUpdateChecker.download(context, current.info) { percent ->
+                                state = UpdateUi.Downloading(percent, current.info)
+                            }
+                            if (!ApkInstaller.install(context, apk)) {
+                                state = UpdateUi.Error("请在系统设置中允许安装未知应用")
+                            }
+                        }.onFailure {
+                            state = UpdateUi.Error(it.message ?: "下载失败")
+                        }
+                    }
+                }
+
+                UpdateUi.Checking, is UpdateUi.Downloading -> Unit
+
+                else -> {
+                    state = UpdateUi.Checking
+                    scope.launch {
+                        state = when (val result = AppUpdateChecker.check()) {
+                            is UpdateState.Available -> UpdateUi.Found(result.info)
+                            UpdateState.UpToDate -> UpdateUi.Latest
+                            is UpdateState.Failed -> UpdateUi.Error(result.message)
+                        }
+                    }
+                }
+            }
+        }
+    )
 }
 
 /**

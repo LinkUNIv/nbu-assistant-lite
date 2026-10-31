@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  只暴露缓存目录里 update/ 这一个子目录。
+
+  下载的 APK 落在 cacheDir/update/，FileProvider 只需要看到这一处；
+  范围写大了等于把应用私有文件都能被外部读到。
+-->
+<paths>
+    <cache-path name="update" path="update/" />
+</paths>

@@ -1,0 +1,20 @@
+{
+  "version": 202610311600,
+  "updatedAt": "2026-10-31T16:00:00+08:00",
+  "notes": "试探包 2026-10-31 16:00：内容与内置完全一致，仅用于验证「下载 → 校验 → 落盘 → 生效」这条链路。看到这行说明资源包已成功应用。",
+  "minAppVersion": 3401,
+  "files": [
+    {
+      "path": "calendar/nbu_calendar.json",
+      "sha256": "f1bd8758515d4a92f299833dac26e47d4811ddfad44cc46075171aa890e4f4ee"
+    },
+    {
+      "path": "portal/entries.json",
+      "sha256": "7963242f746b9f8614d1509b98880e3386c84c9c859f822c947e11affdb73b16"
+    },
+    {
+      "path": "news/sources.json",
+      "sha256": "03cef7a06326d106dc408b09ae5cb8e712e32bf3dffe90975d9d46913c013b60"
+    }
+  ]
+}

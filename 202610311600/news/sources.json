@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "columns": [
+    {
+      "id": 1003,
+      "name": "宁大要闻",
+      "listUrl": "https://news.nbu.edu.cn/ndyw.htm",
+      "source": "宁波大学新闻网",
+      "idOffset": 0
+    },
+    {
+      "id": 1004,
+      "name": "校园动态",
+      "listUrl": "https://news.nbu.edu.cn/xydt.htm",
+      "source": "宁波大学新闻网",
+      "idOffset": 0
+    },
+    {
+      "id": 1005,
+      "name": "媒体宁大",
+      "listUrl": "https://news.nbu.edu.cn/mtnd.htm",
+      "source": "宁波大学新闻网",
+      "idOffset": 0
+    },
+    {
+      "id": 1008,
+      "name": "风华人物",
+      "listUrl": "https://news.nbu.edu.cn/fhrw.htm",
+      "source": "宁波大学新闻网",
+      "idOffset": 0
+    },
+    {
+      "id": 2001,
+      "name": "教务处通告",
+      "listUrl": "https://jwc.nbu.edu.cn/tzgg1.htm",
+      "source": "宁波大学教务处",
+      "idOffset": 3000000000
+    }
+  ],
+  "rules": {
+    "linkSelector": "a[href*=\"info/\"], a[href*=\"wbnewsid=\"]",
+    "minTitleLength": 4,
+    "articleIdPatterns": [
+      "/info/\\d+/(\\d+)\\.htm",
+      "[?&]wbnewsid=(\\d+)"
+    ],
+    "datePattern": "(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})(?:\\s+(\\d{1,2}):(\\d{2}))?",
+    "publishedPattern": "发布(?:日期|时间)[：: ]*\\s*(\\d{4})[/\\-.](\\d{1,2})[/\\-.](\\d{1,2})(?:\\s*(\\d{1,2}):(\\d{2}))?",
+    "contentRoots": [
+      "#vsb_content",
+      "div.v_news_content",
+      "div.conlis div.cen",
+      "div.cen",
+      "div.conlis",
+      "article"
+    ],
+    "contentBlockSelector": "h2, h3, p, img, div.img-desc",
+    "bodyCandidateSelector": "div, article, section",
+    "minRootChars": 30,
+    "minBodyParagraphs": 2,
+    "minBlockChars": 2,
+    "noiseKeywords": [
+      "cenr",
+      "side",
+      "right",
+      "recommend",
+      "related",
+      "share",
+      "fx",
+      "footer",
+      "foot",
+      "nav",
+      "crumb",
+      "dqwz",
+      "banner",
+      "tjlist"
+    ],
+    "decorativeNames": [
+      "index_",
+      "ad_",
+      "foot_logo",
+      "logo",
+      "qq2017",
+      "qrcode",
+      "share"
+    ]
+  }
+}

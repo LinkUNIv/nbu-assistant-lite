@@ -362,7 +362,10 @@ MAA 能"不重装就更新"的根本原因：**它的资源是 `resource/` 目�
 
 ### A 的落点（应用内更新器，0.33.0 已发布）
 
-- [ ] `manifest.json` 放 GitHub Release：`{versionCode, versionName, apkUrl, sha256, notes}`
+- [x] `manifest.json` 放 GitHub Release：`{versionCode, versionName, apkUrl, sha256, notes}`
+- **坑**：不能用 `releases/latest/download/manifest.json` —— 该端点只返回非 prerelease，
+  本项目全是预发布，会一直取不到。要用 `releases?per_page=1` 列最新一次发布，
+  再从资产的 `browser_download_url` 取清单（0.33.1 修正）
 - [ ] 「关于」页加「检查更新」→ 下载到 `cacheDir` → `PackageInstaller` 安装
 - [ ] 需要 `REQUEST_INSTALL_PACKAGES`；MIUI / ColorOS 还要用户开「安装未知应用」，
       **做不到真正静默**，文案必须写清

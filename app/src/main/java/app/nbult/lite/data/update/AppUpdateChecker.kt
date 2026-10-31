@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
@@ -39,8 +40,15 @@ sealed interface UpdateState {
  */
 object AppUpdateChecker {
 
-    private const val MANIFEST_URL =
-        "https://github.com/LinkUNIv/nbu-assistant-lite/releases/latest/download/manifest.json"
+    /**
+     * 列最新的 Release。
+     *
+     * 不能用 `releases/latest`：那个端点只返回最新的**非预发布**版本，
+     * 而本项目全部发布都是 prerelease，它会一直 404。
+     * `per_page=1` 取列表第一条，预发布也能拿到。
+     */
+    private const val RELEASES_API =
+        "https://api.github.com/repos/LinkUNIv/nbu-assistant-lite/releases?per_page=1"
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -53,16 +61,29 @@ object AppUpdateChecker {
     /** 检查是否有比当前安装版本更新的包。 */
     suspend fun check(): UpdateState = withContext(Dispatchers.IO) {
         runCatching {
-            val request = Request.Builder()
-                .url(MANIFEST_URL)
-                .header("Accept", "application/json")
-                .build()
-            val text = client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return@use null
+            // 第一步：找到最新 Release 里的 manifest.json 资产地址
+            val releases = getText(RELEASES_API)?.let { JSONArray(it) }
+                ?: return@withContext UpdateState.Failed("无法获取版本信息")
+            if (releases.length() == 0) {
+                return@withContext UpdateState.Failed("没有可用的版本")
+            }
+            val assets = releases.optJSONObject(0)?.optJSONArray("assets")
+                ?: return@withContext UpdateState.Failed("版本信息不完整")
+            var manifestUrl = ""
+            for (i in 0 until assets.length()) {
+                val asset = assets.optJSONObject(i) ?: continue
+                if (asset.optString("name") == "manifest.json") {
+                    manifestUrl = asset.optString("browser_download_url")
+                    break
                 }
-                response.body?.string()
-            } ?: return@withContext UpdateState.Failed("无法获取版本信息")
+            }
+            if (manifestUrl.isBlank()) {
+                return@withContext UpdateState.Failed("版本信息不完整")
+            }
+
+            // 第二步：读清单
+            val text = getText(manifestUrl)
+                ?: return@withContext UpdateState.Failed("无法获取版本信息")
 
             val json = JSONObject(text)
             val remoteCode = json.optInt("versionCode", 0)
@@ -139,6 +160,17 @@ object AppUpdateChecker {
         AppLog.log("Update", "下载完成 v${info.versionName} ${target.length() / 1024}KB")
         target
     }
+
+    /** 取一个 URL 的文本内容；非 2xx 返回 null，由调用方决定文案。 */
+    private fun getText(url: String): String? = runCatching {
+        val request = Request.Builder()
+            .url(url)
+            .header("Accept", "application/vnd.github+json")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (response.isSuccessful) response.body?.string() else null
+        }
+    }.getOrNull()
 
     private fun sha256Of(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")

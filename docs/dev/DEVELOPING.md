@@ -83,6 +83,23 @@ tools/archive-release.sh debug -f      # → dist/archive/v<版本>-Debug/（-f 
 
 ---
 
+## 行尾与远端同步
+
+**仓库里一律 LF**，由 `.gitattributes` 的 `text=auto eol=lf` 固定。
+
+起因是一次事故：本机是 Windows，编辑器写出 CRLF；而这台机器 `git push` 长期不通，
+提交改走 GitHub API 直推 —— API 不走 git 的换行转换，于是 39 个文件以 CRLF 进了仓库。
+后果有两个：本地 `core.autocrlf=true` 把每个文件都当成「改过」，`git status` 永远脏；
+`tools/*.sh` 带 CRLF 在 Linux 或 CI 上会以 `bad interpreter` 直接失败。
+
+所以：**通过 API 直推时，文件必须先转成 LF**（用 Python 写文件要带 `newline="\n"`）。
+
+本地与远端对齐用 `tools/sync-remote.sh`：带重试地 fetch、硬重置、清掉远端已删除的标签。
+**API 直推之后必须跑一次** —— 否则本地 HEAD 落后，下次改文件是拿旧版本打底，
+提交里会把别人的改动一起回退掉。
+
+---
+
 ## CI
 
 `.github/workflows/build.yml`：

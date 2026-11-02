@@ -34,7 +34,7 @@
 | 预览 | `app.nbult.lite.preview` | 宁大助手 Preview | 粉红 | false |
 | 调试 | `app.nbult.lite.debug` | 宁大助手 Debug | 灰 | true |
 
-- 预览版与正式版同为 `debuggable=false`（走 AOT 编译），性能数据可直接对照
+- 预览版与正式版同为 `debuggable=false`，可用于与调试版进行性能对照；实际编译和优化程度由运行环境决定
 - 正式包名**永久固定**：改了已装用户数据就断代
 - 调试入口用 `BuildConfig.BUILD_KIND`（`release` / `preview` / `debug`），不要用 `BuildConfig.DEBUG`
 
@@ -54,7 +54,7 @@
 ```bash
 ./gradlew :app:assemblePreview   # 预览包
 ./gradlew :app:assembleDebug     # 调试包
-./gradlew :app:assembleRelease   # 正式包（暂无签名配置，暂不出包）
+./gradlew :app:assembleRelease   # 正式包，必须配置固定签名
 ```
 
 **路径要求**：`gradle.properties` 里有 `android.overridePathCheck=true`，用于在含非 ASCII 字符的路径下构建
@@ -63,8 +63,16 @@
 **targetSdk 36 起系统强制边到边**：内容避让由 `Scaffold` 与 `NavigationBar` 消费 systemBars inset，
 不要在根布局再叠一层 padding；系统栏图标明暗由 `MainActivity` 的 `enableEdgeToEdge()` 负责。
 
-**签名**：`release` 构建类型目前没有 `signingConfig`，不会产出可分发 APK。一旦对外发布，
-keystore 必须长期保持不变，否则已安装用户无法覆盖升级（Android 以签名区分应用身份）。
+**签名**：正式版使用固定发布密钥。通过未入库的 `local.properties` 配置
+`nbult.storeFile`、`nbult.storePassword`、`nbult.keyAlias`、`nbult.keyPassword`，
+或使用对应的 `NBULT_STORE_FILE`、`NBULT_STORE_PASSWORD`、`NBULT_KEY_ALIAS`、`NBULT_KEY_PASSWORD` 环境变量。
+密钥、密码和本机配置禁止提交；正式版后续升级必须复用同一签名。
+本次本地正式签名指纹见 `docs/releases/v0.35.13-signing.md`。
+
+GitHub 正式标签 `v<版本>` 使用专用 Secrets：`NBULT_RELEASE_KEYSTORE_BASE64`、
+`NBULT_RELEASE_KEYSTORE_PASSWORD`；可选 `NBULT_RELEASE_KEY_ALIAS`（默认 `nbult`）与
+`NBULT_RELEASE_KEY_PASSWORD`（默认与 store 密码相同）。必须对应本次正式 APK 的同一密钥。
+预览通道继续使用原来的 `NBULT_KEYSTORE_BASE64` 和 `NBULT_KEYSTORE_PASSWORD`，不要替换原预览密钥。
 
 ---
 
@@ -104,9 +112,11 @@ tools/archive-release.sh debug -f      # → dist/archive/v<版本>-Debug/（-f 
 
 `.github/workflows/build.yml`：
 
-- `push` / `pull_request` / 手动触发 → 编译 preview 包并上传 `apk-preview` 产物
-- 推送 `v*` 标签 → 额外生成 Release，附 APK 与 sha256
-- preview 变体走 debug 签名，**CI 不需要任何 keystore**
+- 普通推送/手动触发构建固定签名 Preview，PR 构建 Debug（无需仓库签名 Secrets）。
+- 正式标签 `v0.35.13` 构建 Release；预览标签 `v0.35.13-Preview` 构建 Preview。
+- 标签必须与代码版本和通道一致，运行单元测试后构建，并验证签名。
+- 标签发布先创建草稿、上传 APK / SHA-256 / manifest，再正式发布；正式通道不标记 prerelease。
+- APK 放 Release 附件，不放源码目录；mapping 作为构建产物保存供维护者排查崩溃。
 
 两个已经踩过的坑，改这块前先看：
 
@@ -301,3 +311,12 @@ app/src/main/assets/
 - [`../../CHANGELOG.md`](../../CHANGELOG.md) — 逐版本变更
 - [`NOTES.md`](NOTES.md) — 早期开发笔记（**含已被推翻的设计，请对照 README 的已知限制阅读**）
 - [`PENDING.md`](PENDING.md) — 路线图与未排期事项
+
+
+## 0.35.49 Preview 发布补充
+
+标签为 `v0.35.49-Preview`，发布说明为 `docs/releases/v0.35.49-Preview.md`，GitHub 标记 prerelease，不能标记为稳定最新版。使用 `:app:testPreviewUnitTest :app:assemblePreview`，保留原固定签名配置；正式版与预览版包名不同，用户数据不共享。
+
+运行 `python tools/package-source.py --output /path/to/source.zip` 打包源码；在 Git 仓库中仅收录已跟踪和未忽略的文件，排除构建缓存、密钥、本机配置、日志和私有样本。不要使用临时 OCR 样本目录作为源码发布资产。构建产物放 GitHub Release，不提交 APK、映射或 ZIP 到 Git 历史。
+
+发布资产应包含 APK、源码 ZIP、映射压缩包、APK SHA-256、`SHA256SUMS.txt` 与 `manifest.json`。签名/清单中的 applicationId 为 `app.nbult.lite.preview`。源码 ZIP 与 APK 必须对应同一提交；重新打包后同步更新校验值。OCR 私有照片真机回归存在未通过项，须在预览说明中保留，不应声称完整实机验收通过。

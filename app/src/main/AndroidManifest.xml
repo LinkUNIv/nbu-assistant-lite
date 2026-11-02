@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 滚轮越格的档位震动。缺这条 vibrate() 会抛 SecurityException（被 runCatching 吞掉→表现为"震动没做"） -->
@@ -27,6 +29,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.NbuLite"
         android:networkSecurityConfig="@xml/network_security_config">
+
+        <activity android:name=".browser.OcrTestActivity" android:exported="false" />
+        <activity android:name=".browser.AttendanceSettingsActivity" android:exported="false" />
+        <activity android:name=".account.AccountActivity" android:exported="false" />
+        <activity android:name=".browser.AttendanceBrowserActivity" android:theme="@style/Theme.NbuLite.Browser" android:exported="false" />
 
         <activity
             android:name=".MainActivity"

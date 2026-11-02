@@ -1,4 +1,10 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package app.nbult.lite.ui.nav
+
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.animation.core.animateFloat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -22,6 +28,8 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nbult.lite.ui.LocalAppContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -85,11 +93,14 @@ fun SideRail(
 ) {
     if (!visible || tabs.isEmpty()) return
 
+    // 校历属于「入口」，包括切换导航后恢复到校历页的情况。
+    val selectedRoute = if (currentRoute == "calendar") "portal" else currentRoute
     // 子页（如 settings/appearance）高亮它所属的那个 tab
     val currentIndex = tabs.indexOfFirst {
-        it.route == currentRoute || currentRoute?.startsWith(it.route + "/") == true
+        it.route == selectedRoute || selectedRoute?.startsWith(it.route + "/") == true
     }.coerceAtLeast(0)
 
+    val browserContext = androidx.compose.ui.platform.LocalContext.current
     Box(modifier.fillMaxSize()) {
         // 顶段：圆钮 + 进度胶囊，作为一个整体从状态栏下 6dp 开始
         Column(
@@ -111,6 +122,37 @@ fun SideRail(
             )
             Spacer(Modifier.height(RailMetrics.ToggleToProgress))
             ProgressCapsule(progress)
+            Spacer(Modifier.height(8.dp))
+            Box(
+                Modifier.width(RailMetrics.Width).height(48.dp)
+                    .acrylicPanel(RoundedCornerShape(24.dp))
+                    .background(when (app.nbult.lite.browser.AttendanceSignal.state.collectAsState().value) {
+                        "loading" -> androidx.compose.ui.graphics.Color.Red.copy(alpha = 0.22f)
+                        "ready" -> androidx.compose.ui.graphics.Color.Green.copy(alpha = 0.20f)
+                        else -> androidx.compose.ui.graphics.Color.Transparent
+                    }, RoundedCornerShape(24.dp))
+                    .combinedClickable(onLongClick = {
+                        browserContext.startActivity(android.content.Intent(browserContext, app.nbult.lite.browser.AttendanceSettingsActivity::class.java))
+                    }, onClick = {
+                        if (app.nbult.lite.browser.AttendanceSignal.active.value) app.nbult.lite.browser.PreloadedPage.claim()
+                        browserContext.startActivity(android.content.Intent(
+                            browserContext, app.nbult.lite.browser.AttendanceBrowserActivity::class.java
+                        ).putExtra("preferred_course", if (app.nbult.lite.browser.AttendanceSignal.active.value) app.nbult.lite.browser.AttendanceSignal.courseName else null))
+                    }),
+                contentAlignment = Alignment.Center
+            ) {
+                val active by app.nbult.lite.browser.AttendanceSignal.active.collectAsState()
+                val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "attendance")
+                val glow by pulse.animateFloat(0.35f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(900), androidx.compose.animation.core.RepeatMode.Reverse), label = "glow")
+                androidx.compose.material3.Text(if(active) "点名 ●" else "点名", color = MaterialTheme.colorScheme.primary.copy(alpha = if(active) glow else 1f))
+            }
+            Spacer(Modifier.height(6.dp))
+            Box(Modifier.width(RailMetrics.Width).height(44.dp)
+                .acrylicPanel(RoundedCornerShape(22.dp))
+                .clickable { browserContext.startActivity(android.content.Intent(browserContext, app.nbult.lite.browser.OcrTestActivity::class.java)) },
+                contentAlignment = Alignment.Center) {
+                androidx.compose.material3.Text("OCR测试", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
         }
 
         // 底段：导航块贴底。
@@ -236,7 +278,9 @@ private fun RailDot(
 @Composable
 fun rememberRailProgress(state: TimetableUiState): RailProgress {
     var now by remember { mutableStateOf(AppClock.now()) }
-    LaunchedEffect(Unit) {
+    val refresh by LocalAppContainer.current.clockRefresh.collectAsStateWithLifecycle()
+    LaunchedEffect(refresh) {
+        now = AppClock.now()
         while (true) {
             val wait = 60_000L - (AppClock.now() % 60_000L)
             delay(wait.coerceIn(1_000L, 60_000L) + 60L)

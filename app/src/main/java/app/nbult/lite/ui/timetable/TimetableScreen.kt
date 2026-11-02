@@ -65,6 +65,19 @@ import kotlinx.coroutines.flow.drop
 fun TimetableScreen(vm: TimetableViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
 
+    if (state.askImportTimeSync) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { vm.answerImportTimeSync(false) },
+            title = { Text("是否同步学期时间？") },
+            text = { Text("自动识别开学时间来源并同步学期开始日期，让课表周次与当前日期对应。与学期设置中的“自动识别”相同；需要网络时将联网查询。") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { vm.answerImportTimeSync(true) }) { Text("是，自动识别") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { vm.answerImportTimeSync(false) }) { Text("否，保留当前时间") }
+            }
+        )
+    }
     var showImport by remember { mutableStateOf(false) }
     var showManual by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
@@ -95,15 +108,17 @@ fun TimetableScreen(vm: TimetableViewModel) {
                 state.isEmpty -> TimetableEmptyHint(onImport = { showImport = true })
 
                 else -> {
-                    val totalWeeks = (state.term?.totalWeeks ?: 20).coerceAtLeast(1)
+                    val totalWeeks = (state.term?.totalWeeks ?: 20).coerceAtLeast(1) + if (state.sundayFirst) 1 else 0
                     val today = AppClock.todayEpochDay()
                     val termStart = state.term?.startEpochDay
                     // 每周的课程由 VM 预算好（已叠加停课/调课），滑动时零过滤成本
-                    val entriesByWeek = state.weeks
+                    val entriesByWeek = remember(state.weeks, state.sundayFirst) {
+                        (1..totalWeeks).map { state.entriesForDisplayWeek(it) }
+                    }
 
                     // pager 要被顶栏共享（条带需要读 currentPageOffsetFraction），
                     // 所以把「顶栏 + 课表」整体放进同一个 key 作用域里
-                    key(totalWeeks) {
+                    key(totalWeeks, state.sundayFirst) {
                         val pagerState = rememberPagerState(
                             initialPage = (state.week - 1).coerceIn(0, totalWeeks - 1)
                         ) { totalWeeks }
@@ -143,6 +158,14 @@ fun TimetableScreen(vm: TimetableViewModel) {
                             navSeq++
                         }
 
+                        val externalJump by vm.externalWeekJump.collectAsStateWithLifecycle()
+                        LaunchedEffect(pagerState, externalJump) {
+                            externalJump?.let { request ->
+                                requestPage(request.second - 1, "外部课程定位")
+                                vm.externalWeekJump.value = null
+                            }
+                        }
+
                         Column(
                             Modifier
                                 .fillMaxSize()
@@ -176,7 +199,7 @@ fun TimetableScreen(vm: TimetableViewModel) {
                             ) {
                                 WeekHeader(
                                     pagerState = pagerState,
-                                    startEpochDay = termStart,
+                                    startEpochDay = termStart?.let { it - if (state.sundayFirst) 1L else 0L },
                                     totalWeeks = totalWeeks,
                                     onPrev = {
                                         requestPage(
@@ -191,7 +214,7 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                     onToday = {
                                         state.term?.let {
                                             requestPage(
-                                                ScheduleService.currentWeek(it) - 1, "本周"
+                                                app.nbult.lite.domain.WeekLayout.displayWeek(ScheduleService.currentWeek(it), app.nbult.lite.domain.DateUtil.dayOfWeekIso(today), state.sundayFirst) - 1, "本周"
                                             )
                                         }
                                     },
@@ -411,6 +434,8 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                         )
                                     ) { page ->
                                         WeekBody(
+                                            weekNumber = page + 1,
+                                            sundayFirst = state.sundayFirst,
                                             weekEntries = entriesByWeek.getOrElse(page) {
                                                 emptyList()
                                             },
@@ -495,7 +520,7 @@ fun TimetableScreen(vm: TimetableViewModel) {
     ) { entry ->
         CourseEditorSheet(
             entry = entry,
-            week = state.week,
+            week = entry.academicWeek.takeIf { it > 0 } ?: state.week,
             totalWeeks = state.term?.totalWeeks?.coerceAtLeast(1) ?: 20,
             periods = state.periods,
             hasOverride = entry.overrideId != 0L,

@@ -1,6 +1,9 @@
 package app.nbult.lite.widget
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -9,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.LocalSize
 import androidx.glance.LocalContext
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
@@ -83,7 +87,7 @@ class NextClassWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val state = loadState(context)
-        provideContent { NextClassBody(state) }
+        provideContent { NextClassBody(refreshedWidgetState(context, state)) }
     }
 }
 
@@ -97,7 +101,9 @@ internal data class TodayRow(
     val endTime: String,
     val courseName: String,
     val room: String,
-    val sections: String
+    val sections: String,
+    val focusKey: String,
+    val week: Int
 )
 
 internal data class WidgetState(
@@ -113,7 +119,8 @@ internal data class WidgetState(
     /** FINISHED 时下方的一句提示，避免卡片只剩四个字 */
     val hint: String,
     val today: List<TodayRow>,
-    val isTomorrow: Boolean
+    val isTomorrow: Boolean,
+    val listCountdown: String = ""
 )
 
 /**
@@ -188,8 +195,11 @@ internal suspend fun loadState(context: Context): WidgetState {
 
         // 列表最多取 8 条：再多也滚不完，只会让每次更新的 RemoteViews 更大
         val today = plan.entries.take(8).map { entry ->
-            val (start, end) = timeOf(entry.slot.startSection) ?: ("" to "")
+            val start = timeOf(entry.slot.startSection)?.first.orEmpty()
+            val end = timeOf(entry.slot.endSection)?.second.orEmpty()
             TodayRow(
+                focusKey = "${entry.originSlot.id}:${entry.slot.dayOfWeek}:${entry.slot.startSection}:${entry.slot.endSection}",
+                week = ScheduleService.currentWeek(snapshot.term, app.nbult.lite.domain.DateUtil.epochDayOf(now) + if (plan.isTomorrow) 1 else 0),
                 startTime = start,
                 endTime = end,
                 courseName = stripCourseCode(entry.course.name),
@@ -231,7 +241,15 @@ internal suspend fun loadState(context: Context): WidgetState {
             room = display.slot.room,
             hint = hint,
             today = today,
-            isTomorrow = plan.isTomorrow
+            isTomorrow = plan.isTomorrow,
+            listCountdown = if (plan.isTomorrow) "" else {
+                val target = minutesOf(if (mode == WidgetMode.ONGOING) endTime else startTime)
+                val remaining = target?.minus(nowMin)
+                if (remaining != null && remaining > 0) {
+                    if (mode == WidgetMode.ONGOING) "距下课 $remaining 分钟"
+                    else "距上课 $remaining 分钟"
+                } else ""
+            }
         )
     }.getOrElse { fallback }
 }
@@ -446,40 +464,46 @@ private fun NextClassBody(state: WidgetState) {
  */
 @Composable
 internal fun TodayListBody(state: WidgetState, wide: Boolean) {
+    val context = LocalContext.current
+    val openApp = Intent(context, MainActivity::class.java)
+        .setAction("app.nbult.lite.OPEN_FROM_WIDGET")
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        .putExtra("widget_clear_highlight", true)
     val colors = state.colors
-    val rowHeight = if (wide) 38.dp else 58.dp
+    val rowHeight = if (wide) 32.dp else 58.dp
 
     Box(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(ColorProvider(colors.background))
             .cornerRadius(22.dp)
-            .clickable(actionStartActivity<MainActivity>())
+            .clickable(androidx.glance.appwidget.action.actionStartActivity(openApp))
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Column(GlanceModifier.fillMaxSize()) {
-            Row(
-                modifier = GlanceModifier.fillMaxWidth().padding(bottom = 2.dp),
-                verticalAlignment = Alignment.Vertical.CenterVertically
-            ) {
+            Row(GlanceModifier.fillMaxWidth().height(26.dp).padding(bottom = 2.dp), verticalAlignment = Alignment.Vertical.CenterVertically) {
                 Text(
-                    text = if (state.isTomorrow) "明天" else "今天",
-                    style = TextStyle(
-                        color = ColorProvider(colors.title),
-                        fontSize = fixedSp(11f),
-                        fontWeight = FontWeight.Medium
-                    ),
-                    maxLines = 1
+                    text = (if (state.isTomorrow) "明天" else "今天") + " · 剩 ${state.today.size} 节",
+                    modifier = GlanceModifier.defaultWeight(),
+                    style = TextStyle(color = ColorProvider(colors.body), fontSize = fixedSp(10f)), maxLines = 1
                 )
-                Spacer(GlanceModifier.width(6.dp))
-                Text(
-                    text = "还剩 ${state.today.size} 节",
-                    style = TextStyle(
-                        color = ColorProvider(colors.body),
-                        fontSize = fixedSp(10f)
-                    ),
-                    maxLines = 1
+                if (wide) Text(
+                    text = "签到",
+                    modifier = GlanceModifier.clickable(androidx.glance.appwidget.action.actionStartActivity(
+                        Intent(context, app.nbult.lite.browser.AttendanceBrowserActivity::class.java)
+                            .setAction("app.nbult.lite.WIDGET_ATTENDANCE")
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )).padding(horizontal = 10.dp, vertical = 5.dp),
+                    style = TextStyle(color = ColorProvider(colors.accent), fontSize = fixedSp(11f), fontWeight = FontWeight.Medium), maxLines = 1
                 )
+                Row(GlanceModifier.defaultWeight(), horizontalAlignment = Alignment.Horizontal.End,
+                    verticalAlignment = Alignment.Vertical.CenterVertically) {
+                    Text("刷新", modifier = GlanceModifier.clickable(actionRunCallback<RefreshTodayListAction>()).padding(horizontal = 6.dp, vertical = 5.dp),
+                        style = TextStyle(color = ColorProvider(colors.accent), fontSize = fixedSp(10f)), maxLines = 1)
+                    if (wide && state.listCountdown.isNotBlank()) Text(state.listCountdown,
+                        modifier = GlanceModifier.clickable(actionRunCallback<RefreshTodayListAction>()).padding(vertical = 5.dp),
+                        style = TextStyle(color = ColorProvider(colors.alert), fontSize = fixedSp(10f)), maxLines = 1)
+                }
             }
 
             if (state.today.isEmpty()) {
@@ -492,12 +516,22 @@ internal fun TodayListBody(state: WidgetState, wide: Boolean) {
                     maxLines = 1
                 )
             } else {
-                LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
+                // Give the collection the real remaining height. Its clickable tail is
+                // part of the collection, so it cannot steal room from course rows.
+                val blankHeight = (LocalSize.current.height - 46.dp - rowHeight * state.today.size).coerceAtLeast(0.dp)
+                LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
                     items(state.today) { row ->
                         CourseRow(row = row, colors = colors, wide = wide, rowHeight = rowHeight)
                     }
+                    if (blankHeight > 0.dp) item {
+                        Box(GlanceModifier.fillMaxWidth().height(blankHeight)
+                            .clickable(androidx.glance.appwidget.action.actionStartActivity(openApp))) {}
+                    }
                 }
             }
+            if (state.today.isEmpty()) Box(GlanceModifier.fillMaxWidth().defaultWeight()
+                .clickable(androidx.glance.appwidget.action.actionStartActivity(openApp))) {}
+
         }
     }
 }
@@ -515,8 +549,15 @@ internal fun CourseRow(
     wide: Boolean,
     rowHeight: Dp
 ) {
+    val context = LocalContext.current
+    val openCourse = Intent(context, MainActivity::class.java)
+        .setData(Uri.parse("nbult://widget/course/${row.week}/${row.focusKey}"))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        .putExtra("widget_course", row.focusKey)
+        .putExtra(app.nbult.lite.data.notify.ReminderNotifier.EXTRA_WEEK, row.week)
     Row(
-        modifier = GlanceModifier.fillMaxWidth().height(rowHeight),
+        modifier = GlanceModifier.fillMaxWidth().height(rowHeight)
+            .clickable(androidx.glance.appwidget.action.actionStartActivity(openCourse)),
         verticalAlignment = Alignment.Vertical.CenterVertically
     ) {
         if (wide) {

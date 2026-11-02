@@ -27,6 +27,8 @@ class SettingsStore(private val context: Context) {
     private val keyClassReminder = booleanPreferencesKey("class_reminder")
     private val keyClassLive = booleanPreferencesKey("class_live")
     private val keyTodayShowInactive = booleanPreferencesKey("today_show_inactive")
+    private val keyTodayExpanded = booleanPreferencesKey("today_expanded")
+    private val keySundayFirst = booleanPreferencesKey("sunday_first")
     private val keyTimetableFull = booleanPreferencesKey("timetable_full")
     private val keyThemeColor = stringPreferencesKey("theme_color")
     private val keyDarkMode = stringPreferencesKey("dark_mode")
@@ -143,6 +145,18 @@ class SettingsStore(private val context: Context) {
      * 和 [showInactiveInToday] 一样落 DataStore：这是用户偏好，不是界面瞬时状态，
      * 杀进程重开要能保持。
      */
+    val todayExpanded: Flow<Boolean> = context.settingsDataStore.data.map { it[keyTodayExpanded] ?: true }
+
+    suspend fun setTodayExpanded(expanded: Boolean) {
+        context.settingsDataStore.edit { it[keyTodayExpanded] = expanded }
+    }
+
+    val sundayFirst: Flow<Boolean> = context.settingsDataStore.data.map { it[keySundayFirst] ?: false }
+
+    suspend fun setSundayFirst(enabled: Boolean) {
+        context.settingsDataStore.edit { it[keySundayFirst] = enabled }
+    }
+
     val showFullTimetable: Flow<Boolean> =
         context.settingsDataStore.data.map { it[keyTimetableFull] ?: false }
 

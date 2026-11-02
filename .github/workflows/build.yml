@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: 编译 Preview 包
+    name: 测试与构建 APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,34 +42,66 @@ jobs:
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
 
-      - name: 还原签名密钥
-        # 必须有固定密钥。曾用 debug 签名，而 debug keystore 是「首次构建时按机器生成」的，
-        # runner 每次都是全新的机器 —— 于是每个版本的证书都不同，新包装不上旧版本
-        # （INSTALL_FAILED_UPDATE_INCOMPATIBLE，界面提示「与已安装应用签名不同」）。
-        # 缺密钥时宁可直接失败，也不要产出一个盖不上任何既有安装的包。
-        env:
-          KEYSTORE_BASE64: ${{ secrets.NBULT_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.NBULT_KEYSTORE_PASSWORD }}
+      - name: 选择通道并校验标签
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "缺少 secrets.NBULT_KEYSTORE_BASE64，无法用固定密钥签名" >&2
+          VERSION=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -1)
+          VARIANT=Preview
+          SUFFIX=-Preview
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            VARIANT=Debug
+            SUFFIX=-Debug
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            case "$GITHUB_REF_NAME" in
+              "v$VERSION") VARIANT=Release; SUFFIX=-Release ;;
+              "v$VERSION-Preview") ;;
+              *) echo '标签与代码版本不匹配' >&2; exit 1 ;;
+            esac
+            test -f "docs/releases/$GITHUB_REF_NAME.md"
+          fi
+          echo "BUILD_VARIANT=$VARIANT" >> "$GITHUB_ENV"
+          echo "APK_SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
+
+      - name: 还原固定签名
+        if: github.event_name != 'pull_request'
+        env:
+          PREVIEW_KEY: ${{ secrets.NBULT_KEYSTORE_BASE64 }}
+          PREVIEW_PASSWORD: ${{ secrets.NBULT_KEYSTORE_PASSWORD }}
+          RELEASE_KEY: ${{ secrets.NBULT_RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_PASSWORD: ${{ secrets.NBULT_RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_ALIAS: ${{ secrets.NBULT_RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.NBULT_RELEASE_KEY_PASSWORD }}
+        run: |
+          KEY="$PREVIEW_KEY"
+          PASSWORD="$PREVIEW_PASSWORD"
+          ALIAS=nbult
+          KEY_PASSWORD="$PASSWORD"
+          if [ "$BUILD_VARIANT" = Release ]; then
+            KEY="$RELEASE_KEY"
+            PASSWORD="$RELEASE_PASSWORD"
+            ALIAS="${RELEASE_ALIAS:-nbult}"
+            KEY_PASSWORD="${RELEASE_KEY_PASSWORD:-$PASSWORD}"
+          fi
+          if [ -z "$KEY" ] || [ -z "$PASSWORD" ]; then
+            echo '缺少当前通道固定签名 Secrets，拒绝生成无法覆盖升级的包' >&2
             exit 1
           fi
-          store="$RUNNER_TEMP/nbult-preview.jks"
-          echo "$KEYSTORE_BASE64" | base64 -d > "$store"
+          store="$RUNNER_TEMP/nbult-${BUILD_VARIANT,,}.jks"
+          printf '%s' "$KEY" | base64 --decode > "$store"
+          chmod 600 "$store"
           echo "NBULT_STORE_FILE=$store" >> "$GITHUB_ENV"
-          echo "NBULT_STORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-          echo "NBULT_KEY_ALIAS=nbult" >> "$GITHUB_ENV"
+          echo "NBULT_STORE_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+          echo "NBULT_KEY_ALIAS=$ALIAS" >> "$GITHUB_ENV"
+          echo "NBULT_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: 编译
-        run: ./gradlew --no-daemon --console=plain :app:assemblePreview
+      - name: 测试与编译
+        run: ./gradlew --no-daemon --console=plain ":app:test${BUILD_VARIANT}UnitTest" ":app:assemble$BUILD_VARIANT"
 
       - name: 校验签名
         # 把证书指纹打进日志。签名一旦退回 debug，这行会立刻显示
         # 「CN=Android Debug」而不是「CN=NBU Assistant Lite」，不必等装机才发现
         run: |
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | head -1)
-          "$APKSIGNER" verify --print-certs app/build/outputs/apk/preview/*.apk \
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/${BUILD_VARIANT,,}/*.apk \
             | grep -E "certificate DN|certificate SHA-256"
 
       - name: 重命名产物
@@ -77,18 +109,40 @@ jobs:
         # 按 build.gradle.kts 的 versionName 拼成 nbu-assistant-lite-<版本>-Preview.apk
         run: |
           VERSION=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -1)
-          NAME="nbu-assistant-lite-${VERSION}-Preview.apk"
+          NAME="nbu-assistant-lite-${VERSION}${APK_SUFFIX}.apk"
           mkdir -p out
-          cp app/build/outputs/apk/preview/*.apk "out/$NAME"
+          cp app/build/outputs/apk/${BUILD_VARIANT,,}/*.apk "out/$NAME"
           ls -l out
           echo "APK_NAME=$NAME" >> "$GITHUB_ENV"
+
+      - name: 打包源码和混淆映射
+        run: |
+          VERSION=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -1)
+          python3 tools/package-source.py --output "out/nbu-assistant-lite-${VERSION}${APK_SUFFIX}-source.zip"
+          mapping="app/build/outputs/mapping/${BUILD_VARIANT,,}/mapping.txt"
+          if [ -f "$mapping" ]; then gzip -c "$mapping" > "out/nbu-assistant-lite-${VERSION}${APK_SUFFIX}-mapping.txt.gz"; fi
+          node tools/test-browser-observer.cjs
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
-          name: apk-preview
-          path: out/*.apk
+          name: apk-package
+          path: out/*
           if-no-files-found: error
+
+      - name: 保存测试报告与混淆映射
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: |
+            app/build/reports/tests/
+            app/build/outputs/mapping/
+          if-no-files-found: ignore
+
+      - name: 清理临时签名
+        if: always()
+        run: rm -f "$RUNNER_TEMP"/nbult-preview.jks "$RUNNER_TEMP"/nbult-release.jks
 
   release:
     name: 打标签时发 Release
@@ -103,7 +157,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: apk-preview
+          name: apk-package
           path: apk
 
       - name: 生成 SHA-256
@@ -111,6 +165,7 @@ jobs:
           cd apk
           for f in *.apk; do sha256sum "$f" > "$f.sha256"; done
           cat *.sha256
+          sha256sum *.apk *.zip *.gz > SHA256SUMS.txt
 
       - name: 解析发布说明
         # 每个版本手写一份 docs/releases/<tag>.md。不再使用 generate_release_notes，
@@ -155,6 +210,8 @@ jobs:
           manifest = {
               "versionCode": code,
               "versionName": name,
+              "applicationId": "app.nbult.lite.preview" if "-Preview" in tag else "app.nbult.lite",
+              "channel": "preview" if "-Preview" in tag else "release",
               "apkUrl": f"{base}/{os.path.basename(apk)}",
               "sha256": sha,
               "notes": open(notes_path, encoding="utf-8").read() if os.path.exists(notes_path) else "",
@@ -180,6 +237,9 @@ jobs:
             apk/*.apk
             apk/*.sha256
             apk/manifest.json
+            apk/*.zip
+            apk/*.gz
+            apk/SHA256SUMS.txt
 
       - name: 发布
         env:

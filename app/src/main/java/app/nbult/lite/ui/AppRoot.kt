@@ -148,6 +148,7 @@ fun AppRoot() {
     }
     // 侧栏进度、作息编辑都要读它，提到导航图之前只收一次
     val timetableState by timetableVm.state.collectAsStateWithLifecycle()
+    app.nbult.lite.browser.AttendancePreload(timetableState)
     // 通知点击 → 切到课表并跳到那一周（等学期加载完再 setWeek，否则会被静默忽略）
     // 启动时排一次；之后课表/停课/调课一变就重排（闹钟永远只指向"下一个提醒点"）
     val appContext = LocalContext.current
@@ -165,6 +166,13 @@ fun AppRoot() {
             .drop(1)
             .collect { ClassReminderScheduler.reschedule(appContext) }
     }
+    val highlightedCourse by container.highlightedWidgetCourse.collectAsStateWithLifecycle()
+    LaunchedEffect(highlightedCourse) {
+        if (highlightedCourse != null) {
+            kotlinx.coroutines.delay(5_000)
+            container.highlightedWidgetCourse.value = null
+        }
+    }
     val pendingWeek by container.pendingWeekJump.collectAsStateWithLifecycle()
     LaunchedEffect(pendingWeek) {
         val week = pendingWeek ?: return@LaunchedEffect
@@ -180,7 +188,7 @@ fun AppRoot() {
         if (term == null) {
             AppLog.log("Reminder", "跳到第 $week 周失败：学期信息未就绪")
         } else {
-            timetableVm.setWeek(week)
+            timetableVm.requestWeekJump(week, container.highlightedWidgetCourse.value?.split(":")?.getOrNull(2)?.toIntOrNull() ?: 1)
             AppLog.log("Reminder", "已跳到第 $week 周")
         }
     }

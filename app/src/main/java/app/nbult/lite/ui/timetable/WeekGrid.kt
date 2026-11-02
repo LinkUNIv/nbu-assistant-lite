@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package app.nbult.lite.ui.timetable
 
 import androidx.compose.animation.AnimatedVisibility
@@ -27,6 +29,7 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +39,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.animation.core.animateFloatAsState
@@ -56,7 +60,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nbult.lite.ui.LocalAppContainer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -347,7 +359,10 @@ fun TodayCard(
     onEntryClick: (TimetableEntry) -> Unit = {}
 ) {
     if (entries.isEmpty()) return
-    var expanded by rememberSaveable { mutableStateOf(true) }
+    val settings = LocalAppContainer.current.settings
+    val scope = rememberCoroutineScope()
+    val storedExpanded by settings.todayExpanded.collectAsStateWithLifecycle(initialValue = null)
+    val expanded = storedExpanded ?: return
     // 展开进度：0 折叠、1 展开。标题位移和内容模糊都由它驱动 ——
     // 用 graphicsLayer / blur 而不是 offset / animateContentSize，
     // 前者只影响绘制，后者每帧都会重新测量布局，是滚动掉帧的大头
@@ -440,7 +455,7 @@ fun TodayCard(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .clickable { expanded = !expanded },
+                        .clickable { scope.launch { settings.setTodayExpanded(!expanded) } },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -475,7 +490,7 @@ fun TodayCard(
                                 .fillMaxWidth()
                                 // 停课与「已调走」的块压暗，和还能上的课一眼分开
                                 .alpha(if (entry.isActive) 1f else 0.55f)
-                                .clickable { onEntryClick(entry) }
+                                .combinedClickable(onClick = {}, onLongClickLabel = "课程设置", onLongClick = { onEntryClick(entry) })
                                 .padding(vertical = 3.dp),
                             verticalAlignment = Alignment.Top
                         ) {
@@ -659,6 +674,8 @@ private fun RailCell(
  */
 @Composable
 fun WeekBody(
+    weekNumber: Int = 0,
+    sundayFirst: Boolean = false,
     weekEntries: List<TimetableEntry>,
     periods: List<PeriodTime>,
     totalSections: Int,
@@ -682,16 +699,15 @@ fun WeekBody(
             BlockVisual(entry = entry, weekLabel = WeekMask.label(entry.slot.weekMask))
         }
     }
-    val dayDates = remember(weekStartEpochDay) {
-        weekStartEpochDay?.let { start -> (0..6).map { start + it } }
+    val dayDates = remember(weekStartEpochDay, sundayFirst) {
+        weekStartEpochDay?.let { start -> (1..7).map { day -> start + if (sundayFirst && day == 7) -1L else day - 1L } }
     }
 
     val compact = columnWidth < 54.dp
     val nameSize = if (compact) 10.sp else 11.sp
     val metaSize = if (compact) 9.sp else 10.sp
 
-    // 列宽三档：40dp 以下教室放不下，34dp 以下连课程名都得截
-    val hideRoom = columnWidth < 40.dp
+    // 窄列仍保留地点，长文本换行或省略，不按列宽隐藏。
     val nameLimit = if (columnWidth < 34.dp) 2 else 0
 
     Box(
@@ -753,6 +769,7 @@ fun WeekBody(
         }
 
         BlockLayer(
+            weekNumber = weekNumber,
             blocks = blocks,
             columnWidth = columnWidth,
             cellHeight = cellHeight,
@@ -762,7 +779,6 @@ fun WeekBody(
             nameSize = nameSize,
             metaSize = metaSize,
             visibleDays = visibleDays,
-            hideRoom = hideRoom,
             nameLimit = nameLimit,
             onEntryClick = onEntryClick
         )
@@ -771,14 +787,26 @@ fun WeekBody(
 
 @Composable
 private fun CourseBlock(
+    weekNumber: Int,
     entry: TimetableEntry,
     weekLabel: String,
     compact: Boolean,
     nameSize: TextUnit,
     metaSize: TextUnit,
-    hideRoom: Boolean = false,
     nameLimit: Int = 0
 ) {
+    val focusKey by LocalAppContainer.current.highlightedWidgetCourse.collectAsStateWithLifecycle()
+    val highlighted = focusKey == "${entry.academicWeek.takeIf { it > 0 } ?: weekNumber}:${entry.originSlot.id}:${entry.slot.dayOfWeek}:${entry.slot.startSection}:${entry.slot.endSection}"
+    val pulse = if (highlighted) {
+        val transition = rememberInfiniteTransition(label = "课程定位高亮")
+        val value by transition.animateFloat(
+            initialValue = 0.25f,
+            targetValue = 0.65f,
+            animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
+            label = "定位脉动"
+        )
+        value
+    } else 0.13f
     val accent = courseColor(entry.course.colorSeed)
     val sections = entry.slot.endSection - entry.slot.startSection + 1
     val roomColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -856,8 +884,7 @@ private fun CourseBlock(
         compact,
         metaSize,
         metaSmall,
-        roomColor,
-        hideRoom
+        roomColor
     ) {
         buildAnnotatedString {
             var first = true
@@ -867,8 +894,7 @@ private fun CourseBlock(
                 withStyle(style) { append(text) }
                 first = false
             }
-            // 窄列放不下教室，直接不写，省下的高度留给周次
-            if (!hideRoom) line(SpanStyle(color = roomColor, fontSize = metaSize), entry.room)
+            line(SpanStyle(color = roomColor, fontSize = metaSize), entry.room)
             if (!compact && sections >= 3) {
                 line(
                     SpanStyle(color = roomColor.copy(alpha = 0.6f), fontSize = metaSmall),
@@ -888,38 +914,41 @@ private fun CourseBlock(
             .clipToBounds()
             .drawBehind {
                 val radius = CornerRadius(6.dp.toPx())
-                drawRoundRect(color = blockColor.copy(alpha = 0.13f), cornerRadius = radius)
+                drawRoundRect(color = blockColor.copy(alpha = pulse), cornerRadius = radius)
                 drawRoundRect(
-                    color = blockColor.copy(alpha = 0.45f),
-                    style = Stroke(width = 1f),
+                    color = blockColor.copy(alpha = if (highlighted) 1f else 0.45f),
+                    style = Stroke(width = if (highlighted) 5.dp.toPx() else 1f),
                     cornerRadius = radius
                 )
             }
             .padding(horizontal = 3.dp, vertical = 3.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            // 课程名 + 教师（同一段文字）；调课块在名字前挂一个方框「调」
-            Row(verticalAlignment = Alignment.Top) {
-                Text(
-                    text = titleText,
-                    fontSize = nameSize,
-                    lineHeight = nameSize * 1.15f,
-                    maxLines = if (sections >= 2) 4 else 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (metaText.isNotEmpty()) {
-                Text(
-                    text = metaText,
-                    fontSize = metaSize,
-                    lineHeight = metaSize * 1.1f,
-                    maxLines = when {
-                        sections >= 3 -> 6
-                        sections == 2 -> 4
-                        else -> 2
-                    },
-                    overflow = TextOverflow.Ellipsis
-                )
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // 标题保留显示空间，同时为地点至少留一到两行；地点使用其余全部高度。
+            val roomLineHeight = with(LocalDensity.current) { (metaSize * 1.1f).toDp() }
+            val reservedRoom = if (metaText.isNotEmpty()) {
+                minOf(maxHeight / 2, roomLineHeight * if (sections >= 2) 2 else 1)
+            } else 0.dp
+            val titleMaxHeight = (maxHeight - reservedRoom - 1.dp).coerceAtLeast(0.dp)
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Row(modifier = Modifier.heightIn(max = titleMaxHeight), verticalAlignment = Alignment.Top) {
+                    Text(
+                        text = titleText,
+                        fontSize = nameSize,
+                        lineHeight = nameSize * 1.15f,
+                        maxLines = if (sections >= 2) 4 else 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (metaText.isNotEmpty()) {
+                    Text(
+                        text = metaText,
+                        modifier = Modifier.weight(1f, fill = false),
+                        fontSize = metaSize,
+                        lineHeight = metaSize * 1.1f,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
 
@@ -966,6 +995,7 @@ private fun CourseBlock(
 
 @Composable
 private fun BlockLayer(
+    weekNumber: Int,
     blocks: List<BlockVisual>,
     columnWidth: Dp,
     cellHeight: Dp,
@@ -975,7 +1005,6 @@ private fun BlockLayer(
     nameSize: TextUnit,
     metaSize: TextUnit,
     visibleDays: List<Int>,
-    hideRoom: Boolean,
     nameLimit: Int,
     onEntryClick: (TimetableEntry) -> Unit
 ) {
@@ -983,20 +1012,20 @@ private fun BlockLayer(
         content = {
             blocks.forEach { block ->
                 CourseBlock(
+                    weekNumber = weekNumber,
                     entry = block.entry,
                     weekLabel = block.weekLabel,
                     compact = compact,
                     nameSize = nameSize,
                     metaSize = metaSize,
-                    hideRoom = hideRoom,
-                    nameLimit = nameLimit
+                            nameLimit = nameLimit
                 )
             }
         },
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(blocks, columnWidth, cellHeight, visibleDays) {
-                detectTapGestures { offset ->
+                detectTapGestures(onLongPress = { offset ->
                     val colW = columnWidth.toPx()
                     val cellH = cellHeight.toPx()
                     val top = headerHeight.toPx()
@@ -1010,7 +1039,7 @@ private fun BlockLayer(
                             section >= b.entry.slot.startSection &&
                             section <= b.entry.slot.endSection
                     }?.let { onEntryClick(it.entry) }
-                }
+                })
             }
     ) { measurables, constraints ->
         // 尺寸兜底：快滑过程中若约束在极端情况下退化成 0/负数，

@@ -37,6 +37,8 @@ class AppContainer(context: Context) {
     val timeSync: TimeSync by lazy { TimeSync() }
 
     /** 通知点击带来的"跳到第 N 周"；由 MainActivity 写入，AppRoot 消费后置空。 */
+    val clockRefresh = kotlinx.coroutines.flow.MutableStateFlow(0L)
+    val highlightedWidgetCourse = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val pendingWeekJump = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
     val termStartResolver: TermStartResolver by lazy { TermStartResolver(appContext) }
     val timetableRepository: TimetableRepository by lazy { TimetableRepository(database, settings) }
@@ -98,6 +100,7 @@ class NbuLiteApp : Application() {
                 .collect {
                     kotlinx.coroutines.delay(800)
                     app.nbult.lite.widget.NextClassWidget().updateAll(this@NbuLiteApp)
+                    app.nbult.lite.widget.TodayListWidget().updateAll(this@NbuLiteApp)
                 }
         }
     }

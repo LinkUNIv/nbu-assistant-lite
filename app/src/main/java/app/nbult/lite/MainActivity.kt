@@ -9,6 +9,8 @@ import android.os.HandlerThread
 import android.view.FrameMetrics
 import android.view.Window
 import android.view.WindowManager
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -96,6 +98,7 @@ class MainActivity : ComponentActivity() {
                 // 这里跟着应用主题再设一次。
                 val view = LocalView.current
                 SideEffect {
+                    getSharedPreferences("appearance_snapshot", MODE_PRIVATE).edit().putBoolean("dark", darkTheme).apply()
                     val activity = view.context as? Activity ?: return@SideEffect
                     WindowCompat.getInsetsController(activity.window, view).apply {
                         isAppearanceLightStatusBars = !darkTheme
@@ -113,6 +116,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 冷启动、从桌面或最近任务返回前台时，重新读取课表和当前时间。
+        lifecycleScope.launch {
+            app.nbult.lite.widget.refreshCourseDisplays(this@MainActivity)
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -126,6 +137,15 @@ class MainActivity : ComponentActivity() {
      * 这里拿不到 NavController，也不该由 Activity 去指挥 Compose 的导航。
      */
     private fun handleIntent(intent: Intent?, container: AppContainer) {
+        if (intent?.getBooleanExtra("widget_clear_highlight", false) == true) {
+            container.highlightedWidgetCourse.value = null
+            intent.removeExtra("widget_clear_highlight")
+        }
+        intent?.getStringExtra("widget_course")?.let { key ->
+            val focusWeek = intent.getIntExtra(app.nbult.lite.data.notify.ReminderNotifier.EXTRA_WEEK, 0)
+            container.highlightedWidgetCourse.value = "$focusWeek:$key"
+            intent.removeExtra("widget_course")
+        }
         val week = intent?.getIntExtra(app.nbult.lite.data.notify.ReminderNotifier.EXTRA_WEEK, 0) ?: 0
         if (week > 0) {
             container.pendingWeekJump.value = week

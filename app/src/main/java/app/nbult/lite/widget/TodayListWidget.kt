@@ -1,5 +1,10 @@
 package app.nbult.lite.widget
 
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
+import android.content.Intent
+import android.content.ComponentName
 import android.content.Context
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -26,23 +31,60 @@ class TodayListWidget : GlanceAppWidget() {
      *
      * 高度都 ≥ 110dp 偏大的一侧，避免被 launcher 拉成一张高瘦的卡片。
      */
-    override val sizeMode: SizeMode = SizeMode.Responsive(
-        setOf(
-            DpSize(250.dp, 110.dp),
-            DpSize(110.dp, 220.dp),
-            DpSize(250.dp, 220.dp)
-        )
-    )
+    // Layout and blank-area sizing must follow the host's actual content size,
+    // rather than one of three responsive size buckets.
+    override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val state = loadState(context)
         provideContent {
             // 档位宽度决定用宽行还是窄列：窄列放不下「教室 + 节次」两列
-            TodayListBody(state, wide = LocalSize.current.width >= 180.dp)
+            TodayListBody(refreshedWidgetState(context, state), wide = LocalSize.current.width >= 180.dp)
         }
     }
 }
 
 class TodayListReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = TodayListWidget()
+
+    private fun refreshIntent(context: Context): PendingIntent {
+        val ids = AppWidgetManager.getInstance(context).getAppWidgetIds(
+            ComponentName(context, TodayListReceiver::class.java)
+        )
+        return PendingIntent.getBroadcast(
+            context, 354,
+            Intent(context, TodayListReceiver::class.java)
+                .setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
+        super.onUpdate(context, manager, ids)
+        // 非精确闹钟，无需精确闹钟权限；系统省电时可能延后刷新。
+        context.getSystemService(AlarmManager::class.java).setRepeating(
+            AlarmManager.RTC,
+            (System.currentTimeMillis() / 60_000 + 1) * 60_000,
+            60_000,
+            refreshIntent(context)
+        )
+    }
+
+    override fun onDisabled(context: Context) {
+        context.getSystemService(AlarmManager::class.java).cancel(refreshIntent(context))
+        super.onDisabled(context)
+    }
+}
+
+/** 刷新全部课程显示，不启动 Activity。 */
+class RefreshTodayListAction : androidx.glance.appwidget.action.ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: androidx.glance.action.ActionParameters
+    ) {
+        app.nbult.lite.util.AppLog.log("Widget", "收到手动刷新点击")
+        refreshCourseDisplays(context)
+    }
 }

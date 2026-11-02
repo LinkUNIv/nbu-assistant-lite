@@ -35,3 +35,8 @@ Thumbs.db
 # CI 通过 GitHub Secrets 传入
 *.jks
 *.keystore
+
+# 发布中间目录与私有相机样本
+out/
+app/src/androidTest/assets/private/
+private-ocr-fixtures/

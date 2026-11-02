@@ -19,6 +19,7 @@ import app.nbult.lite.parser.TimetableParser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import app.nbult.lite.domain.WeekLayout
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -38,9 +39,11 @@ data class TimetableUiState(
     val showInactiveToday: Boolean = false,
     /** 课表布局：true = 显示全部（7 天 + 满节次），false = 显示部分。 */
     val showFullTimetable: Boolean = false,
+    val sundayFirst: Boolean = false,
     val preview: ParseResult? = null,
     val previewError: String? = null,
     val importing: Boolean = false,
+    val askImportTimeSync: Boolean = false,
     val message: String? = null,
     val selected: TimetableEntry? = null,
     /** 非空表示有调课在等用户处理冲突。 */
@@ -68,8 +71,16 @@ data class TimetableUiState(
             overrides,
             minimum = if (showFullTimetable) 10 else 4
         )
+    fun entriesForDisplayWeek(displayWeek: Int): List<TimetableEntry> {
+        val days = if (sundayFirst) listOf(7, 1, 2, 3, 4, 5, 6) else (1..7).toList()
+        return days.flatMap { day ->
+            val academic = WeekLayout.academicWeek(displayWeek, day, sundayFirst)
+            weeks.getOrElse(academic - 1) { emptyList() }
+                .filter { it.slot.dayOfWeek == day }.map { it.copy(academicWeek = academic) }
+        }
+    }
     val currentWeekEntries: List<TimetableEntry>
-        get() = weeks.getOrElse(week - 1) { emptyList() }
+        get() = entriesForDisplayWeek(week)
 
     /**
      * 课表要显示的星期，升序。
@@ -86,9 +97,10 @@ data class TimetableUiState(
     val visibleDays: List<Int>
         get() {
             // 还没加载完时先按满 7 列画，避免开屏先从 5 列跳到 6 列
-            if (showFullTimetable || weeks.isEmpty()) return listOf(1, 2, 3, 4, 5, 6, 7)
+            val order = if (sundayFirst) listOf(7, 1, 2, 3, 4, 5, 6) else (1..7).toList()
+            if (showFullTimetable || weeks.isEmpty()) return order
             val used = currentWeekEntries.mapTo(HashSet()) { it.slot.dayOfWeek }
-            return (1..7).filter { it <= 5 || it in used }
+            return order.filter { it <= 5 || it in used }
         }
 }
 
@@ -127,6 +139,12 @@ class TimetableViewModel(
     private val _state = MutableStateFlow(TimetableUiState())
     val state: StateFlow<TimetableUiState> = _state.asStateFlow()
 
+    val externalWeekJump = MutableStateFlow<Pair<Long, Int>?>(null)
+
+    fun requestWeekJump(week: Int, day: Int = 1) {
+        externalWeekJump.value = System.nanoTime() to WeekLayout.displayWeek(week, day, _state.value.sundayFirst)
+    }
+
     private var weekPickedByUser = false
 
     init {
@@ -141,20 +159,15 @@ class TimetableViewModel(
                 Triple(snapshot, showInactive, showFull)
             }
                 .collect { (snapshot, showInactive, showFull) ->
-                val week = snapshot.term?.let { ScheduleService.currentWeek(it) } ?: 1
+                val week = snapshot.term?.let { WeekLayout.displayWeek(ScheduleService.currentWeek(it), DateUtil.dayOfWeekIso(AppClock.todayEpochDay()), _state.value.sundayFirst) } ?: 1
                 val totalWeeks = (snapshot.term?.totalWeeks ?: 20).coerceAtLeast(1)
-                // 每周的课程在这里一次算好（含停课/调课），滑动时不再重复过滤，也不重复查覆盖表
                 val weeks = (1..totalWeeks).map { w ->
                     ScheduleService.weekEntries(snapshot.entries, w, snapshot.overrides)
                 }
                 val plan = ScheduleService.planForToday(
-                    snapshot.entries,
-                    snapshot.term,
-                    snapshot.periods,
-                    snapshot.overrides,
+                    snapshot.entries, snapshot.term, snapshot.periods, snapshot.overrides,
                     includeInactive = showInactive
                 )
-                val current = (_state.value.week).coerceIn(1, totalWeeks)
                 _state.value = _state.value.copy(
                     loading = false,
                     term = snapshot.term,
@@ -162,12 +175,26 @@ class TimetableViewModel(
                     periods = snapshot.periods,
                     overrides = snapshot.overrides,
                     weeks = weeks,
-                    week = if (weekPickedByUser) current else week.coerceIn(1, totalWeeks),
-                    todayEntries = plan.entries,
+                    week = (if (weekPickedByUser) _state.value.week else week).coerceIn(1, totalWeeks + if (_state.value.sundayFirst) 1 else 0),
+                    todayEntries = plan.entries.map { entry ->
+                        val actualWeek = snapshot.term?.let { term ->
+                            ScheduleService.currentWeek(term, AppClock.todayEpochDay() + if (plan.isTomorrow) 1L else 0L)
+                        } ?: week
+                        entry.copy(academicWeek = actualWeek)
+                    },
                     todayIsTomorrow = plan.isTomorrow,
                     showInactiveToday = showInactive,
                     showFullTimetable = showFull
                 )
+
+            }
+        }
+        viewModelScope.launch {
+            settings.sundayFirst.collect { enabled ->
+                val st = _state.value
+                val academic = st.term?.let { ScheduleService.currentWeek(it) } ?: st.week
+                val target = if (weekPickedByUser) st.week else WeekLayout.displayWeek(academic, DateUtil.dayOfWeekIso(AppClock.todayEpochDay()), enabled)
+                _state.value = st.copy(sundayFirst = enabled, week = target)
             }
         }
         viewModelScope.launch { bootstrapTermStart() }
@@ -203,7 +230,7 @@ class TimetableViewModel(
     }
 
     /** 设置页「自动识别」：先查校历，查不到再退回新闻识别。 */
-    fun refreshTermStart() {
+    fun refreshTermStart(jumpToCurrentWeek: Boolean = false) {
         viewModelScope.launch {
             val today = AppClock.todayEpochDay()
             val semester = runCatching {
@@ -211,6 +238,7 @@ class TimetableViewModel(
             }.getOrNull()
             if (semester != null) {
                 applyTermStart(semester.startDay, "校历 ${semester.name}")
+                if (jumpToCurrentWeek) jumpToRecognizedWeek(semester.startDay)
                 _state.value = _state.value.copy(
                     message = "已按校历设置开学时间：${CalendarDates.monthDay(semester.startDay)}"
                 )
@@ -224,6 +252,7 @@ class TimetableViewModel(
                         )
                     } else {
                         applyTermStart(guess.startEpochDay, guess.sourceTitle)
+                        if (jumpToCurrentWeek) jumpToRecognizedWeek(guess.startEpochDay)
                         _state.value = _state.value.copy(
                             message = "已按新闻识别设置：${CalendarDates.monthDay(guess.startEpochDay)}"
                         )
@@ -244,7 +273,7 @@ class TimetableViewModel(
      */
     fun setWeek(week: Int) {
         val term = _state.value.term ?: return
-        val target = week.coerceIn(1, term.totalWeeks.coerceAtLeast(1))
+        val target = week.coerceIn(1, term.totalWeeks.coerceAtLeast(1) + if (_state.value.sundayFirst) 1 else 0)
         if (target == _state.value.week) return
         weekPickedByUser = true
         _state.value = _state.value.copy(week = target)
@@ -270,6 +299,21 @@ class TimetableViewModel(
         _state.value = _state.value.copy(preview = null, previewError = null)
     }
 
+    private suspend fun jumpToRecognizedWeek(startDay: Long) {
+        // 等待新学期日期进入界面状态，避免翻页后又被旧周次覆盖。
+        val updated = kotlinx.coroutines.withTimeoutOrNull(3_000L) {
+            state.first { it.term?.startEpochDay == startDay }
+        } ?: return
+        val term = updated.term ?: return
+        val today = AppClock.todayEpochDay()
+        requestWeekJump(ScheduleService.currentWeek(term, today), DateUtil.dayOfWeekIso(today))
+    }
+
+    fun answerImportTimeSync(sync: Boolean) {
+        _state.value = _state.value.copy(askImportTimeSync = false)
+        if (sync) refreshTermStart(jumpToCurrentWeek = true)
+    }
+
     fun confirmImport() {
         val preview = _state.value.preview ?: return
         viewModelScope.launch {
@@ -289,6 +333,7 @@ class TimetableViewModel(
                 _state.value = _state.value.copy(
                     importing = false,
                     preview = null,
+                    askImportTimeSync = true,
                     message = "已导入 $count 个上课时段"
                 )
             }.onFailure {
@@ -443,7 +488,7 @@ class TimetableViewModel(
 
     /** 停课：只作用于当前这一周的这一节，不动课程本身的排课。 */
     fun suspendCurrent() {
-        val week = _state.value.week
+        val week = _state.value.selected?.academicWeek?.takeIf { it > 0 } ?: _state.value.week
         applySuspend(weekMask = WeekMask.bit(week), week = week)
     }
 
@@ -457,7 +502,7 @@ class TimetableViewModel(
     fun moveCurrent(day: Int, start: Int, end: Int, room: String, targetWeek: Int) {
         val entry = _state.value.selected ?: return
         val maxW = maxWeek()
-        val sourceWeek = entry.sourceWeek.takeIf { it in 1..maxW } ?: _state.value.week
+        val sourceWeek = entry.sourceWeek.takeIf { it in 1..maxW } ?: (entry.academicWeek.takeIf { it > 0 } ?: _state.value.week)
         val safeTarget = targetWeek.coerceIn(sourceWeek, maxW)
         val blocksInTarget = ScheduleService.weekEntries(
             _state.value.entries,
@@ -532,7 +577,7 @@ class TimetableViewModel(
      */
     fun convertMoveToSuspend() {
         val entry = _state.value.selected ?: return
-        val sourceWeek = entry.sourceWeek.takeIf { it in 1..maxWeek() } ?: _state.value.week
+        val sourceWeek = entry.sourceWeek.takeIf { it in 1..maxWeek() } ?: (entry.academicWeek.takeIf { it > 0 } ?: _state.value.week)
         viewModelScope.launch {
             if (entry.overrideId > 0L) repository.clearOverride(entry.overrideId)
             repository.setOverride(
@@ -621,7 +666,7 @@ class TimetableViewModel(
     fun openOrigin() {
         val entry = _state.value.selected ?: return
         val totalWeeks = (_state.value.term?.totalWeeks ?: 20).coerceAtLeast(1)
-        val sourceWeek = (entry.sourceWeek.takeIf { it > 0 } ?: _state.value.week)
+        val sourceWeek = (entry.sourceWeek.takeIf { it > 0 } ?: (entry.academicWeek.takeIf { it > 0 } ?: _state.value.week))
             .coerceIn(1, totalWeeks)
         val candidates = _state.value.weeks.getOrElse(sourceWeek - 1) { emptyList() }
         val originBlock = candidates.firstOrNull {
@@ -635,10 +680,11 @@ class TimetableViewModel(
         }
         weekPickedByUser = true
         _state.value = _state.value.copy(
-            week = sourceWeek,
-            selected = originBlock,
+            week = WeekLayout.displayWeek(sourceWeek, originBlock.slot.dayOfWeek, _state.value.sundayFirst),
+            selected = originBlock.copy(academicWeek = sourceWeek),
             moveError = null
         )
+        requestWeekJump(sourceWeek, originBlock.slot.dayOfWeek)
     }
 
     /**

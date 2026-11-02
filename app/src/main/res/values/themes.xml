@@ -6,4 +6,7 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
+    <style name="Theme.NbuLite.Browser" parent="Theme.NbuLite">
+        <item name="android:windowDisablePreview">true</item>
+    </style>
 </resources>

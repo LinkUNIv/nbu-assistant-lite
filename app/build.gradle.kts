@@ -54,8 +54,9 @@ android {
         targetSdk = 36
         // 版本号规则：主.次.修订；小改动只递增修订号
         // versionCode = 主*10000 + 次*100 + 修订，每版必须递增，保证可覆盖安装
-        versionCode = 3501
-        versionName = "0.35.1"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        versionCode = 3549
+        versionName = "0.35.49"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -154,7 +155,19 @@ tasks.matching {
         (it.name.startsWith("merge", ignoreCase = true) && it.name.endsWith("Assets"))
 }.configureEach { dependsOn(copyChangelog) }
 
+providers.gradleProperty("ocrFixtureDir").orNull?.let { fixtureDir ->
+    android.sourceSets.getByName("androidTest").assets.srcDir(fixtureDir)
+}
+
 dependencies {
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    implementation("androidx.webkit:webkit:1.12.1")
+    testImplementation("junit:junit:4.13.2")
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")

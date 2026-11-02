@@ -160,6 +160,11 @@ fun SettingsScreen(
                 trailing = if (campusPreset == "meishan") "梅山校区" else "主校区"
             ) { onNavigateSection("time") }
             SettingsEntry(
+                title = "账号",
+                subtitle = "学校账号、加密保存密码、点名自动登录",
+                trailing = "管理"
+            ) { appContext.startActivity(android.content.Intent(appContext, app.nbult.lite.account.AccountActivity::class.java)) }
+            SettingsEntry(
                 title = "数据与诊断",
                 subtitle = "清空课表、恢复出厂、工作日志",
                 trailing = "$logCount 条日志"

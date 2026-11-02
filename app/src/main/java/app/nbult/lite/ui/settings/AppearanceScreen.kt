@@ -61,6 +61,8 @@ fun AppearanceScreen(onBack: () -> Unit) {
         .collectAsStateWithLifecycle(initialValue = "system")
     val backdropId by container.settings.backdrop
         .collectAsStateWithLifecycle(initialValue = "plain")
+    val sundayFirst by container.settings.sundayFirst
+        .collectAsStateWithLifecycle(initialValue = false)
     val showFullTimetable by container.settings.showFullTimetable
         .collectAsStateWithLifecycle(initialValue = false)
 
@@ -227,6 +229,28 @@ fun AppearanceScreen(onBack: () -> Unit) {
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            SettingCard(title = "一周起始日") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(false to "周一为第一天", true to "周日为第一天").forEach { (sunday, label) ->
+                            val selected = sunday == sundayFirst
+                            Box(
+                                Modifier.clip(RoundedCornerShape(12.dp))
+                                    .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                                    .clickable { scope.launch { container.settings.setSundayFirst(sunday) } }
+                                    .padding(horizontal = 14.dp, vertical = 9.dp)
+                            ) {
+                                Text(label, style = MaterialTheme.typography.bodyMedium,
+                                    color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+                    Text("周日开始按周日到周六显示，周一开始按周一到周日显示。课程仍按实际日期和教学周次匹配。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 

@@ -39,7 +39,8 @@ data class TimetableEntry(
     val toWeek: Int = 0,
     val toDay: Int = 0,
     val toStart: Int = 0,
-    val toEnd: Int = 0
+    val toEnd: Int = 0,
+    val academicWeek: Int = 0
 ) {
     val displayName: String
         get() = course.name.replace(Regex("""^[A-Za-z0-9]{4,14}\s*[-_]\s*(?=\S)"""), "")

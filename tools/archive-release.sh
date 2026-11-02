@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # 出包留档：把指定变体的 APK + 源码快照归档到 dist/archive/v<版本>-<通道>/
 #
-# 用法：tools/archive-release.sh [preview|debug] [-f]
+# 用法：tools/archive-release.sh [preview|debug|release] [-f]
 #   preview  默认。预览版，包名 app.nbult.lite.preview，版本名带 -Preview
 #   debug    调试版，包名 app.nbult.lite.debug，版本名带 -Debug
 #   -f       覆盖已存在的同名归档
 #
-# 正式版（app.nbult.lite，无后缀）当前**不出包**：等 1.0.0 正式构建并上传 GitHub 之后再走，
-# 届时再给这个脚本加 release 分支与正式签名配置。
+# release 使用固定发布签名，归档版本号不带通道后缀。
 
 set -euo pipefail
 
@@ -21,6 +20,11 @@ fi
 FORCE="${2:-}"
 
 case "$VARIANT" in
+  release)
+    SUFFIX=""
+    PKG="app.nbult.lite"
+    LABEL="正式版"
+    ;;
   preview)
     SUFFIX="-Preview"
     PKG="app.nbult.lite.preview"
@@ -32,7 +36,7 @@ case "$VARIANT" in
     LABEL="调试版"
     ;;
   *)
-    echo "未知变体：$VARIANT（只支持 preview / debug）" >&2
+    echo "未知变体：$VARIANT（只支持 preview / debug / release）" >&2
     exit 2
     ;;
 esac
@@ -79,27 +83,7 @@ SHA="$(sha256sum "$ARCHIVE/$APK_NAME" | cut -d' ' -f1)"
 SIZE="$(du -h "$ARCHIVE/$APK_NAME" | cut -f1)"
 BUILD_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
 
-python - "$ARCHIVE" "$VERSION" <<'PY'
-import os
-import sys
-import zipfile
-
-archive, version = sys.argv[1], sys.argv[2]
-root = os.getcwd()
-skip_dirs = {'.gradle', 'build', '.git', 'dist', '.idea'}
-out = os.path.join(archive, f"source-v{version}.zip")
-
-with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as zf:
-    for base, dirs, files in os.walk(root):
-        dirs[:] = [d for d in dirs if d not in skip_dirs]
-        for name in files:
-            path = os.path.join(base, name)
-            rel = os.path.relpath(path, root)
-            if rel == 'local.properties' or rel.startswith('dist' + os.sep):
-                continue
-            zf.write(path, rel)
-print(f"源码快照：{out}")
-PY
+python tools/package-source.py --output "$ARCHIVE/source-v$VERSION.zip"
 
 cat > "$ARCHIVE/RELEASE.md" <<EOF
 # 宁大助手 Lite v$VERSION（$LABEL）

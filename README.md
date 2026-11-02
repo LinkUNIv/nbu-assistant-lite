@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/LinkUNIv/nbu-assistant-lite?include_prereleases&label=release)](https://github.com/LinkUNIv/nbu-assistant-lite/releases)
 [![License](https://img.shields.io/github/license/LinkUNIv/nbu-assistant-lite)](LICENSE)
 
-将课表、资讯、校历与常用校园入口整合为一个 Android 应用。课表支持离线使用，课表无需登录任何校内系统。
+将课表、资讯、校历与常用校园入口整合为一个 Android 应用。课表支持离线使用、不需要登录任何校内系统；点名与账号功能需要使用学校统一身份认证，登录仅在本机浏览器内完成，凭据不经过本应用服务器且默认不保存。
 
 > 本项目属于非官方第三方工具，与宁波大学不存在隶属、合作或授权关系。名称中的「宁大」仅用于说明适用学校。
 
@@ -12,13 +12,13 @@
 
 ## 下载与安装
 
-当前预览版本：**0.35.49 Preview**（2026-11-02）
+当前预览版本：**0.36.0 Preview**（2026-11-02）
 
-[下载 Preview](https://github.com/LinkUNIv/nbu-assistant-lite/releases/tag/v0.35.49-Preview) · [完整更新说明](docs/releases/v0.35.49-Preview.md)
+[下载 Preview](https://github.com/LinkUNIv/nbu-assistant-lite/releases/tag/v0.36.0-Preview) · [完整更新说明](docs/releases/v0.36.0-Preview.md)
 
 | 文件 | 大小 | 运行要求 |
 |---|---|---|
-| `nbu-assistant-lite-0.35.49-Preview.apk` | 约 45 MiB（含离线 OCR 模型） | Android 7.0（API 24）及以上 |
+| `nbu-assistant-lite-0.36.0-Preview.apk` | 约 23 MiB（含离线 OCR 原生库，已裁剪架构） | Android 7.0（API 24）及以上 |
 
 - 下载完成后使用文件管理器打开安装
 - 同包名、同签名的升级可覆盖安装并保留数据；卸载后重新安装会清空本地数据

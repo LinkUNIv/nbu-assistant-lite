@@ -71,7 +71,7 @@ internal fun AttendancePreload(state: TimetableUiState) {
                 PreloadedPage.web = web; PreloadedPage.transferring = false
                 AttendanceSignal.state.value = "loading"
                 addView(web, FrameLayout.LayoutParams(-1,-1))
-                web.settings.apply { javaScriptEnabled = true; domStorageEnabled = true; userAgentString = AttendanceBrowserActivity.UA; allowFileAccess = false; allowContentAccess = false; mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW }
+                web.settings.apply { javaScriptEnabled = true; domStorageEnabled = true; userAgentString = BrowserIdentity.ua; allowFileAccess = false; allowContentAccess = false; mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW }
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
                 auth = NativeAuthentication(web, this, silent = true) { rows ->

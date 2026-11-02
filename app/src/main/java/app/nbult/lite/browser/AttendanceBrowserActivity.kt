@@ -41,7 +41,8 @@ class AttendanceBrowserActivity : ComponentActivity() {
     companion object {
         private val lock = Any()
         private val logExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "attendance-log").apply { isDaemon = true } }
-        const val UA = "Mozilla/5.0 (Linux; Android 15; PKR110 Build/AP3A.240617.008; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/155.0.8059.43 Mobile Safari/537.36 cpdaily/9.9.10 wisedu/9.9.10"
+        /** 这些事件除写 JSONL 外，同时往 AppLog 落一条摘要 —— 否则用户导出工作日志时看不见点名模块。 */
+        private val SUMMARY = setOf("session_start", "page_finish", "return_to_schedule", "http_error", "network_error", "tls_error")
     }
     private fun safeUrl(value: String): String = runCatching {
         val u = Uri.parse(value)
@@ -49,6 +50,8 @@ class AttendanceBrowserActivity : ComponentActivity() {
         u.buildUpon().encodedAuthority(u.host).clearQuery().fragment(null).build().toString()
     }.getOrDefault("[invalid URL]")
     private fun record(event: String, url: String = "", extra: String = "") {
+        // AppLog 只收关键节点的摘要；DOM、接口正文这些仍然只进 JSONL。
+        if (event in SUMMARY) app.nbult.lite.util.AppLog.log("Web", "$event ${app.nbult.lite.util.AppLog.safeUrl(url)}")
         val line = JSONObject().put("time", System.currentTimeMillis()).put("event", event)
             .put("session", session).put("sequence", sequence.incrementAndGet())
             .put("elapsedMs", SystemClock.elapsedRealtime())
@@ -139,7 +142,7 @@ class AttendanceBrowserActivity : ComponentActivity() {
             override fun handleOnBackPressed() { if (web.canGoBack()) web.goBack() else finish() }
         })
         web.settings.apply {
-            javaScriptEnabled = true; domStorageEnabled = true; userAgentString = UA
+            javaScriptEnabled = true; domStorageEnabled = true; userAgentString = BrowserIdentity.ua
             allowFileAccess = false; allowContentAccess = false
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             setSupportMultipleWindows(false)
@@ -204,7 +207,7 @@ class AttendanceBrowserActivity : ComponentActivity() {
         }
         earlyObserver = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
         if (earlyObserver) WebViewCompat.addDocumentStartJavaScript(web, OBSERVER, setOf("https://*.nbu.edu.cn", "https://nbu.edu.cn"))
-        record("session_start", AttendanceLandingPolicy.SCHEDULE, "UA=$UA; earlyObserver=$earlyObserver; webview=${WebViewCompat.getCurrentWebViewPackage(this)?.versionName}; coverage=navigation,requests,http-errors,fetch-xhr,clicks,forms,history; diagnostics=debug-attendance-api-bodies-and-sign-page; excludes=auth-bodies,headers,cookies,passwords,tokens; service-worker and native-bridge traffic may be missing")
+        record("session_start", AttendanceLandingPolicy.SCHEDULE, "UA=${BrowserIdentity.ua}; earlyObserver=$earlyObserver; webview=${WebViewCompat.getCurrentWebViewPackage(this)?.versionName}; coverage=navigation,requests,http-errors,fetch-xhr,clicks,forms,history; diagnostics=debug-attendance-api-bodies-and-sign-page; excludes=auth-bodies,headers,cookies,passwords,tokens; service-worker and native-bridge traffic may be missing")
         if (reused != null) { web.evaluateJavascript(OBSERVER, null); nativeAuth.adoptPage() } else if (state == null || web.restoreState(state) == null) web.loadUrl(AttendanceLandingPolicy.SCHEDULE)
     }
     @Deprecated("Activity result API")

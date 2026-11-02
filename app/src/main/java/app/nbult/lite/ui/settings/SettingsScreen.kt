@@ -473,7 +473,7 @@ SettingCard(title = "资源") {
         }
 SettingCard(title = "文档") {
             Text(
-                text = "宁大助手 Lite 是非官方第三方工具，与宁波大学无隶属关系。应用不收集个人信息、不需要登录、不保存账号密码。资讯内容来自宁波大学新闻网公开发布内容，仅展示标题、摘要与原文链接，版权归原作者与学校所有。",
+                text = "宁大助手 Lite 是非官方第三方工具，与宁波大学无隶属关系。课表与资讯离线可用、不需要登录；点名与账号功能需要使用学校统一身份认证，登录仅在本机浏览器内完成，凭据不经过本应用服务器，且默认不保存。资讯内容来自宁波大学新闻网公开发布内容，仅展示标题、摘要与原文链接，版权归原作者与学校所有。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

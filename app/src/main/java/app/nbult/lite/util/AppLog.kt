@@ -5,6 +5,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.random.Random
 
 /**
  * 轻量工作日志。
@@ -25,6 +26,10 @@ object AppLog {
     private data class Entry(val at: Long, val text: String)
 
     private val entries = ArrayDeque<Entry>()
+
+    /** 一次运行的短标识。同一次启动的每条记录都带它，翻日志时不必靠时间猜归属。 */
+    private val session: String = Random.nextInt(0x100000, 0x1000000).toString(16)
+    private var seq: Int = 0
     private val timeFormat = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
     private val fileFormat = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
 
@@ -40,8 +45,24 @@ object AppLog {
         } else {
             message
         }
-        entries.addLast(Entry(now, "${timeFormat.format(Date(now))}  [$tag]  $body"))
+        seq += 1
+        val where = "#$session/" + seq.toString().padStart(4, '0')
+        entries.addLast(Entry(now, "${timeFormat.format(Date(now))}  $where  [$tag]  $body"))
         trimLocked(now)
+    }
+
+    /**
+     * 日志里引用地址一律走这里：只留 scheme + host + port + path，
+     * **丢弃查询参数与片段**。凭证、ticket、学号这类东西多半就在 query 里，
+     * 一旦整条 URL 落进日志，用户导出后贴到 issue 就等于公开了。
+     */
+    fun safeUrl(raw: String?): String {
+        if (raw.isNullOrBlank()) return "(空地址)"
+        return runCatching {
+            val u = java.net.URI(raw)
+            val port = if (u.port > 0) ":${u.port}" else ""
+            "${u.scheme}://${u.host}$port${u.path.orEmpty()}"
+        }.getOrElse { "(无效地址)" }
     }
 
     /**
@@ -117,6 +138,7 @@ object AppLog {
         appendLine("宁大助手 Lite 工作日志")
         appendLine("导出时间：${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
         appendLine("设备时区：${app.nbult.lite.domain.AppClock.deviceZoneId()}")
+        appendLine("本次会话：#$session")
         appendLine("条目数：${entries.size}（保留 ${RETAIN_DAYS} 天 / 上限 $MAX_ENTRIES 条）")
         appendLine("-".repeat(40))
         // 摘要在最前面：验收时读这几行就够，不用在几十行流水里数

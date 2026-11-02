@@ -60,6 +60,21 @@
 **路径要求**：`gradle.properties` 里有 `android.overridePathCheck=true`，用于在含非 ASCII 字符的路径下构建
 （AGP 默认拒绝）。更稳的做法仍是把项目放在纯 ASCII 路径下。
 
+> **单元测试必须用纯 ASCII 路径（实测踩坑，2026-11-02）**
+>
+> 在含中文的路径下（如 `C:/Users/xxx/WorkBuddy/风华宁大优化版本/`）跑
+> `:app:testDebugUnitTest` / `:app:testPreviewUnitTest`，**5 个测试类全部
+> `initializationError` + `ClassNotFoundException`**，且报的是测试类自己找不到。
+>
+> 现象容易误判为代码问题：`app/build/tmp/kotlin-classes/<variant>UnitTest/` 里
+> `.class` 明明存在，但 test worker 的运行时 classpath 里没有它。
+> `android.overridePathCheck=true` 只绕过 AGP 的路径检查，**绕不过 test worker 的类加载**。
+>
+> 把同一份源码 `git archive` 到 `C:/tmp/nbu-ascii` 后重跑，19 个测试 0 失败、出包正常。
+>
+> 结论：**本机出包一律在纯 ASCII 路径下构建**。中文路径下出现测试全红，先换路径再怀疑代码。
+> CI 不受影响 —— runner 的工作目录本来就是 ASCII。
+
 **targetSdk 36 起系统强制边到边**：内容避让由 `Scaffold` 与 `NavigationBar` 消费 systemBars inset，
 不要在根布局再叠一层 padding；系统栏图标明暗由 `MainActivity` 的 `enableEdgeToEdge()` 负责。
 
@@ -311,6 +326,8 @@ app/src/main/assets/
 - [`../../CHANGELOG.md`](../../CHANGELOG.md) — 逐版本变更
 - [`NOTES.md`](NOTES.md) — 早期开发笔记（**含已被推翻的设计，请对照 README 的已知限制阅读**）
 - [`PENDING.md`](PENDING.md) — 路线图与未排期事项
+- [`ATTENDANCE_BROWSER.md`](ATTENDANCE_BROWSER.md) — 考勤页内置浏览器与签到识别的实现边界
+- [`WEBVIEW.md`](WEBVIEW.md) — WebView 内嵌校园页面的参考实现分析与取舍
 
 
 ## 0.35.49 Preview 发布补充

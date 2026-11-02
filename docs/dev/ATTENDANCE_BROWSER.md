@@ -4,7 +4,7 @@
 
 入口直接访问 `https://attendance.nbu.edu.cn/h5/student/schedule/`，未登录时跟随学校统一认证。原生认证覆盖层仅信任 `https://uis.nbu.edu.cn/authserver/`，一级登录、二次验证码与设备信任页面等待实际加载完成和文档 complete 后检测，间隔 1 秒；回到前台不等同于加载完成。课程列表从导航开始按 250ms 检测，读取学校已渲染课程并由原卡片执行跳转。网页结构改变时可选择原网页继续。
 
-UA 使用开发时提供的今日校园 UA；实际 WebView 内核以系统为准，UA 不提供原生 JSBridge。TLS 错误拒绝访问，允许学校 HTTPS 认证跳转与跨域 Cookie。会话由 WebView 保存在应用私有目录；更改或清除账号会清理 Cookie 和网页存储。
+UA 由 `browser/BrowserIdentity.kt` 统一提供：固定前缀（机型、系统、Chrome 版本）写在代码里，`cpdaily/{v} wisedu/{v}` 的版本号段可单独调整，浏览器与预加载共用同一来源。实际 WebView 内核以系统为准，UA 不提供原生 JSBridge。TLS 错误拒绝访问，允许学校 HTTPS 认证跳转与跨域 Cookie。会话由 WebView 保存在应用私有目录；更改或清除账号会清理 Cookie 和网页存储。
 
 ## 账号与预加载
 

@@ -8,10 +8,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-internal fun SignCodeScreen(message: String, onKey: (String) -> Unit, onOriginal: () -> Unit, success: Boolean, resultVersion: Int, onScan: (String) -> Unit, onStopScan: () -> Unit) {
+internal fun SignCodeScreen(message: String, digits: String, submitting: Boolean, onKey: (String) -> Unit, onOriginal: () -> Unit, success: Boolean, resultVersion: Int, onScan: (String) -> Unit, onStopScan: () -> Unit) {
     var camera by remember { mutableStateOf(false) }
     var baseline by remember { mutableStateOf(0) }
-    var digits by remember { mutableStateOf("") }
     AttendanceTheme { _, _ ->
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -28,15 +27,13 @@ internal fun SignCodeScreen(message: String, onKey: (String) -> Unit, onOriginal
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         keys.forEach { key ->
                             FilledTonalButton(onClick = {
-                                if (key == "重置") { digits = ""; onKey(key) }
-                                else if (key == "确认") { if (digits.length == 4) onKey(key) }
-                                else if (digits.length < 4) { digits += key; onKey(key) }
-                            }, enabled = key != "确认" || digits.length == 4, modifier = Modifier.weight(1f).height(58.dp), shape = RoundedCornerShape(18.dp)) { Text(key) }
+                                onKey(key)
+                            }, enabled = !success && !submitting && (key != "确认" || digits.length == 4), modifier = Modifier.weight(1f).height(58.dp), shape = RoundedCornerShape(18.dp)) { Text(key) }
                         }
                     }
                 }
-                OutlinedButton(onClick = { baseline = resultVersion; camera = true }, enabled = !success, modifier = Modifier.fillMaxWidth()) { Text("相机识别签到码") }
-                if (camera) SignCameraDialog(success, resultVersion - baseline, message, onCode = { digits = it; onScan(it) }, onDismiss = { onStopScan(); camera = false })
+                OutlinedButton(onClick = { baseline = resultVersion; camera = true }, enabled = !success && !submitting, modifier = Modifier.fillMaxWidth()) { Text("相机识别签到码") }
+                if (camera) SignCameraDialog(success, resultVersion - baseline, message, onCode = onScan, onDismiss = { onStopScan(); camera = false })
                 Text(message, style = MaterialTheme.typography.bodyMedium)
                 TextButton(onClick = onOriginal) { Text("查看学校原页面") }
             }

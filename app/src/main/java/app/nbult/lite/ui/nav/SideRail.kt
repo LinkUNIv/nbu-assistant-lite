@@ -146,13 +146,7 @@ fun SideRail(
                 val glow by pulse.animateFloat(0.35f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(900), androidx.compose.animation.core.RepeatMode.Reverse), label = "glow")
                 androidx.compose.material3.Text(if(active) "点名 ●" else "点名", color = MaterialTheme.colorScheme.primary.copy(alpha = if(active) glow else 1f))
             }
-            Spacer(Modifier.height(6.dp))
-            Box(Modifier.width(RailMetrics.Width).height(44.dp)
-                .acrylicPanel(RoundedCornerShape(22.dp))
-                .clickable { browserContext.startActivity(android.content.Intent(browserContext, app.nbult.lite.browser.OcrTestActivity::class.java)) },
-                contentAlignment = Alignment.Center) {
-                androidx.compose.material3.Text("OCR测试", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-            }
+
         }
 
         // 底段：导航块贴底。

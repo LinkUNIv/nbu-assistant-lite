@@ -30,56 +30,114 @@ internal class NativeAuthentication(private val web: WebView, private val contai
     private val signSuccess = mutableStateOf(false)
     private val signVersion = mutableStateOf(0)
     private var signProbeVersion = 0
-    private var scanGeneration = 0
+    private val signDigits = mutableStateOf("")
+    private val signSubmitting = mutableStateOf(false)
+    private val signKeys = java.util.ArrayDeque<String>()
+    private var signKeyRunning = false
+    private var signInputGeneration = 0
+    private val signInputScript by lazy { web.context.assets.open("sign-input.js").bufferedReader().use { it.readText() } }
+    private fun cancelSignInput() {
+        signInputGeneration++; signKeys.clear(); signKeyRunning = false; signSubmitting.value = false
+    }
     private fun submitScan(code: String) {
-        if (!code.matches(Regex("[0-9]{4}")) || mode != "sign" || signSuccess.value) return
-        val attempt = ++scanGeneration
-        val keys = listOf("重置") + code.map { it.toString() } + "确认"
-        fun next(index: Int) {
-            if (mode != "sign" || attempt != scanGeneration) return
-            val key = JSONObject.quote(keys[index])
-            web.evaluateJavascript("""(() => {
-                if(location.origin!=='https://attendance.nbu.edu.cn'||!location.pathname.startsWith('/h5/student/sign'))return false;
-                const e=[...document.querySelectorAll('span,button,div')].find(e=>e.childElementCount===0&&e.textContent.trim()===$key&&e.getClientRects().length);
-                if(!e)return false;e.click();return true;
-            })()""") { result ->
-                if (result != "true") { signMessage.value = "学校数字键未就绪，已停止本次提交。"; signVersion.value++ }
-                else if (index < keys.lastIndex) handler.postDelayed({ next(index+1) },30)
-                else signMessage.value = "正在验证识别结果…"
-            }
-        }
-        next(0)
+        if (!code.matches(Regex("[0-9]{4}")) || mode != "sign" || signSuccess.value || signSubmitting.value || signKeyRunning) return
+        signKeys.clear()
+        signKeys.add("重置")
+        code.forEach { signKeys.add(it.toString()) }
+        pumpSignKeys()
     }
     fun signResult(response: JSONObject) {
         signSuccess.value = response.optBoolean("success") || response.optString("msg") == "success"
         signVersion.value++
-        signMessage.value = if (response.optBoolean("success") || response.optString("msg") == "success") "签到成功" else response.optString("msg", "签到未完成，请查看学校提示。")
+        signSubmitting.value = false
+        signMessage.value = if (signSuccess.value) "签到成功" else response.optString("msg", "签到未完成，请查看学校提示。")
+        if (signSuccess.value) {
+            // Keep the completed course list visible instead of automatically entering again.
+            autoCourseEntered = true
+            resolvingPreferred.value = false
+            AttendanceSignal.active.value = false
+            AttendanceSignal.courseName = null
+            AttendanceSignal.state.value = "ready"
+            cancelSignInput()
+            web.loadUrl(AttendanceLandingPolicy.SCHEDULE)
+        } else {
+            cancelSignInput()
+            signDigits.value = ""
+            signKeys.add("重置"); pumpSignKeys()
+        }
     }
     private fun signKey(value: String) {
-        signMessage.value = if (value == "确认") "正在提交…" else ""
-        val key = JSONObject.quote(value)
-        web.evaluateJavascript( """(() => {
-          if(location.origin!=='https://attendance.nbu.edu.cn'||!location.pathname.startsWith('/h5/student/sign'))return false;
-          const e=[...document.querySelectorAll('span,button,div')].find(e=>e.childElementCount===0&&e.textContent.trim()===$key&&e.getClientRects().length);
-          if(e){e.click();return true;}return false;
-        })()""") { if (it != "true") signMessage.value = "学校按键尚未就绪，请稍候或查看原页面。" }
+        if (mode != "sign" || signSuccess.value || signSubmitting.value) return
+        if (value == "重置") signKeys.clear()
+        if (value == "确认" || value == "重置" || value.matches(Regex("[0-9]"))) {
+            signKeys.add(value); pumpSignKeys()
+        }
+    }
+    private fun pumpSignKeys() {
+        if (signKeyRunning || signKeys.isEmpty() || mode != "sign" || signSubmitting.value) return
+        val value = signKeys.removeFirst()
+        if ((value == "确认" && signDigits.value.length != 4) || (value.length == 1 && signDigits.value.length >= 4)) { pumpSignKeys(); return }
+        val expected = when(value) { "重置" -> ""; "确认" -> signDigits.value; else -> signDigits.value + value }
+        val epoch = signInputGeneration
+        signKeyRunning = true
+        web.evaluateJavascript(signInputScript + "\nwindow.__nbuSignInput.click(" + JSONObject.quote(value) + ")") { clicked ->
+            if (epoch != signInputGeneration || mode != "sign") return@evaluateJavascript
+            if (clicked != "true") {
+                signKeyRunning = false; signKeys.clear()
+                signMessage.value = "学校按键尚未就绪，请稍候或查看原页面。"; signVersion.value++
+                return@evaluateJavascript
+            }
+            if (value == "确认") {
+                signSubmitting.value = true; signKeyRunning = false; signKeys.clear(); signMessage.value = "正在提交…"
+                handler.postDelayed({
+                    if (epoch == signInputGeneration && mode == "sign" && signSubmitting.value) {
+                        signResult(JSONObject().put("success", false).put("msg", "提交超时，请检查网络后重新输入。"))
+                    }
+                }, 15000)
+                return@evaluateJavascript
+            }
+            fun acknowledge(remaining: Int) {
+                handler.postDelayed({
+                    if (epoch != signInputGeneration || mode != "sign") return@postDelayed
+                    web.evaluateJavascript("window.__nbuSignInput.read()") ack@ { raw ->
+                        if (epoch != signInputGeneration || mode != "sign") return@ack
+                        val actual = runCatching { JSONTokener(raw).nextValue() as? String }.getOrNull()
+                        if (actual == expected) {
+                            signDigits.value = actual; signKeyRunning = false
+                            if (actual.length == 4) { signKeys.clear(); signKeys.add("确认") }
+                            pumpSignKeys()
+                        } else if (remaining > 0) acknowledge(remaining - 1)
+                        else {
+                            signDigits.value = actual.orEmpty(); signKeyRunning = false; signKeys.clear()
+                            signMessage.value = "网页未接收本次输入，请重新输入。"; signVersion.value++
+                        }
+                    }
+                }, 30)
+            }
+            acknowledge(15)
+        }
     }
     private fun inspectSign() {
         if (mode != "sign") {
-            hide(); mode = "sign"; web.alpha = 0f; signMessage.value = ""; signSuccess.value = false; signVersion.value = 0; signProbeVersion = 0
+            cancelSignInput(); signDigits.value = ""; hide(); mode = "sign"; web.alpha = 0f; signMessage.value = ""; signSuccess.value = false; signVersion.value = 0; signProbeVersion = 0
             web.evaluateJavascript("delete window.__nbuSignResponse", null)
             signKey("重置")
             panel = ComposeView(web.context).apply {
                 setBackgroundColor(attendanceBackground(web.context))
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-                setContent { SignCodeScreen(signMessage.value, onKey = ::signKey, onOriginal = { useOriginal = true; reveal() }, success = signSuccess.value, resultVersion = signVersion.value, onScan = ::submitScan, onStopScan = { scanGeneration++ }) }
+                setContent { SignCodeScreen(signMessage.value, digits = signDigits.value, submitting = signSubmitting.value, onKey = ::signKey, onOriginal = { useOriginal = true; reveal() }, success = signSuccess.value, resultVersion = signVersion.value, onScan = ::submitScan, onStopScan = { cancelSignInput() }) }
             }
             container.addView(panel, FrameLayout.LayoutParams(-1,-1))
         }
         web.evaluateJavascript("""(() => {
-            if(!window.__nbuSignProbe){window.__nbuSignProbe=true;const send=XMLHttpRequest.prototype.send;
+            if(!window.__nbuSignProbe){window.__nbuSignProbe=true;const send=XMLHttpRequest.prototype.send,open=XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open=function(method,url){this.__nbuSignUrl=String(url);return open.apply(this,arguments);};
                 XMLHttpRequest.prototype.send=function(){this.addEventListener('loadend',()=>{try{
-                    if(new URL(this.responseURL).pathname==='/api/coursePlan/signByCourseCode')window.__nbuSignResponse={version:(window.__nbuSignResponse?.version||0)+1,result:JSON.parse(this.responseText)};
+                    if(new URL(this.responseURL||this.__nbuSignUrl||location.href,location.href).pathname==='/api/coursePlan/signByCourseCode'){
+                        let result;try{result=JSON.parse(this.responseText)}catch(_){result={success:false,msg:'提交失败，请检查网络后重新输入。'}}
+                        if(this.status<200||this.status>=300)result={success:false,msg:'提交失败，请检查网络后重新输入。'};
+                        window.__nbuSignResponse={version:(window.__nbuSignResponse?.version||0)+1,result};
+                    }
                 }catch(_){}},{once:true});return send.apply(this,arguments);};}
             return JSON.stringify(window.__nbuSignResponse||{});
         })()""") { raw ->
@@ -88,8 +146,17 @@ internal class NativeAuthentication(private val web: WebView, private val contai
                 if(data.optInt("version")>signProbeVersion){signProbeVersion=data.getInt("version");signResult(data.getJSONObject("result"))}
             }
         }
+        if (!signKeyRunning) {
+            val epoch = signInputGeneration
+            web.evaluateJavascript(signInputScript + "\nwindow.__nbuSignInput.read()") { raw ->
+                if (mode == "sign" && epoch == signInputGeneration && !signKeyRunning) {
+                    val actual = runCatching { JSONTokener(raw).nextValue() as? String }.getOrNull()
+                    if (actual != null) signDigits.value = actual
+                }
+            }
+        }
         web.evaluateJavascript("""JSON.stringify((document.body?.innerText||'').split('\n').map(s=>s.trim()).filter(s=>s&&!/^[0-9\s]+${'$'}/.test(s)&&!['签到','请输入签到码','重置','确认'].includes(s)).join('\n'))""") { raw ->
-            if (mode == "sign") runCatching { val text = JSONTokener(raw).nextValue() as String; if (text.isNotBlank()) signMessage.value = text }
+            if (mode == "sign") runCatching { val text = JSONTokener(raw).nextValue() as String; if (text.isNotBlank() && signMessage.value.isBlank()) signMessage.value = text }
         }
     }
     private val courses = mutableStateOf<List<CourseRow>>(emptyList())
@@ -102,7 +169,7 @@ internal class NativeAuthentication(private val web: WebView, private val contai
         }
     }
     fun pageStarted() {
-        generation++; authenticationPageFinished = false; useOriginal = false; handler.removeCallbacks(poll)
+        cancelSignInput(); generation++; authenticationPageFinished = false; useOriginal = false; handler.removeCallbacks(poll)
         show("loading"); handler.post(poll)
     }
     fun pageFinished(url: String = web.url.orEmpty()) {
@@ -122,8 +189,8 @@ internal class NativeAuthentication(private val web: WebView, private val contai
             }
         }
     }
-    fun pause() { scanGeneration++; handler.removeCallbacks(poll) }
-    fun destroy() { handler.removeCallbacksAndMessages(null); hide() }
+    fun pause() { cancelSignInput(); handler.removeCallbacks(poll) }
+    fun destroy() { cancelSignInput(); handler.removeCallbacksAndMessages(null); hide() }
     private fun trusted() = AttendanceLandingPolicy.isAuthentication(web.url.orEmpty())
     private fun hide() { panel?.let { it.disposeComposition(); container.removeView(it) }; panel = null; mode = "" }
     private fun reveal() { hide(); web.alpha = 1f }

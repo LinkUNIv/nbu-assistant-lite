@@ -539,8 +539,7 @@ internal fun TodayListBody(state: WidgetState, wide: Boolean) {
 /**
  * 一行课程。
  *
- * 列宽全部写死，不用自适应：滚动列表在 RemoteViews 里每行独立渲染，
- * 只要有一列随内容伸缩，行与行之间就会错开。
+ * 宽版维持时间、课程、地点、节次的单行横向布局。
  */
 @Composable
 internal fun CourseRow(
@@ -561,7 +560,7 @@ internal fun CourseRow(
         verticalAlignment = Alignment.Vertical.CenterVertically
     ) {
         if (wide) {
-            Column(modifier = GlanceModifier.width(46.dp)) {
+            Column(modifier = GlanceModifier.width(40.dp)) {
                 Text(
                     text = row.startTime,
                     style = TextStyle(
@@ -603,7 +602,7 @@ internal fun CourseRow(
                 .background(ColorProvider(colors.accent))
                 .cornerRadius(2.dp)
         )
-        Spacer(GlanceModifier.width(8.dp))
+        Spacer(GlanceModifier.width(4.dp))
 
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
@@ -629,16 +628,14 @@ internal fun CourseRow(
 
         if (wide) {
             if (row.room.isNotBlank()) {
+                Spacer(GlanceModifier.width(4.dp))
                 Text(
-                    text = row.room,
-                    style = TextStyle(
-                        color = ColorProvider(colors.body),
-                        fontSize = fixedSp(9f)
-                    ),
+                    text = widgetRoom(row.room),
+                    style = TextStyle(color = ColorProvider(colors.body), fontSize = fixedSp(11f)),
                     maxLines = 1
                 )
-                Spacer(GlanceModifier.width(8.dp))
             }
+            Spacer(GlanceModifier.width(4.dp))
             Text(
                 text = row.sections,
                 style = TextStyle(
@@ -649,4 +646,18 @@ internal fun CourseRow(
             )
         }
     }
+}
+
+internal fun widgetRoom(value: String): String {
+    val stack = java.util.ArrayDeque<Char>()
+    val output = StringBuilder()
+    value.forEach { c ->
+        when {
+            c == '(' || c == '（' -> stack.addLast(c)
+            (c == ')' || c == '）') && stack.isNotEmpty() -> stack.removeLast()
+            stack.isEmpty() -> output.append(c)
+        }
+    }
+    // An unmatched opening bracket is data, rather than a reason to hide the remainder.
+    return if (stack.isEmpty()) output.toString().trim() else value.trim()
 }

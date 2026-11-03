@@ -64,6 +64,16 @@ internal fun AttendancePreload(state: TimetableUiState) {
     if (names.isNotEmpty()) key(names, foreground) {
         var auth by remember { mutableStateOf<NativeAuthentication?>(null) }
         var browser by remember { mutableStateOf<WebView?>(null) }
+        LaunchedEffect(browser) {
+            while (true) {
+                delay(15_000)
+                val current = browser
+                if (current != null && !PreloadedPage.transferring && !AttendanceSignal.active.value &&
+                    current.url?.substringBefore('?')?.trimEnd('/') == AttendanceLandingPolicy.SCHEDULE.trimEnd('/')) {
+                    current.reload()
+                }
+            }
+        }
         AndroidView(modifier = Modifier.size(1.dp).alpha(0f), factory = { context ->
             FrameLayout(context).apply {
                 importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -80,12 +90,25 @@ internal fun AttendancePreload(state: TimetableUiState) {
                     web.evaluateJavascript("window.__nbuAuthenticated===true") { if (it == "true" && !PreloadedPage.transferring && PreloadedPage.web === web) AttendanceSignal.state.value = "ready" }
                     AttendanceSignal.courseName = matching?.title
                     AttendanceSignal.active.value = matching != null
+                    if (matching != null && !PreloadedPage.transferring) {
+                        val title = org.json.JSONObject.quote(matching.title)
+                        web.evaluateJavascript("""(() => {
+                            if(window.__nbuPreloadEntering)return;
+                            const e=document.querySelectorAll('.list-item')[${matching.index}];
+                            if(e?.querySelector('strong')?.innerText===$title){window.__nbuPreloadEntering=true;e.click();}
+                        })()""", null)
+                    }
                 }
                 PreloadedPage.auth = auth
                 var returned = false
                 web.webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = request.url.scheme != "https"
-                    override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) { AttendanceSignal.active.value = false; AttendanceSignal.state.value = "loading"; auth?.pageStarted() }
+                    override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                        if (url.substringBefore('?').trimEnd('/') != "https://attendance.nbu.edu.cn/h5/student/sign") {
+                            AttendanceSignal.active.value = false; AttendanceSignal.state.value = "loading"
+                        }
+                        auth?.pageStarted()
+                    }
                     override fun onPageFinished(view: WebView, url: String) {
                         CookieManager.getInstance().flush()
                         if (!returned && url.substringBefore('?').trimEnd('/') == "https://attendance.nbu.edu.cn/h5/student") {

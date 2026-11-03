@@ -50,6 +50,9 @@ class AttendanceSettingsActivity : ComponentActivity() {
                                 }
                             }
                         } }
+                        OutlinedButton(onClick = {
+                            startActivity(android.content.Intent(this@AttendanceSettingsActivity, OcrTestActivity::class.java))
+                        }, modifier = Modifier.fillMaxWidth()) { Text("相机 OCR 测试") }
                         Text("开启预加载会同时开启自动跳转；关闭自动跳转会同时关闭预加载。", style = MaterialTheme.typography.bodySmall)
                     }
                 }

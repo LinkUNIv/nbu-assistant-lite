@@ -3,6 +3,7 @@ package app.nbult.lite.data.update
 import app.nbult.lite.BuildConfig
 import app.nbult.lite.data.SettingsStore
 import app.nbult.lite.util.AppLog
+import kotlinx.coroutines.flow.first
 
 /**
  * 版本检查的「要不要查」与「查完记下来」。
@@ -32,6 +33,9 @@ object UpdateCenter {
         when (result) {
             is UpdateState.Available -> {
                 settings.setUpdateChecked(now, result.info.versionCode.toLong(), result.info.versionName)
+                // 与下载、安装完全解耦：这里落盘，后面用户取消、装失败、杀掉进程都还在。
+                // 装成功之后靠版本号对上再弹「本版更新了什么」。
+                settings.setPendingApp(result.info.versionCode.toLong(), result.info.notes)
                 AppLog.log("Update", "发现新版本 ${result.info.versionName}（${result.info.versionCode}）")
             }
 
@@ -43,5 +47,23 @@ object UpdateCenter {
             is UpdateState.Failed -> AppLog.log("Update", "检查失败：${result.message}")
         }
         return result
+    }
+
+    /**
+     * 启动时调用：待装记录的版本号就是当前正在跑的版本，说明「装上了」。
+     *
+     * 返回需要展示给用户的更新说明，没有则返回 null。
+     * 判据用 `versionCode` 而不是 `versionName` —— 后者带通道后缀
+     * （`0.37.0-Preview`），而 manifest 里写的是不带后缀的 `0.37.0`，
+     * 字符串比对必然对不上；版本码是两边唯一的共同语言。
+     */
+    suspend fun consumeInstalledNotes(settings: SettingsStore): String? {
+        val pendingCode = settings.pendingAppCode.first()
+        val notes = settings.pendingAppNotes.first()
+        if (pendingCode <= 0L || notes.isBlank()) return null
+        if (pendingCode != BuildConfig.VERSION_CODE.toLong()) return null
+        settings.promotePendingApp()
+        AppLog.log("Update", "已装 ${BuildConfig.VERSION_NAME}，展示更新内容 ${notes.length} 字")
+        return notes
     }
 }

@@ -40,6 +40,12 @@ class SettingsStore(private val context: Context) {
     private val keyUpdateLatestCode = longPreferencesKey("update_latest_code")
     private val keyUpdateLatestName = stringPreferencesKey("update_latest_name")
     private val keyUpdateDismissed = longPreferencesKey("update_dismissed_code")
+
+    // 「要装但还没装」与「装上了、这一版的说明」分开存：前者的生命周期跨重启，
+    // 后者要长期留着给关于页回看。搬运只在一次 edit 内完成，避免两份不同步。
+    private val keyPendingAppCode = longPreferencesKey("update_pending_code")
+    private val keyPendingAppNotes = stringPreferencesKey("update_pending_notes")
+    private val keyCurrentAppNotes = stringPreferencesKey("update_current_notes")
     // 资源包：用户已确认看到的版本 / 发现但还没生效的版本
     private val keyPackAck = longPreferencesKey("pack_ack_version")
     private val keyPackPending = longPreferencesKey("pack_pending_version")
@@ -180,6 +186,18 @@ class SettingsStore(private val context: Context) {
     val updateDismissedCode: Flow<Long> =
         context.settingsDataStore.data.map { it[keyUpdateDismissed] ?: 0L }
 
+    /** 已查到、还没装上的版本号；0 表示没有待装的版本记录。 */
+    val pendingAppCode: Flow<Long> =
+        context.settingsDataStore.data.map { it[keyPendingAppCode] ?: 0L }
+
+    /** 待装版本的更新说明。**与下载结果无关**：下载失败、取消安装都不会清掉它。 */
+    val pendingAppNotes: Flow<String> =
+        context.settingsDataStore.data.map { it[keyPendingAppNotes] ?: "" }
+
+    /** 当前这一版在安装后第一次启动时展示过的说明，供关于页回看。 */
+    val currentAppNotes: Flow<String> =
+        context.settingsDataStore.data.map { it[keyCurrentAppNotes] ?: "" }
+
     /** 资源包：用户已经看过的版本，红点据此熄灭。 */
     val packAckVersion: Flow<Long> =
         context.settingsDataStore.data.map { it[keyPackAck] ?: 0L }
@@ -198,6 +216,34 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setUpdateDismissed(code: Long) {
         context.settingsDataStore.edit { it[keyUpdateDismissed] = code }
+    }
+
+    /**
+     * 记下「有个新版本等着装」以及它的说明。
+     *
+     * 只在拿到非空说明时写入 —— 空说明写进去会弹出一个空壳，比不弹更差。
+     */
+    suspend fun setPendingApp(code: Long, notes: String) {
+        if (code <= 0L || notes.isBlank()) return
+        context.settingsDataStore.edit {
+            it[keyPendingAppCode] = code
+            it[keyPendingAppNotes] = notes
+        }
+    }
+
+    /**
+     * 把待装的说明搬到「当前版本已展示过」。
+     *
+     * 三件事必须在同一次 `edit {}` 里完成（搬运 + 清空待装）：分成两次写，
+     * 中途被杀进程会留下「两份都在」或「两份都没了」的中间态。
+     */
+    suspend fun promotePendingApp() {
+        context.settingsDataStore.edit {
+            val notes = it[keyPendingAppNotes]
+            if (!notes.isNullOrBlank()) it[keyCurrentAppNotes] = notes
+            it.remove(keyPendingAppCode)
+            it.remove(keyPendingAppNotes)
+        }
     }
 
     suspend fun setPackAck(version: Long) {

@@ -38,6 +38,7 @@ import app.nbult.lite.data.update.UpdateCenter
 import app.nbult.lite.data.update.UpdateInfo
 import app.nbult.lite.data.update.UpdateState
 import app.nbult.lite.ui.settings.UpdateDialog
+import app.nbult.lite.ui.settings.WhatsNewDialog
 import kotlinx.coroutines.flow.first
 import app.nbult.lite.BuildConfig
 import app.nbult.lite.data.notify.ClassReminderScheduler
@@ -130,6 +131,18 @@ fun AppRoot() {
     // 启动后自动检查版本：延迟 12 秒，避开首屏；24 小时内最多一次。
     // 查到新版且用户没对同一版本点过「以后再说」，就弹窗。
     var pendingUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
+    // 这一版装好之后的第一次启动：把上次记下的说明弹出来，并搬到「关于页可回看」。
+    var whatsNew by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        whatsNew = UpdateCenter.consumeInstalledNotes(container.settings)
+    }
+    whatsNew?.let { notes ->
+        WhatsNewDialog(
+            versionName = BuildConfig.VERSION_NAME.substringBefore('-'),
+            notes = notes,
+            onDismiss = { whatsNew = null }
+        )
+    }
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(12_000)
         val lastCheck = container.settings.updateCheckedAt.first()

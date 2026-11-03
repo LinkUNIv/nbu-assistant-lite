@@ -319,6 +319,47 @@ internal fun UpdateDialog(info: UpdateInfo, onDismiss: () -> Unit) {
 
 // ---- 内部 ----
 
+/**
+ * 「这一版更新了什么」。
+ *
+ * 与 [UpdateDialog] 是两回事：那个是「远端有个新版本，要不要下」，
+ * 这个是「你已经装上并正在运行这一版」。混用会让人分不清自己在看哪一份说明。
+ */
+@Composable
+internal fun WhatsNewDialog(versionName: String, notes: String, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 3.dp
+        ) {
+            Column(Modifier.padding(20.dp)) {
+                Text(
+                    text = "已更新到 $versionName",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    Button(onClick = onDismiss) { Text("知道了") }
+                }
+            }
+        }
+    }
+}
+
 private sealed interface VersionUi {
     data object Idle : VersionUi
     data object Checking : VersionUi

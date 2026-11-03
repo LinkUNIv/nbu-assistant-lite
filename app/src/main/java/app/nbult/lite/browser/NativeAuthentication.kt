@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import org.json.JSONObject
 import androidx.compose.runtime.mutableStateOf
 import org.json.JSONTokener
+import app.nbult.lite.util.AppLog
 
 /** Native controls forward input to the trusted university form; no credential logging or JavaScript bridge. */
 internal class NativeAuthentication(private val web: WebView, private val container: FrameLayout, private val silent: Boolean = false, private val preferredCourse: String? = null, private val onCourses: (List<CourseRow>) -> Unit = {}) {
@@ -22,7 +23,14 @@ internal class NativeAuthentication(private val web: WebView, private val contai
     private var autoAttempted = false
     private var generation = 0
     private var authenticationPageFinished = false
-    private var autoCourseEntered = false
+    /**
+     * 自动进入过的那一门课。
+     *
+     * 原来是个布尔，一旦置真就再不复位 —— 相当于「一次会话只自动进一次」，
+     * 当天第二门课开放签到时要用户自己点。记课程名而不是记「进过没」，
+     * 抑制的就只是同一门课；这门课不再开放签到时自动解除（见 [inspectCourses]）。
+     */
+    private var autoEnteredCourse: String? = null
     private var lastCourseSignature = ""
     private val resolvingPreferred = mutableStateOf(preferredCourse != null)
     private var coursePolls = 0
@@ -51,9 +59,12 @@ internal class NativeAuthentication(private val web: WebView, private val contai
         signVersion.value++
         signSubmitting.value = false
         signMessage.value = if (signSuccess.value) "签到成功" else response.optString("msg", "签到未完成，请查看学校提示。")
+        // 只记结果不记签到码：导出日志后可能被贴到公开的地方，四位码等于一次有效签到。
+        AppLog.log("Web", if (signSuccess.value) "sign_ok" else "sign_fail")
         if (signSuccess.value) {
             // Keep the completed course list visible instead of automatically entering again.
-            autoCourseEntered = true
+            // 抑制靠 autoEnteredCourse 记着的课程名，这里不需要额外动作：
+            // 签完这门课就不再是「开放签到」，下一次 inspectCourses 会自动解除抑制。
             resolvingPreferred.value = false
             AttendanceSignal.active.value = false
             AttendanceSignal.courseName = null
@@ -89,8 +100,10 @@ internal class NativeAuthentication(private val web: WebView, private val contai
             }
             if (value == "确认") {
                 signSubmitting.value = true; signKeyRunning = false; signKeys.clear(); signMessage.value = "正在提交…"
+                AppLog.log("Web", "sign_submit")
                 handler.postDelayed({
                     if (epoch == signInputGeneration && mode == "sign" && signSubmitting.value) {
+                        AppLog.log("Web", "sign_timeout")
                         signResult(JSONObject().put("success", false).put("msg", "提交超时，请检查网络后重新输入。"))
                     }
                 }, 15000)
@@ -238,6 +251,9 @@ internal class NativeAuthentication(private val web: WebView, private val contai
                 } else CourseListScreen(courses.value, onRefresh = { web.reload() }, onOriginal = {
                     useOriginal = true; reveal()
                 }, onCourse = { row ->
+                    // 手动点过的课也算「进过了」：否则签到失败退回列表后，
+                    // 自动跳转会把用户又弹进同一门课，跟用户刚做的动作打架。
+                    autoEnteredCourse = row.title
                     val title = JSONObject.quote(row.title)
                     web.evaluateJavascript("""(() => {
                       if(location.origin!=='https://attendance.nbu.edu.cn'||location.pathname.replace(/\/${'$'}/,'')!=='/h5/student/schedule')return false;
@@ -276,10 +292,17 @@ internal class NativeAuthentication(private val web: WebView, private val contai
                 val signature = courses.value.toString()
                 val open = courses.value.filter { it.open }
                 coursePolls++
+                // 自动进入的那门课不再开放签到（已签到或已关闭）就解除抑制。
+                // 判之前必须要求列表非空：签到成功后的整页重载会先清空再填，
+                // 在空列表上判「它不在了」会立刻解除，然后被学校还没更新的状态再弹进去一次。
+                if (courses.value.isNotEmpty() && autoEnteredCourse != null &&
+                    courses.value.none { it.title == autoEnteredCourse && it.open }) {
+                    autoEnteredCourse = null
+                }
                 val target = if (preferredCourse != null) open.firstOrNull { it.title == preferredCourse } else open.singleOrNull()
                 if (target == null && coursePolls >= 6) resolvingPreferred.value = false
-                if (!silent && AttendanceOptions.auto(web.context) && !autoCourseEntered && target != null) {
-                    autoCourseEntered = true
+                if (!silent && AttendanceOptions.auto(web.context) && target != null && target.title != autoEnteredCourse) {
+                    autoEnteredCourse = target.title
                     val row = target
                     val title = JSONObject.quote(row.title)
                     web.evaluateJavascript("""(() => {

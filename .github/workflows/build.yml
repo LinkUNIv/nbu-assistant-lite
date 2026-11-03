@@ -122,6 +122,7 @@ jobs:
           mapping="app/build/outputs/mapping/${BUILD_VARIANT,,}/mapping.txt"
           if [ -f "$mapping" ]; then gzip -c "$mapping" > "out/nbu-assistant-lite-${VERSION}${APK_SUFFIX}-mapping.txt.gz"; fi
           node tools/test-browser-observer.cjs
+          node tools/test-sign-input.cjs
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4

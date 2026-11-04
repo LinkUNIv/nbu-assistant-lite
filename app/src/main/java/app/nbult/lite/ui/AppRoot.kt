@@ -129,9 +129,9 @@ fun AppRoot() {
     val navController = rememberNavController()
 
     // 启动后自动检查版本：延迟 12 秒，避开首屏；24 小时内最多一次。
-    // 查到新版且用户没对同一版本点过「以后再说」，就弹窗。
+    // 查到新版、开关打开、且没对这个版本勾过「不再提醒」，就弹二次确认。
     var pendingUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
-    // 这一版装好之后的第一次启动：把上次记下的说明弹出来，并搬到「关于页可回看」。
+    // 这一版装好之后的第一次启动：把上次记下的说明弹一次，然后清掉记录。
     var whatsNew by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         whatsNew = UpdateCenter.consumeInstalledNotes(container.settings)
@@ -143,12 +143,14 @@ fun AppRoot() {
             onDismiss = { whatsNew = null }
         )
     }
+    // 关掉开关只管自动弹窗；手动检查在更新页，不受这里影响
+    val popupEnabled by container.settings.updatePopupEnabled.collectAsStateWithLifecycle(initialValue = true)
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(12_000)
         val lastCheck = container.settings.updateCheckedAt.first()
         if (UpdateCenter.due(lastCheck)) {
             val result = UpdateCenter.refresh(container.settings)
-            if (result is UpdateState.Available) {
+            if (result is UpdateState.Available && popupEnabled) {
                 val dismissed = container.settings.updateDismissedCode.first()
                 if (dismissed != result.info.versionCode.toLong()) {
                     pendingUpdate = result.info
@@ -157,7 +159,16 @@ fun AppRoot() {
         }
     }
     pendingUpdate?.let { info ->
-        UpdateDialog(info = info, onDismiss = { pendingUpdate = null })
+        UpdateDialog(
+            info = info,
+            onConfirm = {
+                pendingUpdate = null
+                // 先关弹窗再跳转：下载由应用容器持有，不依赖弹窗还活着
+                navController.navigateOnce("settings/about")
+                container.updateInstaller.start(info)
+            },
+            onCancel = { pendingUpdate = null }
+        )
     }
     // 侧栏进度、作息编辑都要读它，提到导航图之前只收一次
     val timetableState by timetableVm.state.collectAsStateWithLifecycle()

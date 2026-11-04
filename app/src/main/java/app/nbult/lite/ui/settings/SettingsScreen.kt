@@ -80,9 +80,6 @@ fun SettingsScreen(
     val settings: SettingsStore = container.settings
 
     var showDatePicker by remember { mutableStateOf(false) }
-    var showWhatsNew by remember { mutableStateOf(false) }
-    // 这一版装好时展示过的说明。空就说明没记录（例如从旧版直接装上来，没经过应用内检查）
-    val whatsNewNotes by settings.currentAppNotes.collectAsStateWithLifecycle(initialValue = "")
     val scope = rememberCoroutineScope()
 
     var timeOffset by remember { mutableStateOf(0L) }
@@ -470,6 +467,7 @@ SettingCard(title = "版本") {
                 if (badges.version) RedDot()
             }
             VersionEntry(badge = false)
+            UpdatePopupEntry()
         }
 SettingCard(title = "资源") {
             PackEntry()
@@ -492,11 +490,6 @@ SettingCard(title = "文档") {
                 subtitle = "各版本的改动说明，最新在前",
                 onClick = { onNavigateSection("changelog") }
             )
-            LinkRow(
-                title = "本次更新内容",
-                subtitle = if (whatsNewNotes.isBlank()) "没有记录（当前版本不是经应用内更新装上的）" else "你装上的这一版改了什么",
-                onClick = { if (whatsNewNotes.isNotBlank()) showWhatsNew = true }
-            )
         }
             }
 
@@ -510,14 +503,6 @@ SettingCard(title = "调试") {
 
         // 版本号只保留在「关于」行右侧一处。原来这里还有一行「版本 0.30.x」，
         // 和右侧重复了 —— 同一个信息出现两次，读者会以为其中一个是别的东西
-    }
-
-    if (showWhatsNew) {
-        WhatsNewDialog(
-            versionName = BuildConfig.VERSION_NAME.substringBefore('-'),
-            notes = whatsNewNotes,
-            onDismiss = { showWhatsNew = false }
-        )
     }
 
     // 清空课表要确认：它和「恢复出厂」一样不可撤销，但入口更靠前、更容易误触

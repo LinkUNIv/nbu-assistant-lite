@@ -41,11 +41,12 @@ class SettingsStore(private val context: Context) {
     private val keyUpdateLatestName = stringPreferencesKey("update_latest_name")
     private val keyUpdateDismissed = longPreferencesKey("update_dismissed_code")
 
-    // 「要装但还没装」与「装上了、这一版的说明」分开存：前者的生命周期跨重启，
-    // 后者要长期留着给关于页回看。搬运只在一次 edit 内完成，避免两份不同步。
+    // 「要装但还没装」：版本号与说明。与下载结果无关，装成功之后靠版本号对上再弹一次。
     private val keyPendingAppCode = longPreferencesKey("update_pending_code")
     private val keyPendingAppNotes = stringPreferencesKey("update_pending_notes")
-    private val keyCurrentAppNotes = stringPreferencesKey("update_current_notes")
+
+    /** 是否在启动检查到新版本时弹窗。只管自动弹窗，手动检查不受影响。 */
+    private val keyUpdatePopup = booleanPreferencesKey("update_popup_enabled")
     // 资源包：用户已确认看到的版本 / 发现但还没生效的版本
     private val keyPackAck = longPreferencesKey("pack_ack_version")
     private val keyPackPending = longPreferencesKey("pack_pending_version")
@@ -194,9 +195,13 @@ class SettingsStore(private val context: Context) {
     val pendingAppNotes: Flow<String> =
         context.settingsDataStore.data.map { it[keyPendingAppNotes] ?: "" }
 
-    /** 当前这一版在安装后第一次启动时展示过的说明，供关于页回看。 */
-    val currentAppNotes: Flow<String> =
-        context.settingsDataStore.data.map { it[keyCurrentAppNotes] ?: "" }
+    /** 启动检查到新版本时是否弹窗；关掉之后仍可在「关于」手动检查。 */
+    val updatePopupEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[keyUpdatePopup] ?: true }
+
+    suspend fun setUpdatePopupEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[keyUpdatePopup] = enabled }
+    }
 
     /** 资源包：用户已经看过的版本，红点据此熄灭。 */
     val packAckVersion: Flow<Long> =
@@ -232,15 +237,13 @@ class SettingsStore(private val context: Context) {
     }
 
     /**
-     * 把待装的说明搬到「当前版本已展示过」。
+     * 展示过「这一版更新了什么」之后清掉待装记录。
      *
-     * 三件事必须在同一次 `edit {}` 里完成（搬运 + 清空待装）：分成两次写，
-     * 中途被杀进程会留下「两份都在」或「两份都没了」的中间态。
+     * 不再另存一份 `currentAppNotes`：翻旧版本内容有「更新日志」页，
+     * 单独留档只是多一个没人点的入口。
      */
-    suspend fun promotePendingApp() {
+    suspend fun clearPendingApp() {
         context.settingsDataStore.edit {
-            val notes = it[keyPendingAppNotes]
-            if (!notes.isNullOrBlank()) it[keyCurrentAppNotes] = notes
             it.remove(keyPendingAppCode)
             it.remove(keyPendingAppNotes)
         }

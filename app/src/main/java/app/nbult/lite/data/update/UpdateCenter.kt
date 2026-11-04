@@ -62,7 +62,7 @@ object UpdateCenter {
         val notes = settings.pendingAppNotes.first()
         if (pendingCode <= 0L || notes.isBlank()) return null
         if (pendingCode != BuildConfig.VERSION_CODE.toLong()) return null
-        settings.promotePendingApp()
+        settings.clearPendingApp()
         AppLog.log("Update", "已装 ${BuildConfig.VERSION_NAME}，展示更新内容 ${notes.length} 字")
         return notes
     }

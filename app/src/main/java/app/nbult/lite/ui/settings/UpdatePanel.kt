@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,10 +42,13 @@ import app.nbult.lite.data.pack.ResourcePackChecker
 import app.nbult.lite.data.pack.ResourcePackStore
 import app.nbult.lite.data.pack.formatPackVersion
 import app.nbult.lite.data.update.AppUpdateChecker
+import app.nbult.lite.data.update.InstallState
 import app.nbult.lite.data.update.UpdateCenter
 import app.nbult.lite.data.update.UpdateInfo
 import app.nbult.lite.data.update.UpdateState
 import app.nbult.lite.ui.LocalAppContainer
+import app.nbult.lite.ui.common.SmoothSwitch
+import app.nbult.lite.util.AppLog
 import app.nbult.lite.util.ApkInstaller
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -100,27 +104,34 @@ internal fun RedDot(modifier: Modifier = Modifier) {
 /** 「版本」栏里的检查更新行。 */
 @Composable
 internal fun VersionEntry(badge: Boolean) {
-    val context = LocalContext.current
-    val settings = LocalAppContainer.current.settings
+    val container = LocalAppContainer.current
+    val settings = container.settings
+    val installer = container.updateInstaller
     val scope = rememberCoroutineScope()
     val latestName by settings.updateLatestName.collectAsStateWithLifecycle("")
     val latestCode by settings.updateLatestCode.collectAsStateWithLifecycle(0L)
+    // 进度来自应用容器，不来自这个 Composable：切页、返回都不会打断下载
+    val install by installer.state.collectAsStateWithLifecycle()
 
     var state by remember { mutableStateOf<VersionUi>(VersionUi.Idle) }
 
-    val (title, subtitle) = when (val current = state) {
-        VersionUi.Idle ->
-            if (latestCode > BuildConfig.VERSION_CODE) {
-                "发现新版本 $latestName" to "点击下载并安装"
-            } else {
-                "检查更新" to "当前 v${BuildConfig.VERSION_NAME}"
-            }
+    val (title, subtitle) = when (val running = install) {
+        is InstallState.Downloading -> "正在下载 v${running.versionName}" to "${running.percent}%"
+        is InstallState.HandedOff -> "等待系统安装" to "请在系统弹窗中确认安装 v${running.versionName}"
+        is InstallState.Failed -> "重试更新" to running.message
+        InstallState.Idle -> when (val current = state) {
+            VersionUi.Idle ->
+                if (latestCode > BuildConfig.VERSION_CODE) {
+                    "发现新版本 $latestName" to "点击下载并安装"
+                } else {
+                    "检查更新" to "当前 v${BuildConfig.VERSION_NAME}"
+                }
 
-        VersionUi.Checking -> "检查更新" to "正在检查…"
-        VersionUi.Latest -> "检查更新" to "已是最新版本"
-        is VersionUi.Found -> "发现 v${current.info.versionName}" to "点击下载并安装"
-        is VersionUi.Downloading -> "正在下载 v${current.info.versionName}" to "${current.percent}%"
-        is VersionUi.Error -> "检查更新" to current.message
+            VersionUi.Checking -> "检查更新" to "正在检查…"
+            VersionUi.Latest -> "检查更新" to "已是最新版本"
+            is VersionUi.Found -> "发现 v${current.info.versionName}" to "点击下载并安装"
+            is VersionUi.Error -> "检查更新" to current.message
+        }
     }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -129,18 +140,17 @@ internal fun VersionEntry(badge: Boolean) {
             subtitle = subtitle,
             modifier = Modifier.weight(1f),
             onClick = {
-                when (val current = state) {
-                    is VersionUi.Found -> {
-                        state = VersionUi.Downloading(0, current.info)
-                        scope.launch {
-                            install(context, current.info) { percent ->
-                                state = VersionUi.Downloading(percent, current.info)
-                            }.let { message -> if (message != null) state = VersionUi.Error(message) }
-                        }
+                when {
+                    // 正在跑：连点不该再开一份
+                    install is InstallState.Downloading || install is InstallState.HandedOff -> Unit
+                    // 上一次失败：先清结果，再重来一次
+                    install is InstallState.Failed -> {
+                        installer.reset()
+                        if (state is VersionUi.Found) (state as VersionUi.Found).let { installer.start(it.info) }
                     }
-
-                    VersionUi.Checking, is VersionUi.Downloading -> Unit
-
+                    // 已经查到：直接开下载，下载在容器里跑
+                    state is VersionUi.Found -> installer.start((state as VersionUi.Found).info)
+                    state is VersionUi.Checking -> Unit
                     else -> {
                         state = VersionUi.Checking
                         scope.launch {
@@ -158,6 +168,32 @@ internal fun VersionEntry(badge: Boolean) {
             Spacer(Modifier.width(8.dp))
             RedDot()
         }
+    }
+}
+
+/** 「版本」栏里检查更新下面那行开关：只管自动弹窗，不拦手动检查。 */
+@Composable
+internal fun UpdatePopupEntry() {
+    val settings = LocalAppContainer.current.settings
+    val scope = rememberCoroutineScope()
+    val enabled by settings.updatePopupEnabled.collectAsStateWithLifecycle(initialValue = true)
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("更新弹窗", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = "启动时检查到新版本自动提醒；关闭后仍可在这里手动检查",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        SmoothSwitch(
+            checked = enabled,
+            onCheckedChange = { on ->
+                AppLog.log("Update", "弹窗开关 ${if (on) "on" else "off"} 来源=关于页")
+                scope.launch { settings.setUpdatePopupEnabled(on) }
+            }
+        )
     }
 }
 
@@ -245,14 +281,24 @@ internal fun PackEntry() {
  * 而那恰恰是用户最该先看到的部分。
  */
 @Composable
-internal fun UpdateDialog(info: UpdateInfo, onDismiss: () -> Unit) {
-    val context = LocalContext.current
+internal fun UpdateDialog(
+    info: UpdateInfo,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
     val settings = LocalAppContainer.current.settings
     val scope = rememberCoroutineScope()
-    var progress by remember { mutableIntStateOf(-1) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var noRemind by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    // 勾了「不再提醒」就是一个独立意愿，点确认还是取消都该记住
+    fun rememberChoice() {
+        if (noRemind) {
+            scope.launch { settings.setUpdateDismissed(info.versionCode.toLong()) }
+            AppLog.log("Update", "勾选不再提醒 ${info.versionName}")
+        }
+    }
+
+    Dialog(onDismissRequest = { rememberChoice(); AppLog.log("Update", "取消更新 ${info.versionName}"); onCancel() }) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -277,40 +323,31 @@ internal fun UpdateDialog(info: UpdateInfo, onDismiss: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                error?.let {
-                    Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = noRemind, onCheckedChange = { noRemind = it })
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error
+                        text = "不再提醒这个版本",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(Modifier.height(14.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = {
-                        scope.launch { settings.setUpdateDismissed(info.versionCode.toLong()) }
-                        onDismiss()
-                    }) { Text("以后再说") }
+                        rememberChoice()
+                        AppLog.log("Update", "取消更新 ${info.versionName}")
+                        onCancel()
+                    }) { Text("取消") }
 
                     Spacer(Modifier.width(4.dp))
-                    Button(
-                        enabled = progress < 0,
-                        onClick = {
-                            progress = 0
-                            scope.launch {
-                                val message = install(context, info) { progress = it }
-                                if (message != null) {
-                                    error = message
-                                    progress = -1
-                                }
-                            }
-                        }
-                    ) {
-                        Text(if (progress < 0) "立即更新" else "下载中 $progress%")
-                    }
+                    Button(onClick = {
+                        rememberChoice()
+                        AppLog.log("Update", "确认更新 ${info.versionName}")
+                        onConfirm()
+                    }) { Text("确认") }
                 }
             }
         }
@@ -365,27 +402,8 @@ private sealed interface VersionUi {
     data object Checking : VersionUi
     data object Latest : VersionUi
     data class Found(val info: UpdateInfo) : VersionUi
-    data class Downloading(val percent: Int, val info: UpdateInfo) : VersionUi
     data class Error(val message: String) : VersionUi
 }
-
-/**
- * 下载并交给系统安装器。返回 null 表示已交给系统，返回字符串表示失败原因。
- *
- * 签名不一致单独判：系统只会给出「安装失败(-7)」，不说人话。
- */
-private suspend fun install(
-    context: android.content.Context,
-    info: UpdateInfo,
-    onProgress: (Int) -> Unit
-): String? = runCatching {
-    val apk = AppUpdateChecker.download(context, info) { onProgress(it) }
-    when {
-        ApkInstaller.signatureMismatch(context, apk) -> "与已安装版本签名不同，需先卸载再安装"
-        !ApkInstaller.install(context, apk) -> "请在系统设置中允许安装未知应用"
-        else -> null
-    }
-}.getOrElse { it.message ?: "下载失败" }
 
 /** 0 表示从没检查过，别显示成 1970 年。 */
 private fun formatCheckTime(millis: Long): String {

@@ -47,6 +47,11 @@ class AppContainer(context: Context) {
         NewsRepository(appContext, database, newsSource, newsCrawler, networkMonitor)
     }
 
+    /** 下载与安装的唯一持有者：弹窗关掉、切页都不会中断进度。 */
+    val updateInstaller: app.nbult.lite.data.update.UpdateInstaller by lazy {
+        app.nbult.lite.data.update.UpdateInstaller(appContext)
+    }
+
     /** 恢复出厂设置：课表、资讯、设置、网页数据、日志一并清空。 */
     suspend fun factoryReset() {
         AppReset.factoryReset(

@@ -1,6 +1,8 @@
 package app.nbult.lite.data.db
 
 import android.content.Context
+import androidx.room.withTransaction
+import kotlinx.coroutines.flow.first
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -24,6 +26,15 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun timetableDao(): TimetableDao
 
     abstract fun newsDao(): NewsDao
+
+    /** Repair an empty timetable after a reset; preserve all existing custom times. */
+    suspend fun ensureDefaultPeriods() = withTransaction {
+        if (timetableDao().observePeriods().first().isEmpty()) {
+            timetableDao().upsertPeriods(DEFAULT_PERIODS.map { (idx, pair) ->
+                PeriodTime(idx = idx, startTime = pair.first, endTime = pair.second)
+            })
+        }
+    }
 
     companion object {
 

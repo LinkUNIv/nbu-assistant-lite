@@ -56,7 +56,7 @@ class AppContainer(context: Context) {
     suspend fun factoryReset() {
         AppReset.factoryReset(
             context = appContext,
-            clearDatabase = { database.clearAllTables() },
+            clearDatabase = { database.clearAllTables(); database.ensureDefaultPeriods() },
             resetSettings = { settings.resetAll() }
         )
         AppClock.setOffset(0L)
@@ -78,6 +78,7 @@ class NbuLiteApp : Application() {
         AppLog.log("App", "启动 v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
 
         appScope.launch {
+            container.database.ensureDefaultPeriods()
             AppLog.houseKeeping(applicationContext)
             val savedOffset = container.settings.timeOffset.first()
             AppClock.setOffset(savedOffset)

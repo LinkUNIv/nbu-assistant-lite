@@ -90,6 +90,7 @@ class TimetableRepository(
         totalWeeks: Int,
         replace: Boolean = true
     ): Int {
+        database.ensureDefaultPeriods()
         val termId = ensureTerm(termName, startEpochDay, totalWeeks)
 
         if (replace) {

@@ -24,6 +24,17 @@ class TimetableRepository(
 
     private val dao = database.timetableDao()
 
+    private val expansionCache by lazy {
+        WeekExpansionCache(java.io.File(java.io.File(database.openHelper.writableDatabase.path).parentFile, "week-expansion-v1.cache"))
+    }
+
+    fun clearExpansionCache() = expansionCache.clear()
+
+    suspend fun expandedWeeks(snapshot: Snapshot): List<List<TimetableEntry>> =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            expansionCache.get(snapshot.term, snapshot.entries, snapshot.overrides)
+        }
+
     data class Snapshot(
         val term: Term?,
         val entries: List<TimetableEntry>,

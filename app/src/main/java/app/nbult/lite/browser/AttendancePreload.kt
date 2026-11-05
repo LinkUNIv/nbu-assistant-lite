@@ -51,17 +51,23 @@ internal fun AttendancePreload(state: TimetableUiState) {
         onDispose { owner.lifecycle.removeObserver(observer); AttendanceSignal.active.value = false }
     }
     LaunchedEffect(foreground) { while (foreground) { delay(30_000); tick++ } }
+    val signedRevision by AttendanceSignedSessions.revision.collectAsState()
+    val today = app.nbult.lite.domain.DateUtil.epochDayOf(AppClock.now())
     val now = remember(tick) { Instant.ofEpochMilli(AppClock.now()).atZone(ZoneId.systemDefault()).toLocalTime() }
-    val names = if (!enabled || !foreground || state.todayIsTomorrow) emptySet() else state.todayEntries.filter { entry ->
+    val targets = remember(state.todayEntries, state.periods, enabled, foreground, state.todayIsTomorrow, now, today, signedRevision) { if (!enabled || !foreground || state.todayIsTomorrow) emptyList() else state.todayEntries.filter { entry ->
         val start = state.periods.find { it.idx == entry.slot.startSection }?.startTime
         val end = state.periods.find { it.idx == entry.slot.endSection }?.endTime
         !entry.suspended && entry.ghostLabel.isEmpty() && runCatching {
             val minute = now.toSecondOfDay() / 60
             minute >= LocalTime.parse(start).toSecondOfDay()/60 - 15 && minute < LocalTime.parse(end).toSecondOfDay()/60
         }.getOrDefault(false)
-    }.map { it.course.name.replace(Regex("\\s+"), "") }.toSet()
+    }.map { entry -> AttendanceTarget(entry.course.name,
+        state.periods.find { it.idx == entry.slot.startSection }?.startTime.orEmpty(),
+        state.periods.find { it.idx == entry.slot.endSection }?.endTime.orEmpty(), attendanceSessionKey(entry)) }
+        .filter { !AttendanceSignedSessions.contains(context, today, it.sessionKey) } }
+    val names = targets.map { attendanceCourseName(it.name) }.toSet()
     DisposableEffect(names) { AttendanceSignal.active.value = false; if(names.isEmpty()) AttendanceSignal.state.value = "idle"; onDispose { AttendanceSignal.active.value = false } }
-    if (names.isNotEmpty()) key(names, foreground) {
+    if (names.isNotEmpty()) key(targets, foreground) {
         var auth by remember { mutableStateOf<NativeAuthentication?>(null) }
         var browser by remember { mutableStateOf<WebView?>(null) }
         LaunchedEffect(browser) {
@@ -84,10 +90,30 @@ internal fun AttendancePreload(state: TimetableUiState) {
                 web.settings.apply { javaScriptEnabled = true; domStorageEnabled = true; userAgentString = BrowserIdentity.ua; allowFileAccess = false; allowContentAccess = false; mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW }
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
+                var lastDetection = ""
+                app.nbult.lite.util.AppLog.log("AttendancePreload", "开始匹配当前课程：${names.joinToString()}")
                 auth = NativeAuthentication(web, this, silent = true) { rows ->
-                    val matching = rows.firstOrNull { it.open && it.title.replace(Regex("\\s+"), "") in names }
+                    targets.forEach { target ->
+                        val signed = rows.filter { it.signed }.map { it.copy(open = true, signed = false) }
+                        // With duplicate local names, require the web time to identify the occurrence.
+                        val sameNameCount = targets.count { attendanceCourseName(it.name) == attendanceCourseName(target.name) }
+                        val identifiable = if (sameNameCount > 1) signed.filter { it.details.contains(target.start) && it.details.contains(target.end) } else signed
+                        if (matchingAttendanceCourse(identifiable, listOf(target)) != null) AttendanceSignedSessions.mark(context,today,target)
+                    }
+                    val remaining = targets.filterNot { AttendanceSignedSessions.contains(context,today,it.sessionKey) }
+                    val matching = matchingAttendanceCourse(rows, remaining)
                     if (rows.isNotEmpty()) AttendanceSignal.state.value = "ready"
                     web.evaluateJavascript("window.__nbuAuthenticated===true") { if (it == "true" && !PreloadedPage.transferring && PreloadedPage.web === web) AttendanceSignal.state.value = "ready" }
+                    val detection = "目标=${names.joinToString()}；列表=" + rows.joinToString { "${it.title}[open=${it.open},signed=${it.signed},status=${it.status}]" }
+                    if (lastDetection != detection) {
+                        lastDetection = detection
+                        app.nbult.lite.util.AppLog.log("AttendancePreload", detection)
+                        app.nbult.lite.util.AppLog.log("AttendancePreload", "匹配结果=${matching?.title ?: "无"}")
+                    }
+                    if (matching != null) {
+                        val local = remaining.filter { matchingAttendanceCourse(listOf(matching),listOf(it)) != null }.singleOrNull()
+                        if (local != null) AttendanceSignedSessions.matchedSession = Triple(today,matching.title,local)
+                    }
                     AttendanceSignal.courseName = matching?.title
                     AttendanceSignal.active.value = matching != null
                     if (matching != null && !PreloadedPage.transferring) {

@@ -28,6 +28,9 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nbult.lite.ui.LocalAppContainer
 import androidx.compose.runtime.Composable
@@ -273,12 +276,16 @@ private fun RailDot(
 fun rememberRailProgress(state: TimetableUiState): RailProgress {
     var now by remember { mutableStateOf(AppClock.now()) }
     val refresh by LocalAppContainer.current.clockRefresh.collectAsStateWithLifecycle()
-    LaunchedEffect(refresh) {
-        now = AppClock.now()
-        while (true) {
-            val wait = 60_000L - (AppClock.now() % 60_000L)
-            delay(wait.coerceIn(1_000L, 60_000L) + 60L)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner, refresh) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            // Resume from the current clock, without replaying missed background ticks.
             now = AppClock.now()
+            while (true) {
+                val wait = 60_000L - (AppClock.now() % 60_000L)
+                delay(wait.coerceIn(1_000L, 60_000L) + 60L)
+                now = AppClock.now()
+            }
         }
     }
 

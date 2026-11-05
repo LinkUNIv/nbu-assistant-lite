@@ -161,9 +161,7 @@ class TimetableViewModel(
                 .collect { (snapshot, showInactive, showFull) ->
                 val week = snapshot.term?.let { WeekLayout.displayWeek(ScheduleService.currentWeek(it), DateUtil.dayOfWeekIso(AppClock.todayEpochDay()), _state.value.sundayFirst) } ?: 1
                 val totalWeeks = (snapshot.term?.totalWeeks ?: 20).coerceAtLeast(1)
-                val weeks = (1..totalWeeks).map { w ->
-                    ScheduleService.weekEntries(snapshot.entries, w, snapshot.overrides)
-                }
+                val weeks = repository.expandedWeeks(snapshot)
                 val plan = ScheduleService.planForToday(
                     snapshot.entries, snapshot.term, snapshot.periods, snapshot.overrides,
                     includeInactive = showInactive

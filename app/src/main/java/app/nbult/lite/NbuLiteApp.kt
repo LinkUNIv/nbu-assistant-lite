@@ -56,7 +56,7 @@ class AppContainer(context: Context) {
     suspend fun factoryReset() {
         AppReset.factoryReset(
             context = appContext,
-            clearDatabase = { database.clearAllTables(); database.ensureDefaultPeriods() },
+            clearDatabase = { app.nbult.lite.browser.AttendanceSignedSessions.clear(appContext); timetableRepository.clearExpansionCache(); database.clearAllTables(); database.ensureDefaultPeriods() },
             resetSettings = { settings.resetAll() }
         )
         AppClock.setOffset(0L)

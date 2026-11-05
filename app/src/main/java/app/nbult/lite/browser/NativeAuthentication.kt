@@ -31,6 +31,7 @@ internal class NativeAuthentication(private val web: WebView, private val contai
      * 抑制的就只是同一门课；这门课不再开放签到时自动解除（见 [inspectCourses]）。
      */
     private var autoEnteredCourse: String? = null
+    private var selectedCourseName: String? = preferredCourse
     private var lastCourseSignature = ""
     private val resolvingPreferred = mutableStateOf(preferredCourse != null)
     private var coursePolls = 0
@@ -62,6 +63,7 @@ internal class NativeAuthentication(private val web: WebView, private val contai
         // 只记结果不记签到码：导出日志后可能被贴到公开的地方，四位码等于一次有效签到。
         AppLog.log("Web", if (signSuccess.value) "sign_ok" else "sign_fail")
         if (signSuccess.value) {
+            AttendanceSignedSessions.recordSuccess(web.context, selectedCourseName ?: AttendanceSignal.courseName)
             // Keep the completed course list visible instead of automatically entering again.
             // 抑制靠 autoEnteredCourse 记着的课程名，这里不需要额外动作：
             // 签完这门课就不再是「开放签到」，下一次 inspectCourses 会自动解除抑制。
@@ -251,6 +253,7 @@ internal class NativeAuthentication(private val web: WebView, private val contai
                 } else CourseListScreen(courses.value, onRefresh = { web.reload() }, onOriginal = {
                     useOriginal = true; reveal()
                 }, onCourse = { row ->
+                    selectedCourseName = row.title
                     // 手动点过的课也算「进过了」：否则签到失败退回列表后，
                     // 自动跳转会把用户又弹进同一门课，跟用户刚做的动作打架。
                     autoEnteredCourse = row.title
@@ -268,13 +271,23 @@ internal class NativeAuthentication(private val web: WebView, private val contai
         val currentGeneration = generation
         web.evaluateJavascript("""(() => {
           const elements=[...document.querySelectorAll('.list-item')];
-          let component=null;
-          for(let n=document.querySelector('.h5-page');n&&!component;n=n.parentElement){
-            for(let v=n.__vue__;v;v=v.${'$'}parent){if(Array.isArray(v.list)&&v.list.length===elements.length){component=v;break;}}
-          }
+          const normalize=s=>String(s||'').normalize('NFKC').replace(/[\s\u00a0\u200b\ufeff]/g,'');
+          const components=new Set();
+          const collect=n=>{for(let v=n?.__vue__;v;v=v.${'$'}parent){if(components.has(v))break;components.add(v);}};
+          collect(document.querySelector('.h5-page'));
+          elements.forEach(e=>{for(let n=e;n;n=n.parentElement)collect(n);});
           return JSON.stringify(elements.map((e,index)=>{
-            const item=component?.list[index];
-            const verified=item&&item.courseName===e.querySelector('strong')?.innerText;
+            const title=normalize(e.querySelector('strong')?.innerText);
+            let item=null;
+            for(const component of components){
+              if(normalize(component.courseName)===title&&component.coursePlanId){item=component;break;}
+              if(!Array.isArray(component.list))continue;
+              const same=component.list.filter(v=>normalize(v?.courseName)===title);
+              const indexed=component.list[index];
+              if(same.length===1){item=same[0];break;}
+              if(normalize(indexed?.courseName)===title&&component.list.length===elements.length){item=indexed;break;}
+            }
+            const verified=!!item;
             return {index,title:e.querySelector('strong')?.innerText||'',
               details:[...e.querySelectorAll('span')].filter(s=>!s.closest('.el-tag')).map(s=>s.innerText).filter(Boolean).join(' · '),
               status:[...e.querySelectorAll('.el-tag')].map(s=>s.innerText).join(' · '),
@@ -299,10 +312,11 @@ internal class NativeAuthentication(private val web: WebView, private val contai
                     courses.value.none { it.title == autoEnteredCourse && it.open }) {
                     autoEnteredCourse = null
                 }
-                val target = if (preferredCourse != null) open.firstOrNull { it.title == preferredCourse } else open.singleOrNull()
+                val target = if (preferredCourse != null) open.firstOrNull { attendanceCourseName(it.title) == attendanceCourseName(preferredCourse) } else open.singleOrNull()
                 if (target == null && coursePolls >= 6) resolvingPreferred.value = false
                 if (!silent && AttendanceOptions.auto(web.context) && target != null && target.title != autoEnteredCourse) {
                     autoEnteredCourse = target.title
+                    selectedCourseName = target.title
                     val row = target
                     val title = JSONObject.quote(row.title)
                     web.evaluateJavascript("""(() => {

@@ -36,11 +36,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nbult.lite.ui.LocalAppContainer
+import app.nbult.lite.ui.common.SmoothSwitch
 import app.nbult.lite.ui.common.luminanceIsDark
 import app.nbult.lite.ui.theme.Backdrop
 import app.nbult.lite.ui.theme.DarkMode
 import app.nbult.lite.ui.theme.SeedColor
 import app.nbult.lite.ui.theme.brushFor
+import app.nbult.lite.util.AppLog
 import kotlinx.coroutines.launch
 
 /**
@@ -65,6 +67,8 @@ fun AppearanceScreen(onBack: () -> Unit) {
         .collectAsStateWithLifecycle(initialValue = false)
     val showFullTimetable by container.settings.showFullTimetable
         .collectAsStateWithLifecycle(initialValue = false)
+    val motionBlur by container.settings.motionBlur
+        .collectAsStateWithLifecycle(initialValue = container.settings.lastKnownMotionBlur)
 
     val background = MaterialTheme.colorScheme.background
     val dark = background.luminanceIsDark()
@@ -228,6 +232,26 @@ fun AppearanceScreen(onBack: () -> Unit) {
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            SettingCard(title = "动效") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("精致动效", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = "关闭时切页仅左右横移，高刷屏更流畅；开启会叠加淡入与轻微缩放。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    SmoothSwitch(
+                        checked = motionBlur,
+                        onCheckedChange = { on ->
+                            AppLog.log("Settings", "精致动效=$on")
+                            scope.launch { container.settings.setMotionBlur(on) }
+                        }
                     )
                 }
             }

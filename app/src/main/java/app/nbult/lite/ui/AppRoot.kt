@@ -72,6 +72,7 @@ import app.nbult.lite.ui.news.NewsViewModel
 import app.nbult.lite.ui.portal.PortalScreen
 import app.nbult.lite.ui.settings.AppearanceScreen
 import app.nbult.lite.ui.settings.ChangelogScreen
+import app.nbult.lite.ui.settings.EditGestureScreen
 import app.nbult.lite.ui.settings.LicensesScreen
 import app.nbult.lite.ui.settings.ScheduleEditorScreen
 import app.nbult.lite.ui.settings.SettingsScreen
@@ -382,6 +383,11 @@ fun AppRoot() {
             composable("settings/appearance") {
                 PageEnterEffect(enabled = motionBlur) {
                     AppearanceScreen(onBack = { navController.popBackStack() })
+                }
+            }
+            composable("settings/editing") {
+                PageEnterEffect(enabled = motionBlur) {
+                    EditGestureScreen(onBack = { navController.popBackStack() })
                 }
             }
             composable("settings/schedule") {

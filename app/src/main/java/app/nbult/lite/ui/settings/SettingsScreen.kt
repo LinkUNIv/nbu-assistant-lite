@@ -52,7 +52,6 @@ import app.nbult.lite.data.update.UpdateState
 import app.nbult.lite.util.ApkInstaller
 import app.nbult.lite.BuildConfig
 import app.nbult.lite.data.SettingsStore
-import app.nbult.lite.ui.common.SmoothSwitch
 import app.nbult.lite.ui.theme.DarkMode
 import app.nbult.lite.ui.theme.SeedColor
 import app.nbult.lite.domain.AppClock
@@ -96,9 +95,6 @@ fun SettingsScreen(
     var showFactoryReset by remember { mutableStateOf(false) }
     var resetting by remember { mutableStateOf(false) }
     var resetMessage by remember { mutableStateOf<String?>(null) }
-    val motionBlur by settings.motionBlur.collectAsStateWithLifecycle(
-        initialValue = settings.lastKnownMotionBlur
-    )
     // 入口页的「状态回显」用：不点进去也要能看出当前是什么设置
     val reminderOn by settings.classReminder.collectAsStateWithLifecycle(
         initialValue = settings.lastKnownClassReminder
@@ -106,6 +102,7 @@ fun SettingsScreen(
     val themeColor by settings.themeColor.collectAsStateWithLifecycle(initialValue = "blue")
     val darkModeId by settings.darkMode.collectAsStateWithLifecycle(initialValue = "system")
     val campusPreset by settings.campusPreset.collectAsStateWithLifecycle(initialValue = "main")
+    val editGesture by settings.editGesture.collectAsStateWithLifecycle(initialValue = "tap")
     var showClearConfirm by remember { mutableStateOf(false) }
 
     val totalWeeks = (state.term?.totalWeeks ?: 20).coerceAtLeast(1)
@@ -145,8 +142,8 @@ fun SettingsScreen(
                 trailing = "${SeedColor.of(themeColor).label} · ${DarkMode.of(darkModeId).label}"
             ) { onOpenAppearance() }
             SettingsEntry(
-                title = "学期",
-                subtitle = "开学日期、总周数、来源",
+                title = "学期与作息",
+                subtitle = "开学日期、总周数、上下课时间",
                 trailing = "第 ${state.week} / $totalWeeks 周"
             ) { onNavigateSection("term") }
             SettingsEntry(
@@ -155,17 +152,17 @@ fun SettingsScreen(
                 trailing = if (reminderOn) "已开启" else "未开启"
             ) { onNavigateSection("reminder") }
             SettingsEntry(
-                title = "时间与作息",
-                subtitle = "校时、上下课时间",
-                trailing = if (campusPreset == "meishan") "梅山校区" else "主校区"
-            ) { onNavigateSection("time") }
+                title = "课表编辑",
+                subtitle = "编辑课程是点击还是长按",
+                trailing = if (editGesture == "long_press") "长按" else "点击"
+            ) { onNavigateSection("editing") }
             SettingsEntry(
                 title = "账号",
                 subtitle = "学校账号、加密保存密码、点名自动登录",
                 trailing = "管理"
             ) { appContext.startActivity(android.content.Intent(appContext, app.nbult.lite.account.AccountActivity::class.java)) }
             SettingsEntry(
-                title = "数据与诊断",
+                title = "数据与日志",
                 subtitle = "清空课表、恢复出厂、工作日志",
                 trailing = "$logCount 条日志"
             ) { onNavigateSection("more") }
@@ -269,7 +266,7 @@ SettingCard(title = "学期设置") {
         BackgroundRunCard()
             }
 
-            if (section == "time") {
+            if (section == "term") {
 SettingCard(title = "时间与时区") {
             Text(
                 text = "设备时区：${AppClock.deviceZoneId()}${if (AppClock.deviceIsShanghai()) "（东八区）" else "（非东八区）"}",
@@ -329,7 +326,7 @@ SettingCard(title = "时间与时区") {
         }
             }
 
-            if (section == "time") {
+            if (section == "term") {
 SettingCard(title = "作息时间") {
             Text(
                 text = "当前 ${state.periods.size} 节：",
@@ -395,29 +392,6 @@ SettingCard(title = "存储与重置") {
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
-        }
-            }
-
-            if (section == "more") {
-SettingCard(title = "高级") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("精致动效（切页淡入缩放）", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = "关闭时切页仅左右横移，高刷屏更流畅；开启会叠加淡入与轻微缩放。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                SmoothSwitch(
-                    checked = motionBlur,
-                    onCheckedChange = { on ->
-                        AppLog.log("Settings", "精致动效=$on")
-                        scope.launch { settings.setMotionBlur(on) }
-                    }
-                )
-            }
-
         }
             }
 
@@ -493,7 +467,8 @@ SettingCard(title = "文档") {
         }
             }
 
-            if (section == "about") {
+            // 路由在 release 包里不注册，卡片也必须一起藏 —— 否则点了会导航到不存在的目标
+            if (section == "about" && BuildConfig.BUILD_KIND != "release") {
 SettingCard(title = "调试") {
                 TextButton(onClick = onOpenDebug) { Text("打开调试面板") }
             }
@@ -814,10 +789,9 @@ private fun SettingsSectionHeader(title: String, onBack: () -> Unit) {
 }
 
 private fun sectionTitle(section: String): String = when (section) {
-    "term" -> "学期"
+    "term" -> "学期与作息"
     "reminder" -> "上课提醒"
-    "time" -> "时间与作息"
-    "more" -> "数据与诊断"
+    "more" -> "数据与日志"
     "about" -> "关于"
     else -> "设置"
 }

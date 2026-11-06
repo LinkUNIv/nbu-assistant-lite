@@ -12,13 +12,13 @@
 
 ## 下载与安装
 
-当前预览版本：**0.37.6 Preview**（2026-11-04）
+当前预览版本：**0.37.7 Preview**（2026-11-06）
 
-[下载 Preview](https://github.com/LinkUNIv/nbu-assistant-lite/releases/tag/v0.37.6-Preview) · [完整更新说明](docs/releases/v0.37.6-Preview.md)
+[下载 Preview](https://github.com/LinkUNIv/nbu-assistant-lite/releases/tag/v0.37.7-Preview) · [完整更新说明](docs/releases/v0.37.7-Preview.md)
 
 | 文件 | 大小 | 运行要求 |
 |---|---|---|
-| `nbu-assistant-lite-0.37.6-Preview.apk` | 约 23 MiB（含离线 OCR 原生库，已裁剪架构） | Android 7.0（API 24）及以上 |
+| `nbu-assistant-lite-0.37.7-Preview.apk` | 约 23 MiB（含离线 OCR 原生库，已裁剪架构） | Android 7.0（API 24）及以上 |
 
 - 下载完成后使用文件管理器打开安装
 - 同包名、同签名的升级可覆盖安装并保留数据；卸载后重新安装会清空本地数据

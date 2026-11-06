@@ -362,6 +362,7 @@ fun TodayCard(
     val settings = LocalAppContainer.current.settings
     val scope = rememberCoroutineScope()
     val storedExpanded by settings.todayExpanded.collectAsStateWithLifecycle(initialValue = null)
+    val editGesture by settings.editGesture.collectAsStateWithLifecycle(initialValue = "tap")
     val expanded = storedExpanded ?: return
     // 展开进度：0 折叠、1 展开。标题位移和内容模糊都由它驱动 ——
     // 用 graphicsLayer / blur 而不是 offset / animateContentSize，
@@ -484,13 +485,19 @@ fun TodayCard(
                 ) {
                     Spacer(Modifier.height(6.dp))
                     entries.forEach { entry ->
+                        val openEntry: () -> Unit = { onEntryClick(entry) }
                         val range = timeRangeOf(periods, entry.slot.startSection, entry.slot.endSection)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 // 停课与「已调走」的块压暗，和还能上的课一眼分开
                                 .alpha(if (entry.isActive) 1f else 0.55f)
-                                .combinedClickable(onClick = {}, onLongClickLabel = "课程设置", onLongClick = { onEntryClick(entry) })
+                                .combinedClickable(
+                                    // 与周视图同一个开关：点击（默认）或长按打开编辑器
+                                    onClick = if (editGesture == "long_press") ({}) else openEntry,
+                                    onLongClick = if (editGesture == "long_press") openEntry else null,
+                                    onLongClickLabel = if (editGesture == "long_press") "课程设置" else null
+                                )
                                 .padding(vertical = 3.dp),
                             verticalAlignment = Alignment.Top
                         ) {
@@ -1008,6 +1015,8 @@ private fun BlockLayer(
     nameLimit: Int,
     onEntryClick: (TimetableEntry) -> Unit
 ) {
+    val editGesture by LocalAppContainer.current.settings.editGesture
+        .collectAsStateWithLifecycle(initialValue = "tap")
     Layout(
         content = {
             blocks.forEach { block ->
@@ -1024,22 +1033,26 @@ private fun BlockLayer(
         },
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(blocks, columnWidth, cellHeight, visibleDays) {
-                detectTapGestures(onLongPress = { offset ->
+            .pointerInput(blocks, columnWidth, cellHeight, visibleDays, editGesture) {
+                // 0.35.49 起被改成长按，且没有任何提示，用户根本发现不了。
+                // 现在按设置二选一，默认回到点击：误触的代价很小，编辑器可以取消。
+                val open: (Offset) -> Unit = open@ { offset ->
                     val colW = columnWidth.toPx()
                     val cellH = cellHeight.toPx()
                     val top = headerHeight.toPx()
-                    if (offset.x < 0f || offset.y < top) return@detectTapGestures
+                    if (offset.x < 0f || offset.y < top) return@open
                     // 列号 → 星期：隐藏周末后列号不再等于 dayOfWeek
                     val day = visibleDays.getOrNull((offset.x / colW).toInt())
-                        ?: return@detectTapGestures
+                        ?: return@open
                     val section = ((offset.y - top) / cellH).toInt() + 1
                     blocks.lastOrNull { b ->
                         b.entry.slot.dayOfWeek == day &&
                             section >= b.entry.slot.startSection &&
                             section <= b.entry.slot.endSection
                     }?.let { onEntryClick(it.entry) }
-                })
+                }
+                if (editGesture == "long_press") detectTapGestures(onLongPress = open)
+                else detectTapGestures(onTap = open)
             }
     ) { measurables, constraints ->
         // 尺寸兜底：快滑过程中若约束在极端情况下退化成 0/负数，

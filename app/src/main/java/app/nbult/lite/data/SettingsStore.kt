@@ -33,6 +33,8 @@ class SettingsStore(private val context: Context) {
     private val keyThemeColor = stringPreferencesKey("theme_color")
     private val keyDarkMode = stringPreferencesKey("dark_mode")
     private val keyBackdrop = stringPreferencesKey("backdrop")
+    /** 课表编辑的触发方式：tap / long_press。 */
+    private val keyEditGesture = stringPreferencesKey("timetable_edit_gesture")
 
     // 更新提醒。这几个值只用于「要不要亮红点 / 要不要弹窗」，
     // 不能拿去替代真实的版本比对 —— 真正的判断永远以 BuildConfig.VERSION_CODE 为准
@@ -83,6 +85,10 @@ class SettingsStore(private val context: Context) {
     /** 背景 id，见 `background/AppBackdrop.kt` 的 Backdrop。 */
     val backdrop: Flow<String> =
         context.settingsDataStore.data.map { it[keyBackdrop] ?: "plain" }
+
+    /** 课表编辑触发方式；默认点击 —— 长按在周视图里没有任何视觉提示，发现不了。 */
+    val editGesture: Flow<String> =
+        context.settingsDataStore.data.map { it[keyEditGesture] ?: "tap" }
 
     /**
      * 进程内记住"上一次读到的值"。
@@ -301,5 +307,9 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setBackdrop(id: String) {
         context.settingsDataStore.edit { it[keyBackdrop] = id }
+    }
+
+    suspend fun setEditGesture(id: String) {
+        context.settingsDataStore.edit { it[keyEditGesture] = id }
     }
 }

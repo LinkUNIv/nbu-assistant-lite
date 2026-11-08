@@ -41,14 +41,16 @@ sealed interface UpdateState {
 object AppUpdateChecker {
 
     /**
-     * 列最新的 Release。
+     * 列最近的 Release。
      *
      * 不能用 `releases/latest`：那个端点只返回最新的**非预发布**版本，
      * 而本项目全部发布都是 prerelease，它会一直 404。
-     * `per_page=1` 取列表第一条，预发布也能拿到。
+     *
+     * 取 5 条而不是 1 条：三种通道共用这一个仓库，最新一条未必属于当前通道。
+     * Preview 之后协作者可能发 Debug，只取 1 条就会把 Debug 包推给 Preview 用户。
      */
     private const val RELEASES_API =
-        "https://api.github.com/repos/LinkUNIv/nbu-assistant-lite/releases?per_page=1"
+        "https://api.github.com/repos/LinkUNIv/nbu-assistant-lite/releases?per_page=5"
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -67,7 +69,22 @@ object AppUpdateChecker {
             if (releases.length() == 0) {
                 return@withContext UpdateState.Failed("没有可用的版本")
             }
-            val assets = releases.optJSONObject(0)?.optJSONArray("assets")
+            // 按通道挑：装不上的包，提示了也没用
+            val refs = (0 until releases.length()).map { i ->
+                val obj = releases.optJSONObject(i)
+                ReleaseRef(
+                    tag = obj?.optString("tag_name").orEmpty(),
+                    draft = obj?.optBoolean("draft", false) ?: true
+                )
+            }
+            val pickedIndex = UpdateChannel.pick(refs, UpdateChannel.current)
+            if (pickedIndex < 0) {
+                AppLog.log("Update", "本通道（${UpdateChannel.current}）最近没有发布")
+                return@withContext UpdateState.UpToDate
+            }
+            val release = releases.optJSONObject(pickedIndex)
+                ?: return@withContext UpdateState.Failed("版本信息不完整")
+            val assets = release.optJSONArray("assets")
                 ?: return@withContext UpdateState.Failed("版本信息不完整")
             var manifestUrl = ""
             for (i in 0 until assets.length()) {
@@ -86,6 +103,12 @@ object AppUpdateChecker {
                 ?: return@withContext UpdateState.Failed("无法获取版本信息")
 
             val json = JSONObject(text)
+            // 二次核对：tag 与清单里的 channel 应当一致，不一致说明 CI 或人工哪边出了错
+            val manifestChannel = json.optString("channel")
+            if (manifestChannel.isNotBlank() && !manifestChannel.equals(UpdateChannel.current, ignoreCase = true)) {
+                AppLog.log("Update", "清单通道 ${manifestChannel} 与安装包 ${UpdateChannel.current} 不符，已忽略")
+                return@withContext UpdateState.UpToDate
+            }
             val remoteCode = json.optInt("versionCode", 0)
             val apkUrl = json.optString("apkUrl")
             val digest = json.optString("sha256")

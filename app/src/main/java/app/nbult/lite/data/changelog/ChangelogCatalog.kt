@@ -100,6 +100,28 @@ object ChangelogCatalog {
         })
     }
 
+    /**
+     * 解析一段独立的发布说明（Release 正文 / manifest 里的 notes）。
+     *
+     * 与 [parse] 的区别是不要求 `## vX.Y.Z` 版本头 —— Release 正文用的是 `# 0.37.7 Preview`。
+     * 更新弹窗直接拿它渲染，避免把 `**`、`- `、反引号这些标记当普通字符显示出来。
+     */
+    fun parseFragment(raw: String): Pair<String, List<ChangelogBlock>> {
+        val body = mutableListOf<String>()
+        var title = ""
+        for (line in raw.lineSequence()) {
+            // 只把最外层的一级标题摘出来当标题，正文里的 `## 更新内容` 继续走块解析
+            if (title.isEmpty() && line.trimStart().startsWith("# ")) {
+                title = line.trim().removePrefix("#").trim()
+                continue
+            }
+            body += line
+        }
+        val (headline, blocks) = parseBody(body)
+        // 正文首行的 `**...**` 优先：它是作者写的一句话摘要，比版本号更有信息量
+        return (headline.ifBlank { title }) to blocks
+    }
+
     /** 版本号按数字段比较，`0.9.0` 不能排在 `0.10.0` 之后。 */
     private fun parseVersionKey(version: String): List<Int> =
         version.split('.').map { segment ->

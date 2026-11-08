@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -235,7 +236,7 @@ private fun VersionCard(
                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
                         modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
                     )
-                    version.blocks.forEach { block -> BlockView(block) }
+                    version.blocks.forEach { block -> ChangelogBlockView(block) }
                 }
             }
         }
@@ -261,8 +262,16 @@ private fun CurrentBadge(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * 渲染一个内容块。
+ *
+ * [body] 让调用方决定正文字号：变更记录页用 bodySmall 挤信息，更新弹窗要大一号。
+ */
 @Composable
-private fun BlockView(block: ChangelogBlock) {
+internal fun ChangelogBlockView(
+    block: ChangelogBlock,
+    body: TextStyle = MaterialTheme.typography.bodySmall
+) {
     when (block) {
         is ChangelogBlock.Heading -> Text(
             text = inline(block.text),
@@ -277,13 +286,13 @@ private fun BlockView(block: ChangelogBlock) {
                     // 圆点用文本而非 Canvas：行首缩进随字号自动对齐，不用手算基线
                     Text(
                         text = "·",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = body,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(end = 6.dp)
                     )
                     Text(
                         text = inline(item),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = body,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -292,13 +301,13 @@ private fun BlockView(block: ChangelogBlock) {
 
         is ChangelogBlock.Paragraph -> Text(
             text = inline(block.text),
-            style = MaterialTheme.typography.bodySmall,
+            style = body,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         is ChangelogBlock.Code -> Text(
             text = block.text,
-            style = MaterialTheme.typography.bodySmall,
+            style = body,
             fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
@@ -316,7 +325,7 @@ private fun BlockView(block: ChangelogBlock) {
 private val INLINE_MARKUP = Regex("""\*\*(.+?)\*\*|`([^`]+?)`""")
 
 @Composable
-private fun inline(text: String): AnnotatedString {
+internal fun inline(text: String): AnnotatedString {
     val codeBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
     return remember(text, codeBg) { annotate(text, codeBg) }
 }

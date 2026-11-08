@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nbult.lite.BuildConfig
+import app.nbult.lite.data.changelog.ChangelogCatalog
 import app.nbult.lite.data.pack.PackCheckResult
 import app.nbult.lite.data.pack.ResourcePackChecker
 import app.nbult.lite.data.pack.ResourcePackStore
@@ -310,18 +311,37 @@ internal fun UpdateDialog(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(Modifier.height(10.dp))
+                // 说明是 Markdown（Release 正文原样同步）。以前直接当纯文本塞进 Text，
+                // 于是 `**加粗**`、`- `、反引号全都原样显示出来，字号还只有 12sp。
+                val (notesTitle, notesBlocks) = remember(info.notes) {
+                    ChangelogCatalog.parseFragment(info.notes)
+                }
                 Box(
                     Modifier
                         .fillMaxWidth()
                         // 说明可能很长，限高后滚动，避免弹窗顶到状态栏
-                        .heightIn(max = 360.dp)
+                        .heightIn(max = 380.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    Text(
-                        text = info.notes.ifBlank { "本版本未提供更新说明。" },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (notesTitle.isBlank() && notesBlocks.isEmpty()) {
+                        Text(
+                            text = "本版本未提供更新说明。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (notesTitle.isNotBlank()) {
+                                Text(
+                                    text = inline(notesTitle),
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                            }
+                            notesBlocks.forEach { block ->
+                                ChangelogBlockView(block, MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -376,17 +396,23 @@ internal fun WhatsNewDialog(versionName: String, notes: String, onDismiss: () ->
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(Modifier.height(10.dp))
+                val (notesTitle, notesBlocks) = remember(notes) {
+                    ChangelogCatalog.parseFragment(notes)
+                }
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 360.dp)
+                        .heightIn(max = 380.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    Text(
-                        text = notes,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (notesTitle.isNotBlank()) {
+                            Text(text = inline(notesTitle), style = MaterialTheme.typography.titleSmall)
+                        }
+                        notesBlocks.forEach { block ->
+                            ChangelogBlockView(block, MaterialTheme.typography.bodyMedium)
+                        }
+                    }
                 }
                 Spacer(Modifier.height(14.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {

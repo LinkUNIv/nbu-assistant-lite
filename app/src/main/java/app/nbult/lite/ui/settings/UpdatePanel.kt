@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +34,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -49,12 +53,12 @@ import app.nbult.lite.data.update.UpdateInfo
 import app.nbult.lite.data.update.UpdateState
 import app.nbult.lite.ui.LocalAppContainer
 import app.nbult.lite.ui.common.SmoothSwitch
-import app.nbult.lite.util.AppLog
 import app.nbult.lite.util.ApkInstaller
-import kotlinx.coroutines.launch
+import app.nbult.lite.util.AppLog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 /** 两个入口各自要不要亮红点。 */
 internal data class UpdateBadges(val version: Boolean, val pack: Boolean) {
@@ -316,13 +320,7 @@ internal fun UpdateDialog(
                 val (notesTitle, notesBlocks) = remember(info.notes) {
                     ChangelogCatalog.parseFragment(info.notes)
                 }
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        // 说明可能很长，限高后滚动，避免弹窗顶到状态栏
-                        .heightIn(max = 380.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
+                NotesScrollArea {
                     if (notesTitle.isBlank() && notesBlocks.isEmpty()) {
                         Text(
                             text = "本版本未提供更新说明。",
@@ -330,16 +328,14 @@ internal fun UpdateDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (notesTitle.isNotBlank()) {
-                                Text(
-                                    text = inline(notesTitle),
-                                    style = MaterialTheme.typography.titleSmall
-                                )
-                            }
-                            notesBlocks.forEach { block ->
-                                ChangelogBlockView(block, MaterialTheme.typography.bodyMedium)
-                            }
+                        if (notesTitle.isNotBlank()) {
+                            Text(
+                                text = inline(notesTitle),
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+                        notesBlocks.forEach { block ->
+                            ChangelogBlockView(block, MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
@@ -377,6 +373,53 @@ internal fun UpdateDialog(
 // ---- 内部 ----
 
 /**
+ * 说明的滚动区。
+ *
+ * 内容超长时底部渐隐并提示可以下滑 —— 只做滚动不给提示，用户会以为内容被截断了
+ * （0.37.8 的弹窗就是这个观感）。
+ */
+@Composable
+private fun NotesScrollArea(content: @Composable ColumnScope.() -> Unit) {
+    val scrollState = rememberScrollState()
+    val canScroll by remember { derivedStateOf { scrollState.canScrollForward } }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            // 限高后滚动，避免弹窗顶到状态栏
+            .heightIn(max = 380.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            content = content
+        )
+        if (canScroll) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, MaterialTheme.colorScheme.surface)
+                        )
+                    )
+            )
+            Text(
+                text = "下滑查看全部",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 2.dp)
+            )
+        }
+    }
+}
+
+/**
  * 「这一版更新了什么」。
  *
  * 与 [UpdateDialog] 是两回事：那个是「远端有个新版本，要不要下」，
@@ -399,19 +442,12 @@ internal fun WhatsNewDialog(versionName: String, notes: String, onDismiss: () ->
                 val (notesTitle, notesBlocks) = remember(notes) {
                     ChangelogCatalog.parseFragment(notes)
                 }
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 380.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (notesTitle.isNotBlank()) {
-                            Text(text = inline(notesTitle), style = MaterialTheme.typography.titleSmall)
-                        }
-                        notesBlocks.forEach { block ->
-                            ChangelogBlockView(block, MaterialTheme.typography.bodyMedium)
-                        }
+                NotesScrollArea {
+                    if (notesTitle.isNotBlank()) {
+                        Text(text = inline(notesTitle), style = MaterialTheme.typography.titleSmall)
+                    }
+                    notesBlocks.forEach { block ->
+                        ChangelogBlockView(block, MaterialTheme.typography.bodyMedium)
                     }
                 }
                 Spacer(Modifier.height(14.dp))

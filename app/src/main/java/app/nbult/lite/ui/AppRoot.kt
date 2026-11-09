@@ -25,7 +25,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -146,17 +149,32 @@ fun AppRoot() {
     }
     // 关掉开关只管自动弹窗；手动检查在更新页，不受这里影响
     val popupEnabled by container.settings.updatePopupEnabled.collectAsStateWithLifecycle(initialValue = true)
+
+    // 冷启动与「从后台切回来」共用这一段：是否真的查由 checkIfDue 按 6 小时把关，
+    // 它内部有互斥，两个入口同时触发也只会打一次请求。
+    suspend fun checkAndPrompt() {
+        val result = UpdateCenter.checkIfDue(container.settings) ?: return
+        if (result !is UpdateState.Available || !popupEnabled) return
+        val dismissed = container.settings.updateDismissedCode.first()
+        if (dismissed != result.info.versionCode.toLong()) {
+            pendingUpdate = result.info
+        }
+    }
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(12_000)
-        val lastCheck = container.settings.updateCheckedAt.first()
-        if (UpdateCenter.due(lastCheck)) {
-            val result = UpdateCenter.refresh(container.settings)
-            if (result is UpdateState.Available && popupEnabled) {
-                val dismissed = container.settings.updateDismissedCode.first()
-                if (dismissed != result.info.versionCode.toLong()) {
-                    pendingUpdate = result.info
-                }
+        // 4 秒：太早会跟首屏加载抢带宽，12 秒又常常等不到用户停留
+        kotlinx.coroutines.delay(4_000)
+        checkAndPrompt()
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        var firstResume = true
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            // 首次 RESUMED 与上面的 4 秒检查重复，跳过；之后每次回到前台都试一次
+            if (firstResume) {
+                firstResume = false
+                return@repeatOnLifecycle
             }
+            checkAndPrompt()
         }
     }
     pendingUpdate?.let { info ->

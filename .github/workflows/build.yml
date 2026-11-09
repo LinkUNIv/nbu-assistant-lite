@@ -207,6 +207,22 @@ jobs:
           sha = open(glob.glob('apk/*.sha256')[0], encoding='utf-8').read().split()[0]
           tag = os.environ['GITHUB_REF_NAME']
           base = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}"
+          # 清单里的说明是给「使用者」看的：只取「## 更新内容」小节。
+          # 整篇正文里的包名、版本码、签名、单测条数、数据隔离声明都不该出现在更新弹窗里。
+          def user_notes(text):
+              out, inside = [], False
+              for line in text.splitlines():
+                  stripped = line.strip()
+                  if stripped.startswith("## "):
+                      if inside:
+                          break
+                      inside = stripped[3:].strip() == "更新内容"
+                      continue
+                  if inside:
+                      out.append(line)
+              body = "\n".join(out).strip()
+              return body or text.strip()
+
           notes_path = f"docs/releases/{tag}.md"
           manifest = {
               "versionCode": code,
@@ -215,7 +231,7 @@ jobs:
               "channel": "preview" if "-Preview" in tag else "release",
               "apkUrl": f"{base}/{os.path.basename(apk)}",
               "sha256": sha,
-              "notes": open(notes_path, encoding="utf-8").read() if os.path.exists(notes_path) else "",
+              "notes": user_notes(open(notes_path, encoding="utf-8").read() if os.path.exists(notes_path) else ""),
           }
           with open('apk/manifest.json', 'w', encoding='utf-8') as f:
               json.dump(manifest, f, ensure_ascii=False, indent=2)

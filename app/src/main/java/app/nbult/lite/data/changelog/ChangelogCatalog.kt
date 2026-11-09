@@ -118,8 +118,15 @@ object ChangelogCatalog {
             body += line
         }
         val (headline, blocks) = parseBody(body)
+        // 只留面向使用者的部分：
+        // - 开头那行「包名 … 版本码 … 签名 …」是给维护者看的
+        // - 「验证与限制」之后（单测条数、ASCII 路径、数据隔离）同样不该出现在弹窗里
+        // 清单里的说明由 CI 只提取「更新内容」小节，这里是第二道闸 —— 已经发出去的旧清单也走这条。
+        val visible = blocks
+            .takeWhile { !(it is ChangelogBlock.Heading && it.text.contains("验证与限制")) }
+            .filterNot { it is ChangelogBlock.Paragraph && it.text.trimStart().startsWith("包名 ") }
         // 正文首行的 `**...**` 优先：它是作者写的一句话摘要，比版本号更有信息量
-        return (headline.ifBlank { title }) to blocks
+        return (headline.ifBlank { title }) to visible
     }
 
     /** 版本号按数字段比较，`0.9.0` 不能排在 `0.10.0` 之后。 */
@@ -192,7 +199,9 @@ object ChangelogCatalog {
                 // 「详见 docs/releases/…」是仓库内相对链接，应用里点不开，直接略过
                 trimmed.startsWith("详见 ") -> Unit
 
-                trimmed.startsWith("###") -> {
+                // 两级及以上都算标题：原来只认 `###`，Release 正文里的 `## 更新内容`
+                // 会掉进段落分支，界面上直接显示出 `##` 两个字
+                trimmed.startsWith("##") -> {
                     flushAll()
                     blocks += ChangelogBlock.Heading(trimmed.trimStart('#').trim())
                 }

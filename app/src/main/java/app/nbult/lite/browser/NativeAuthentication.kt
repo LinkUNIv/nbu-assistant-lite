@@ -81,7 +81,7 @@ internal class NativeAuthentication(private val web: WebView, private val contai
     }
     private fun signKey(value: String) {
         if (mode != "sign" || signSuccess.value || signSubmitting.value) return
-        if (value == "重置") signKeys.clear()
+        if (value == "重置") cancelSignInput()
         if (value == "确认" || value == "重置" || value.matches(Regex("[0-9]"))) {
             signKeys.add(value); pumpSignKeys()
         }
@@ -127,9 +127,9 @@ internal class NativeAuthentication(private val web: WebView, private val contai
                             signMessage.value = "网页未接收本次输入，请重新输入。"; signVersion.value++
                         }
                     }
-                }, 30)
+                }, 16)
             }
-            acknowledge(15)
+            acknowledge(60)
         }
     }
     private fun inspectSign() {

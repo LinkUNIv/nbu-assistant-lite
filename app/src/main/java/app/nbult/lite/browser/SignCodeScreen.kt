@@ -6,6 +6,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Alignment
+
 
 @Composable
 internal fun SignCodeScreen(message: String, digits: String, submitting: Boolean, onKey: (String) -> Unit, onOriginal: () -> Unit, success: Boolean, resultVersion: Int, onScan: (String) -> Unit, onStopScan: () -> Unit) {
@@ -13,7 +24,7 @@ internal fun SignCodeScreen(message: String, digits: String, submitting: Boolean
     var baseline by remember { mutableStateOf(0) }
     AttendanceTheme { _, _ ->
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("课程签到", style = MaterialTheme.typography.headlineSmall)
                 Text("输入老师提供的四位签到码", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -26,9 +37,26 @@ internal fun SignCodeScreen(message: String, digits: String, submitting: Boolean
                 listOf(listOf("1","2","3"),listOf("4","5","6"),listOf("7","8","9"),listOf("重置","0","确认")).forEach { keys ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         keys.forEach { key ->
-                            FilledTonalButton(onClick = {
-                                onKey(key)
-                            }, enabled = !success && !submitting && (key != "确认" || digits.length == 4), modifier = Modifier.weight(1f).height(58.dp), shape = RoundedCornerShape(18.dp)) { Text(key) }
+                            val enabled = !success && !submitting && (key != "确认" || digits.length == 4)
+                            Surface(
+                                modifier = Modifier.weight(1f).height(58.dp)
+                                    .semantics {
+                                        role = Role.Button
+                                        if (!enabled) disabled()
+                                        onClick { if (enabled) onKey(key); enabled }
+                                    }
+                                    .pointerInput(key, enabled) {
+                                        if (enabled) detectTapGestures(onPress = {
+                                            onKey(key)
+                                            tryAwaitRelease()
+                                        })
+                                    },
+                                shape = RoundedCornerShape(18.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = if (enabled) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.38f)
+                            ) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(key) }
+                            }
                         }
                     }
                 }

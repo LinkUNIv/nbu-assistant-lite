@@ -130,8 +130,8 @@ fun SideRail(
                 Modifier.width(RailMetrics.Width).height(48.dp)
                     .acrylicPanel(RoundedCornerShape(24.dp))
                     .background(when (app.nbult.lite.browser.AttendanceSignal.state.collectAsState().value) {
-                        "loading" -> androidx.compose.ui.graphics.Color.Red.copy(alpha = 0.22f)
-                        "ready" -> androidx.compose.ui.graphics.Color.Green.copy(alpha = 0.20f)
+                        "loading" -> if (app.nbult.lite.BuildConfig.BUILD_KIND == "preview") androidx.compose.ui.graphics.Color.Transparent else androidx.compose.ui.graphics.Color.Red.copy(alpha = 0.22f)
+                        "ready" -> if (app.nbult.lite.BuildConfig.BUILD_KIND == "preview") androidx.compose.ui.graphics.Color.Transparent else androidx.compose.ui.graphics.Color.Green.copy(alpha = 0.20f)
                         else -> androidx.compose.ui.graphics.Color.Transparent
                     }, RoundedCornerShape(24.dp))
                     .combinedClickable(onLongClick = {
@@ -147,7 +147,7 @@ fun SideRail(
                 val active by app.nbult.lite.browser.AttendanceSignal.active.collectAsState()
                 val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "attendance")
                 val glow by pulse.animateFloat(0.35f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(900), androidx.compose.animation.core.RepeatMode.Reverse), label = "glow")
-                androidx.compose.material3.Text(if(active) "点名 ●" else "点名", color = MaterialTheme.colorScheme.primary.copy(alpha = if(active) glow else 1f))
+                androidx.compose.material3.Text(if(active) "● 点名" else "点名", color = MaterialTheme.colorScheme.primary.copy(alpha = if(active) glow else 1f))
             }
 
         }

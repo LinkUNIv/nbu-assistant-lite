@@ -4,6 +4,10 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.Density
 
 /**
  * 应用主题。
@@ -17,9 +21,16 @@ fun NbuLiteTheme(
     seed: SeedColor = SeedColor.Blue,
     content: @Composable () -> Unit
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) darkScheme(seed) else lightScheme(seed),
-        typography = Typography(),
-        content = content
-    )
+    // Themes must not add layout nodes: browser toolbar ComposeViews use wrap-content height.
+    val configuration = LocalConfiguration.current
+    val original = LocalDensity.current
+    val scale = minOf(configuration.screenWidthDp / 400f, configuration.screenHeightDp / 800f)
+        .coerceIn(0.85f, 1.10f)
+    CompositionLocalProvider(LocalDensity provides Density(original.density, scale)) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) darkScheme(seed) else lightScheme(seed),
+            typography = Typography(),
+            content = content
+        )
+    }
 }

@@ -22,7 +22,7 @@
 
 | 优先级 | 版本 | 主题 | 依赖 / 阻塞 |
 |---|---|---|---|
-| **P1** | 0.37.13 | 点名页：退出按钮、WebView 交还预加载、深色模式切换闪烁 | 见第十节 10.1 / 10.2 |
+| **P1** | 0.37.13 | 点名页：退出语义、交还预加载、路由即时切换 | 见第十节 10.1 / 10.2（闪烁已淡出，只做加固） |
 | P2 | 0.37.14 | 动效口径统一：四档时长、弹簧替代 tween、列表项动画 | 见第十四节 14.6 与 `docs/design/MOTION.md` |
 | P1 | — | 安全地基：域名白名单拦截器、网络安全配置口径 | 无 |
 | P1 | 0.38.0 | 课表解析词典外置（资源包第三批） | 需要先做解析自检 |
@@ -229,18 +229,24 @@
 - [ ] 仅在「预加载开启 + 当前 URL 仍在 `attendance.nbu.edu.cn`」时交还，其余照旧销毁
 - [ ] 交还前 `cancelSignInput()` 并复位 `AttendanceSignal`
 
-## 10.2 深色模式下切换时原网页闪现
+## 10.2 深色模式下切换时原网页闪现（已淡出，保留三项观察）
+
+**2026-11-10 复核：视觉层面已不闪。** 0.37.11 把 `root`、`browserFrame`、`web` 背景与
+`panel` 底色统一到 `attendanceBackground()`，即使网页先露出来也同色，跳变看不出来。
+下面五条成因里第 4 条已彻底解决，其余三条仍在，只是被同色底掩盖。
 
 共同点是**「先画后遮」**：自绘面板是事后盖上去的，中间总有一段时间网页是可见的。
 按可能性排序：
 
-| # | 原因 | 证据 |
-|---|---|---|
-| 1 | 切换时机只由轮询决定 | `poll` 在课表页 250ms、其他页 1000ms 一次；考勤站是 Nuxt SPA，站内跳转不触发 `onPageStarted`，整页加载那个时机拿不到 |
-| 2 | `!trusted()` 无条件 `reveal()` | `NativeAuthentication.inspect()` 里「非认证页就把 WebView 显形」，任何中间页都会露出原网页，下一拍再遮回去，本身就是一次闪烁 |
-| 3 | 用 `web.alpha` 做隐藏 | WebView 由渲染进程合成，`setAlpha` 在某些系统 WebView 版本上晚一帧生效；它也不是硬遮挡 |
-| 4 | 底色有两个来源 | `attendanceBackground()` 读 SharedPreferences 快照（`MainActivity` 的 `SideEffect` 写入），Compose 侧读 settings Flow。进程被直接拉起时快照可能还没写，窗口与 WebView 底色会按系统深浅取，与用户强制的深色不一致 |
-| 5 | 签到成功整页 `loadUrl` | 回课表用 `loadUrl(SCHEDULE)`，Nuxt 应用整个重启，中间是白屏 |
+| # | 原因 | 证据 | 现状（11-10） |
+|---|---|---|---|
+| 1 | 切换时机只由轮询决定 | `poll` 在课表页 250ms、其他页 1000ms 一次；考勤站是 Nuxt SPA，站内跳转不触发 `onPageStarted` | ❌ 仍在。`onConsoleMessage` 只记日志，没调 `inspect()` |
+| 2 | `!trusted()` 无条件 `reveal()` | 「非认证页就把 WebView 显形」，中间页会露出原网页，下一拍再遮回去 | ⚠️ 收敛为 `if (panel != null) reveal()`，仍会在面板撤销后露一次 |
+| 3 | 用 `web.alpha` 做隐藏 | `setAlpha` 在某些 WebView 版本晚一帧生效，也不是硬遮挡 | ❌ 仍是唯一手段；同色底让它看不出来 |
+| 4 | 底色有两个来源 | 快照未写时窗口与 WebView 会按系统深浅取色 | ✅ **已解决**：0.37.11 四处统一走 `attendanceBackground()` |
+| 5 | 签到成功整页 `loadUrl` | 回课表用 `loadUrl(SCHEDULE)`，Nuxt 整个重启 | ❌ 仍在。同色底后是「深色空屏」而非白屏 |
+
+**以下为兜底方案，真机再有残留才做**：
 
 - [ ] **加不透明遮罩层**：`browserFrame` 内、WebView 之上放一个普通 `View`，底色跟主题，
       默认可见，只有 `reveal()` 才移开。不再依赖 `web.alpha` 隐藏
@@ -249,7 +255,7 @@
       `inspect()`，把延迟从「最多 1 秒」压到「一帧」，轮询只作兜底
 - [ ] **`!trusted()` 不再自动 `reveal()`**：改为显示「需要在原页面继续」面板，
       用户点按钮才显形，与「查看学校原页面」是同一个动作
-- [ ] **配色单一来源**：`AttendanceTheme` 的 `dark` 值统一驱动
+- [x] **配色单一来源**：`AttendanceTheme` 的 `dark` 值统一驱动（0.37.11）
       `root` / `browserFrame` / `web` / 窗口底色，去掉 `attendanceBackground()` 的快照读法
 - [ ] **签到成功改用页面内返回**：`history.back()` 或站内路由，不整页重载
 

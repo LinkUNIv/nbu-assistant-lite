@@ -236,6 +236,8 @@ jobs:
               "channel": "preview" if "-Preview" in tag else "release",
               "apkUrl": f"{base}/{os.path.basename(apk)}",
               "sha256": sha,
+              # 应用内用它在下载前给出体积预告（「下载约 23 MB」），不参与校验
+              "size": os.path.getsize(apk),
               "notes": user_notes(open(notes_path, encoding="utf-8").read() if os.path.exists(notes_path) else ""),
           }
           with open('apk/manifest.json', 'w', encoding='utf-8') as f:

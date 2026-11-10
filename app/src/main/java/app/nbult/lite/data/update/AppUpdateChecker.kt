@@ -19,7 +19,9 @@ data class UpdateInfo(
     val versionName: String,
     val apkUrl: String,
     val sha256: String,
-    val notes: String
+    val notes: String,
+    /** 安装包字节数，只用于在弹窗里给出「下载约 23 MB」这类预告。0 表示清单没提供。 */
+    val size: Long = 0L
 )
 
 sealed interface UpdateState {
@@ -131,7 +133,8 @@ object AppUpdateChecker {
                     versionName = json.optString("versionName", ""),
                     apkUrl = apkUrl,
                     sha256 = digest,
-                    notes = json.optString("notes", "")
+                    notes = json.optString("notes", ""),
+                    size = json.optLong("size", 0L)
                 )
             )
         }.getOrElse {

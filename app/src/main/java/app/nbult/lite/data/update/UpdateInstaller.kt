@@ -11,12 +11,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 
 /** 一次下载安装的进度。`Idle` 之外的每个状态都代表「上一次点过更新」。 */
 sealed interface InstallState {
     data object Idle : InstallState
 
     data class Downloading(val percent: Int, val versionName: String) : InstallState
+
+    /**
+     * 下载并校验完成，等用户点「安装」。
+     *
+     * 不直接唤起系统安装器：改成「检测到就下载」之后，用户很可能正在看课表，
+     * 被安装弹窗打断的代价比多点一次大。
+     */
+    data class ReadyToInstall(val versionName: String, val apk: File) : InstallState
 
     /** 已交给系统安装器，正在等用户在系统弹窗里确认。 */
     data class HandedOff(val versionName: String) : InstallState
@@ -52,29 +61,66 @@ class UpdateInstaller(private val context: Context) {
         job = scope.launch {
             _state.value = InstallState.Downloading(0, info.versionName)
             val startedAt = System.currentTimeMillis()
+            var ready: File? = null
             val failure = runCatching {
                 val apk = AppUpdateChecker.download(appContext, info) { percent ->
                     _state.value = InstallState.Downloading(percent, info.versionName)
                 }
-                when {
-                    // 签名不一致单独判：系统只会给出「安装失败(-7)」，不说人话
-                    ApkInstaller.signatureMismatch(appContext, apk) ->
-                        "与已安装版本签名不同，需先卸载再安装"
-
-                    !ApkInstaller.install(appContext, apk) ->
-                        "请在系统设置中允许安装未知应用"
-
-                    else -> null
+                // 签名不一致单独判：系统只会给出「安装失败(-7)」，不说人话
+                if (ApkInstaller.signatureMismatch(appContext, apk)) {
+                    "与已安装版本签名不同，需先卸载再安装"
+                } else {
+                    ready = apk
+                    null
                 }
             }.getOrElse { it.message ?: "下载失败" }
 
-            if (failure == null) {
-                AppLog.log("Update", "已交给系统安装 ${info.versionName} 耗时=${(System.currentTimeMillis() - startedAt) / 1000}s")
-                _state.value = InstallState.HandedOff(info.versionName)
+            val apkReady = ready
+            if (failure == null && apkReady != null) {
+                AppLog.log(
+                    "Update",
+                    "下载完成待安装 ${info.versionName} ${apkReady.length() / 1024}KB 耗时=${(System.currentTimeMillis() - startedAt) / 1000}s"
+                )
+                _state.value = InstallState.ReadyToInstall(info.versionName, apkReady)
             } else {
                 AppLog.log("Update", "下载或安装失败 ${info.versionName}：$failure")
-                _state.value = InstallState.Failed(failure)
+                _state.value = InstallState.Failed(failure ?: "下载失败")
             }
+        }
+    }
+
+    /**
+     * 已经下好的包。关掉弹窗、甚至重启进程之后，用户还能从这里接着装 ——
+     * 否则「下载完成不自动装」会变成「下了装不了」。
+     */
+    fun cachedApk(versionCode: Int): File? {
+        if (versionCode <= 0) return null
+        val file = File(File(appContext.cacheDir, "update"), "nbu-lite-$versionCode.apk")
+        return file.takeIf { it.exists() && it.length() > 0 }
+    }
+
+    /** 装一个已经下好的包（重启后的入口）。 */
+    fun installCached(versionCode: Int, versionName: String): Boolean {
+        val apk = cachedApk(versionCode) ?: return false
+        if (ApkInstaller.signatureMismatch(appContext, apk)) {
+            _state.value = InstallState.Failed("与已安装版本签名不同，需先卸载再安装")
+            return false
+        }
+        _state.value = InstallState.ReadyToInstall(versionName, apk)
+        installNow()
+        return true
+    }
+
+    /** 用户点了「安装」：这时候才唤起系统安装器。 */
+    fun installNow() {
+        val ready = _state.value as? InstallState.ReadyToInstall ?: return
+        val ok = ApkInstaller.install(appContext, ready.apk)
+        if (ok) {
+            AppLog.log("Update", "已交给系统安装 ${ready.versionName}")
+            _state.value = InstallState.HandedOff(ready.versionName)
+        } else {
+            AppLog.log("Update", "唤起安装器失败 ${ready.versionName}")
+            _state.value = InstallState.Failed("请在系统设置中允许安装未知应用")
         }
     }
 

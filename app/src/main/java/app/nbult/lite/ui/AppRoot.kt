@@ -177,14 +177,16 @@ fun AppRoot() {
             checkAndPrompt()
         }
     }
+    val install by container.updateInstaller.state.collectAsStateWithLifecycle()
     pendingUpdate?.let { info ->
+        // 下载进度就在弹窗里看，不再跳去关于页；关掉弹窗下载也继续（状态在容器上）
         UpdateDialog(
             info = info,
-            onConfirm = {
+            install = install,
+            onDownload = { container.updateInstaller.start(info) },
+            onInstall = {
+                container.updateInstaller.installNow()
                 pendingUpdate = null
-                // 先关弹窗再跳转：下载由应用容器持有，不依赖弹窗还活着
-                navController.navigateOnce("settings/about")
-                container.updateInstaller.start(info)
             },
             onCancel = { pendingUpdate = null }
         )

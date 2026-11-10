@@ -92,8 +92,13 @@ internal fun AttendancePreload(state: TimetableUiState) {
         state.periods.find { it.idx == entry.slot.endSection }?.endTime.orEmpty(), attendanceSessionKey(entry)) }
         .filter { !AttendanceSignedSessions.contains(context, today, it.sessionKey) } }
     val names = targets.map { attendanceCourseName(it.name) }.toSet()
+    // AndroidView 的 factory 只会跑一次，闭包里必须能读到**最新**的课程列表。
+    // 以前靠 key(targets, foreground) 强制重建来「传新值」，代价是每次切前后台
+    // 都销毁并重新加载整个 Nuxt 应用；现在改为传引用，只在预加载开关变化时重建。
+    val currentTargets by rememberUpdatedState(targets)
+    val currentNames by rememberUpdatedState(names)
     DisposableEffect(names) { AttendanceSignal.active.value = false; if(names.isEmpty()) AttendanceSignal.state.value = "idle"; onDispose { AttendanceSignal.active.value = false } }
-    if (names.isNotEmpty()) key(targets, foreground) {
+    if (enabled) {
         var auth by remember { mutableStateOf<NativeAuthentication?>(null) }
         var browser by remember { mutableStateOf<WebView?>(null) }
         LaunchedEffect(browser) {
@@ -118,20 +123,20 @@ internal fun AttendancePreload(state: TimetableUiState) {
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
                 var lastDetection = ""
-                app.nbult.lite.util.AppLog.log("AttendancePreload", "开始匹配当前课程：${names.joinToString()}")
+                app.nbult.lite.util.AppLog.log("AttendancePreload", "开始匹配当前课程：${currentNames.joinToString()}")
                 auth = NativeAuthentication(web, this, silent = true) { rows ->
-                    targets.forEach { target ->
+                    currentTargets.forEach { target ->
                         val signed = rows.filter { it.signed }.map { it.copy(open = true, signed = false) }
                         // With duplicate local names, require the web time to identify the occurrence.
-                        val sameNameCount = targets.count { attendanceCourseName(it.name) == attendanceCourseName(target.name) }
+                        val sameNameCount = currentTargets.count { attendanceCourseName(it.name) == attendanceCourseName(target.name) }
                         val identifiable = if (sameNameCount > 1) signed.filter { it.details.contains(target.start) && it.details.contains(target.end) } else signed
                         if (matchingAttendanceCourse(identifiable, listOf(target)) != null) AttendanceSignedSessions.mark(context,today,target)
                     }
-                    val remaining = targets.filterNot { AttendanceSignedSessions.contains(context,today,it.sessionKey) }
+                    val remaining = currentTargets.filterNot { AttendanceSignedSessions.contains(context,today,it.sessionKey) }
                     val matching = matchingAttendanceCourse(rows, remaining)
                     if (rows.isNotEmpty()) AttendanceSignal.state.value = "ready"
                     web.evaluateJavascript("window.__nbuAuthenticated===true") { if (it == "true" && !PreloadedPage.transferring && PreloadedPage.web === web) AttendanceSignal.state.value = "ready" }
-                    val detection = "目标=${names.joinToString()}；列表=" + rows.joinToString { "${it.title}[open=${it.open},signed=${it.signed},status=${it.status}]" }
+                    val detection = "目标=${currentNames.joinToString()}；列表=" + rows.joinToString { "${it.title}[open=${it.open},signed=${it.signed},status=${it.status}]" }
                     // 列表为空说明页面还在加载，这种中间态不算「变化」。
                     // 之前空/满交替，每 15 秒就刷两行，一小时 480 行，日志上限只有 500 条。
                     if (rows.isNotEmpty() && lastDetection != detection) {

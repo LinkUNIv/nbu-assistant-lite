@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.surfaceColorAtElevation
@@ -120,17 +121,27 @@ internal fun VersionEntry(badge: Boolean) {
     val install by installer.state.collectAsStateWithLifecycle()
 
     var state by remember { mutableStateOf<VersionUi>(VersionUi.Idle) }
+    // 查文件系统算一次就够，别每次重组都 stat 一遍
+    val cachedReady = remember(latestCode, install) { installer.cachedApk(latestCode.toInt()) }
+    // 查到新版本就直接弹窗（含更新内容与体积），不再停在「发现新版本」这种什么都不发生的状态
+    var dialogInfo by remember { mutableStateOf<UpdateInfo?>(null) }
 
     val (title, subtitle) = when (val running = install) {
         is InstallState.Downloading -> "正在下载 v${running.versionName}" to "${running.percent}%"
+        is InstallState.ReadyToInstall -> "可安装 v${running.versionName}" to "下载已完成，点击安装"
         is InstallState.HandedOff -> "等待系统安装" to "请在系统弹窗中确认安装 v${running.versionName}"
         is InstallState.Failed -> "重试更新" to running.message
         InstallState.Idle -> when (val current = state) {
             VersionUi.Idle ->
-                if (latestCode > BuildConfig.VERSION_CODE) {
-                    "发现新版本 $latestName" to "点击下载并安装"
-                } else {
-                    "检查更新" to "当前 v${BuildConfig.VERSION_NAME}"
+                when {
+                    // 上次下好但没装（关弹窗或重启过），这里给回入口，否则等于「下了装不了」
+                    latestCode > BuildConfig.VERSION_CODE && cachedReady != null ->
+                        "可安装 v$latestName" to "下载已完成，点击安装"
+
+                    latestCode > BuildConfig.VERSION_CODE ->
+                        "发现新版本 $latestName" to "点击查看并下载"
+
+                    else -> "检查更新" to "当前 v${BuildConfig.VERSION_NAME}"
                 }
 
             VersionUi.Checking -> "检查更新" to "正在检查…"
@@ -147,21 +158,35 @@ internal fun VersionEntry(badge: Boolean) {
             modifier = Modifier.weight(1f),
             onClick = {
                 when {
+                    // 下载完成：这时才装
+                    install is InstallState.ReadyToInstall -> installer.installNow()
+                    // 内存里没状态但有包：装缓存里的那份
+                    install is InstallState.Idle && state is VersionUi.Idle && cachedReady != null -> {
+                        installer.installCached(latestCode.toInt(), latestName)
+                    }
                     // 正在跑：连点不该再开一份
                     install is InstallState.Downloading || install is InstallState.HandedOff -> Unit
-                    // 上一次失败：先清结果，再重来一次
+                    // 上一次失败：先清结果，再重新查一次
                     install is InstallState.Failed -> {
                         installer.reset()
-                        if (state is VersionUi.Found) (state as VersionUi.Found).let { installer.start(it.info) }
+                        state = VersionUi.Checking
+                        scope.launch {
+                            state = when (val result = UpdateCenter.refresh(settings)) {
+                                is UpdateState.Available -> { dialogInfo = result.info; VersionUi.Found(result.info) }
+                                UpdateState.UpToDate -> VersionUi.Latest
+                                is UpdateState.Failed -> VersionUi.Error(result.message)
+                            }
+                        }
                     }
-                    // 已经查到：直接开下载，下载在容器里跑
-                    state is VersionUi.Found -> installer.start((state as VersionUi.Found).info)
+                    // 已经查到：弹窗，由用户点「下载」
+                    state is VersionUi.Found -> dialogInfo = (state as VersionUi.Found).info
                     state is VersionUi.Checking -> Unit
                     else -> {
                         state = VersionUi.Checking
                         scope.launch {
                             state = when (val result = UpdateCenter.refresh(settings)) {
-                                is UpdateState.Available -> VersionUi.Found(result.info)
+                                // 检查到就弹窗 —— 内容、体积、下载按钮一次给全
+                                is UpdateState.Available -> { dialogInfo = result.info; VersionUi.Found(result.info) }
                                 UpdateState.UpToDate -> VersionUi.Latest
                                 is UpdateState.Failed -> VersionUi.Error(result.message)
                             }
@@ -174,6 +199,15 @@ internal fun VersionEntry(badge: Boolean) {
             Spacer(Modifier.width(8.dp))
             RedDot()
         }
+    }
+    dialogInfo?.let { info ->
+        UpdateDialog(
+            info = info,
+            install = install,
+            onDownload = { installer.start(info) },
+            onInstall = { installer.installNow() },
+            onCancel = { dialogInfo = null }
+        )
     }
 }
 
@@ -280,6 +314,13 @@ internal fun PackEntry() {
 
 // ---- 更新弹窗 ----
 
+/** 清单没给体积时不要编一个数字，如实说不知道。 */
+private fun formatApkSize(bytes: Long): String = when {
+    bytes <= 0L -> "安装包大小未知"
+    bytes >= 1024 * 1024 -> "安装包 ${"%.1f".format(bytes / 1024.0 / 1024.0)} MB"
+    else -> "安装包 ${bytes / 1024} KB"
+}
+
 /**
  * 发现新版本时的弹窗。
  *
@@ -289,7 +330,9 @@ internal fun PackEntry() {
 @Composable
 internal fun UpdateDialog(
     info: UpdateInfo,
-    onConfirm: () -> Unit,
+    install: InstallState,
+    onDownload: () -> Unit,
+    onInstall: () -> Unit,
     onCancel: () -> Unit
 ) {
     val settings = LocalAppContainer.current.settings
@@ -314,6 +357,13 @@ internal fun UpdateDialog(
                 Text(
                     text = "发现新版本 ${info.versionName}",
                     style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(Modifier.height(2.dp))
+                // 体积写在标题下面：下载前就该知道要花多少流量，而不是等进度条出现才发现
+                Text(
+                    text = formatApkSize(info.size),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(10.dp))
                 // 说明是 Markdown（Release 正文原样同步）。以前直接当纯文本塞进 Text，
@@ -349,22 +399,51 @@ internal fun UpdateDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                val downloading = install as? InstallState.Downloading
+                if (downloading != null) {
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { downloading.percent / 100f },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = {
                         rememberChoice()
-                        AppLog.log("Update", "取消更新 ${info.versionName}")
+                        AppLog.log("Update", "关闭更新弹窗 ${info.versionName}")
                         onCancel()
-                    }) { Text("取消") }
+                    }) { Text(if (downloading != null) "后台下载" else "取消") }
 
                     Spacer(Modifier.width(4.dp))
-                    Button(onClick = {
-                        rememberChoice()
-                        AppLog.log("Update", "确认更新 ${info.versionName}")
-                        onConfirm()
-                    }) { Text("确认") }
+                    Button(
+                        enabled = install !is InstallState.HandedOff,
+                        onClick = {
+                            rememberChoice()
+                            when (install) {
+                                is InstallState.ReadyToInstall -> {
+                                    AppLog.log("Update", "安装 ${info.versionName}")
+                                    onInstall()
+                                }
+                                is InstallState.Downloading -> Unit
+                                else -> {
+                                    AppLog.log("Update", "开始下载 ${info.versionName}")
+                                    onDownload()
+                                }
+                            }
+                        }
+                    ) {
+                        Text(
+                            when (install) {
+                                is InstallState.Downloading -> "下载中 ${install.percent}%"
+                                is InstallState.ReadyToInstall -> "安装"
+                                is InstallState.HandedOff -> "等待系统安装"
+                                else -> "下载"
+                            }
+                        )
+                    }
                 }
             }
         }

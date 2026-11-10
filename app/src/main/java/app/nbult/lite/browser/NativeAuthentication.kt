@@ -205,6 +205,18 @@ internal class NativeAuthentication(private val web: WebView, private val contai
         }
     }
     fun pause() { cancelSignInput(); handler.removeCallbacks(poll) }
+
+    /**
+     * 页面内路由变了（SPA 的 pushState / replaceState / popstate / hashchange）。
+     *
+     * 考勤站是 Nuxt 单页应用，站内跳转不会触发 `onPageStarted`，以前只能靠轮询
+     * （课表页 250ms、其他页 1000ms）发现，最坏要等一秒才盖上自绘面板。
+     * 观察脚本已经在 console 里上报这些事件，这里直接借它把延迟压到一帧。
+     */
+    fun routeChanged() {
+        if (useOriginal) return
+        inspect()
+    }
     fun destroy() { cancelSignInput(); handler.removeCallbacksAndMessages(null); hide() }
     private fun trusted() = AttendanceLandingPolicy.isAuthentication(web.url.orEmpty())
     private fun hide() { panel?.let { it.disposeComposition(); container.removeView(it) }; panel = null; mode = "" }

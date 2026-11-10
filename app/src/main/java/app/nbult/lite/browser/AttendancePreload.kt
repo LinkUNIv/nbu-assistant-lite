@@ -27,7 +27,33 @@ internal object PreloadedPage {
     var auth: NativeAuthentication? = null
     val claimed = mutableSetOf<WebView>()
     var transferring = false
+    /** 隐形宿主。交还时要把 WebView 塞回这里，所以得留一份引用。 */
+    var host: FrameLayout? = null
+
     fun claim() { if (web != null) { transferring = true; web?.let { claimed.add(it) }; auth?.destroy(); (web?.parent as? android.view.ViewGroup)?.removeView(web) } }
+
+    /**
+     * 交还：把 WebView 从点名页摘下、塞回隐形宿主，下次进点名不必重新加载整个 Nuxt 应用。
+     *
+     * 返回 false 表示宿主已经不在（预加载关闭或组合已销毁），调用方应照旧销毁 WebView。
+     */
+    fun release(web: WebView): Boolean {
+        val target = host ?: return false
+        if (!target.isAttachedToWindow) return false
+        // 活动侧设置的两个客户端持有 Activity 引用；不解除的话，这一页留在宿主里
+        // 会一直把已销毁的 Activity 吊着。下次 claim 时活动会重新设置。
+        web.webViewClient = WebViewClient()
+        web.webChromeClient = WebChromeClient()
+        (web.parent as? android.view.ViewGroup)?.removeView(web)
+        // 换回应用上下文：沿用 Activity 当 baseContext 会把整页泄漏到下一次打开
+        (web.context as? android.content.MutableContextWrapper)?.baseContext = target.context.applicationContext
+        web.alpha = 0f
+        target.addView(web, FrameLayout.LayoutParams(-1, -1))
+        this.web = web
+        transferring = false
+        claimed.remove(web)
+        return true
+    }
 }
 
 internal object AttendanceSignal { var courseName: String? = null; val state = MutableStateFlow("idle"); val active = MutableStateFlow(false) }
@@ -82,6 +108,7 @@ internal fun AttendancePreload(state: TimetableUiState) {
         }
         AndroidView(modifier = Modifier.size(1.dp).alpha(0f), factory = { context ->
             FrameLayout(context).apply {
+                PreloadedPage.host = this
                 importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                 val web = WebView(android.content.MutableContextWrapper(context)); browser = web
                 PreloadedPage.web = web; PreloadedPage.transferring = false
@@ -154,6 +181,8 @@ internal fun AttendancePreload(state: TimetableUiState) {
             }
         }, onRelease = {
             auth?.destroy()
+            // 宿主随组合一起销毁了，交还的落点没了，下次只能重建
+            PreloadedPage.host = null
             if (browser !in PreloadedPage.claimed) {
                 browser?.stopLoading(); browser?.destroy()
                 if (PreloadedPage.web === browser) PreloadedPage.web = null

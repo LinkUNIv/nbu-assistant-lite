@@ -3,6 +3,8 @@ package app.nbult.lite.browser
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.graphics.toArgb
@@ -38,7 +40,10 @@ class AttendanceBrowserActivity : ComponentActivity() {
     private val createLog = 704
     private var authenticationSeen = false
     private var returnApplied = false
+
     companion object {
+        /** 站内路由变化的四类事件：观察脚本在 console 里以 NBU_TRACE 上报。 */
+        private val ROUTE_KINDS = setOf("pushState", "replaceState", "popstate", "hashchange")
         private val lock = Any()
         private val logExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "attendance-log").apply { isDaemon = true } }
         /** 这些事件除写 JSONL 外，同时往 AppLog 落一条摘要 —— 否则用户导出工作日志时看不见点名模块。 */
@@ -94,20 +99,43 @@ class AttendanceBrowserActivity : ComponentActivity() {
                         }
                     }
                     Surface(color = MaterialTheme.colorScheme.surface) {
-                        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                TextButton(onClick = { if (web.canGoBack()) web.goBack() else finish() }) { Text("返回") }
-                                TextButton(onClick = { web.reload() }) { Text("刷新") }
-                                TextButton(onClick = {
-                                    startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-                                        addCategory(Intent.CATEGORY_OPENABLE); type = "text/plain"
-                                        putExtra(Intent.EXTRA_TITLE, "attendance-browser-${System.currentTimeMillis()}.jsonl")
-                                    }, createLog)
-                                }) { Text("导出日志") }
-                            }
-                            Text(status, style = MaterialTheme.typography.labelSmall,
+                        // 单开一页却把「返回」做成网页后退，用户要连按几次才回得到课表。
+                        // 这里改成「关闭」直接结束；网页相关操作收进溢出菜单，主位只留一个动作。
+                        var menuOpen by remember { mutableStateOf(false) }
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { finish() }) { Text("关闭") }
+                            Text(
+                                text = status,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(horizontal = 6.dp)
+                            )
+                            Box {
+                                TextButton(onClick = { menuOpen = true }) { Text("更多") }
+                                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text("网页后退") },
+                                        onClick = { menuOpen = false; if (web.canGoBack()) web.goBack() }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("刷新") },
+                                        onClick = { menuOpen = false; web.reload() }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("导出日志") },
+                                        onClick = { menuOpen = false; exportDiagnostics() }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("用系统浏览器打开") },
+                                        onClick = { menuOpen = false; openInBrowser() }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -139,7 +167,13 @@ class AttendanceBrowserActivity : ComponentActivity() {
         setContentView(root)
         root.requestApplyInsets()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() { if (web.canGoBack()) web.goBack() else finish() }
+            override fun handleOnBackPressed() {
+                // 单开一页却沿用网页历史，会让人「退不回课表」。落在课表页时按一次就退出，
+                // 其余页面仍是网页后退 —— 用户想回上一页时不该被踢出整个点名。
+                val onSchedule = web.url?.substringBefore('?')?.trimEnd('/')
+                    ?.equals(AttendanceLandingPolicy.SCHEDULE.trimEnd('/')) == true
+                if (!onSchedule && web.canGoBack()) web.goBack() else finish()
+            }
         })
         web.settings.apply {
             javaScriptEnabled = true; domStorageEnabled = true; userAgentString = BrowserIdentity.ua
@@ -190,11 +224,19 @@ class AttendanceBrowserActivity : ComponentActivity() {
         web.webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(message: ConsoleMessage): Boolean {
                 // Never persist arbitrary site console messages: they can contain credentials.
-                if (message.message().startsWith("NBU_TRACE:")) runCatching {
-                    val obj = JSONObject(message.message().removePrefix("NBU_TRACE:"))
-                    record("js_" + obj.optString("kind").take(30), obj.optString("url"),
-                        "method=${obj.optString("method").take(12)};status=${obj.optInt("status")};duration=${obj.optLong("duration")};tag=${obj.optString("tag").take(20)}" +
-                            if (app.nbult.lite.BuildConfig.DEBUG) ";diagnostic=${obj.optString("diagnostic").take(90000)}" else "")
+                val text = message.message()
+                if (text.startsWith("NBU_TRACE:")) {
+                    val obj = runCatching { JSONObject(text.removePrefix("NBU_TRACE:")) }.getOrNull()
+                    if (obj != null) {
+                        val kind = obj.optString("kind")
+                        // 站内跳转不触发 onPageStarted，这里把判定拉到现在，不再等下一次轮询
+                        if (kind in ROUTE_KINDS) nativeAuth.routeChanged()
+                        record(
+                            "js_" + kind.take(30), obj.optString("url"),
+                            "method=${obj.optString("method").take(12)};status=${obj.optInt("status")};duration=${obj.optLong("duration")};tag=${obj.optString("tag").take(20)}" +
+                                if (app.nbult.lite.BuildConfig.DEBUG) ";diagnostic=${obj.optString("diagnostic").take(90000)}" else ""
+                        )
+                    }
                 }
                 else if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
                     record("console_error", message.sourceId(), "line=${message.lineNumber()};message=redacted")
@@ -237,7 +279,43 @@ class AttendanceBrowserActivity : ComponentActivity() {
     }
     override fun onPause() { nativeAuth.pause(); CookieManager.getInstance().flush(); web.onPause(); super.onPause() }
     override fun onResume() { super.onResume(); if (::web.isInitialized) { web.onResume(); nativeAuth.resume() } }
-    override fun onDestroy() { nativeAuth.destroy(); web.stopLoading(); web.destroy(); super.onDestroy() }
+    private fun exportDiagnostics() {
+        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE); type = "text/plain"
+            putExtra(Intent.EXTRA_TITLE, "attendance-browser-${System.currentTimeMillis()}.jsonl")
+        }, createLog)
+    }
+
+    private fun openInBrowser() {
+        val url = web.url ?: return
+        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    }
+
+    override fun onDestroy() {
+        nativeAuth.destroy()
+        if (!releaseToPreload()) {
+            PreloadedPage.claimed.remove(web)
+            web.stopLoading(); web.destroy()
+        }
+        super.onDestroy()
+    }
+
+    /**
+     * 把 WebView 交还给预加载宿主，而不是销毁。
+     *
+     * 以前 `onDestroy` 无条件 `web.destroy()`，下次进点名要重新加载整个 Nuxt 应用 ——
+     * 预加载等于白做。只在「页面还在考勤站、且不是认证页」时交还：
+     * 认证页带着证书与表单状态，留在后台既没用也不安全。
+     */
+    private fun releaseToPreload(): Boolean {
+        if (isChangingConfigurations) return false   // 旋转重建不交还，交给系统保存/恢复
+        val url = web.url ?: return false
+        if (!url.startsWith("https://attendance.nbu.edu.cn")) return false
+        if (AttendanceLandingPolicy.isAuthentication(url)) return false
+        AttendanceSignal.state.value = "idle"
+        AttendanceSignal.active.value = false
+        return PreloadedPage.release(web)
+    }
     private val OBSERVER by lazy { """
         (() => {
           if (window.__nbuTrace) return; window.__nbuTrace = true;

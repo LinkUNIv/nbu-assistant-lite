@@ -27,6 +27,10 @@ import java.util.Locale
  */
 object ReminderNotifier {
 
+    /** 允许的最大提前量。课前的两档是 30 / 15 分钟，留足延迟余量后仍超过这个数就是排错了。 */
+    private const val MAX_LEAD_MINUTES = 90
+
+
     const val CHANNEL_REMINDER = "class_reminder"
     private const val CHANNEL_LIVE = "class_live"
     const val EXTRA_WEEK = "week"
@@ -140,6 +144,16 @@ object ReminderNotifier {
             0
         }
 
+        // 早到守卫：最长提前量是 30 分钟，留出延迟余量后 90 分钟仍属异常。
+        // 0.37.9 实测过一次提前 805 分钟触发 —— 那种通知除了让人以为改课了，没有任何价值。
+        if (minutesLeft > MAX_LEAD_MINUTES) {
+            AppLog.log(
+                "Reminder",
+                "闹钟早到：距上课 $minutesLeft 分钟，已忽略（预期 ≤ $MAX_LEAD_MINUTES）"
+            )
+            return
+        }
+
         ensureChannel(context)
 
         val sections = if (startSection > 0 && endSection >= startSection) {
@@ -186,7 +200,7 @@ object ReminderNotifier {
         }
         runCatching { manager.notify(ID_REMINDER, builder.build()) }
             .onFailure { AppLog.log("Reminder", "发通知失败: ${it.message}") }
-        AppLog.log("Reminder", "已提醒 $minutesLeft 分钟 · $name $sections")
+        AppLog.log("Reminder", "已提醒：距上课 $minutesLeft 分钟 · $name $sections")
     }
 
     /** 立刻发一条测试通知：用来区分"代码没发出去"和"系统把它静默了"。 */

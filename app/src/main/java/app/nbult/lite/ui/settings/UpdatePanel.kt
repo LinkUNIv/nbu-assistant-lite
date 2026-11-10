@@ -21,6 +21,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -396,15 +397,16 @@ private fun NotesScrollArea(content: @Composable ColumnScope.() -> Unit) {
             content = content
         )
         if (canScroll) {
+            // 渐变的终点必须和弹窗真实底色一致：外层 Surface 带 tonalElevation = 3.dp，
+            // 直接拿 colorScheme.surface 会在滚动时露出一条浅色接缝
+            val fadeTo = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .height(40.dp)
                     .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Transparent, MaterialTheme.colorScheme.surface)
-                        )
+                        Brush.verticalGradient(listOf(Color.Transparent, fadeTo))
                     )
             )
             Text(

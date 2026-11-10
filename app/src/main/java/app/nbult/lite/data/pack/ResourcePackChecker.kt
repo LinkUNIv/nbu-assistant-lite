@@ -80,7 +80,8 @@ object ResourcePackChecker {
             val local = ResourcePackStore.state(context)
 
             if (!force && now - local.lastAttemptAt < MIN_INTERVAL_MS) {
-                AppLog.log("Pack", "距上次检查不足 1 小时，本次跳过")
+                val minutes = (now - local.lastAttemptAt) / 60_000L
+                AppLog.log("Pack", "距上次检查 $minutes 分钟，未满 1 小时，本次跳过")
                 return@runCatching PackCheckResult.Skipped
             }
             // 每次尝试都记时间：界面上的「上次检查」必须反映「试过」，而不是「成功过」

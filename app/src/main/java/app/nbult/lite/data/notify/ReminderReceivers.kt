@@ -29,9 +29,16 @@ class ClassReminderReceiver : BroadcastReceiver() {
         }
         if (intent.action != ClassReminderScheduler.ACTION_FIRE) return
         // 先记一条：没有这条就说明闹钟压根没触发（被系统掐了），有这条但没通知才是渲染问题
+        val kind = intent.getStringExtra(ClassReminderScheduler.EXTRA_KIND)
+        val planned = intent.getLongExtra(ClassReminderScheduler.EXTRA_PLANNED_AT, 0L)
+        // 偏离预定时刻要单独记：为 0 说明准点，正的分钟数是系统延迟投递，
+        // 负的大数字则是排程算错（0.37.9 见过提前 805 分钟触发的那种）
+        // 用系统真实时间：闹钟按 RTC 投递，而 AppClock 带「校时」偏移，
+        // 拿它算偏差会把偏移量算进去
+        val drift = if (planned > 0L) (System.currentTimeMillis() - planned) / 60_000L else null
         AppLog.log(
             "Reminder",
-            "闹钟触发 kind=${intent.getStringExtra(ClassReminderScheduler.EXTRA_KIND)}"
+            "闹钟触发 kind=$kind" + (drift?.let { " · 偏离预定 ${it} 分钟" } ?: "")
         )
         val pending = goAsync()
         val appContext = context.applicationContext

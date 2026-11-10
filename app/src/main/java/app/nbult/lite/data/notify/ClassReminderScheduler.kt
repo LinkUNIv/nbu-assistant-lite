@@ -47,6 +47,9 @@ object ClassReminderScheduler {
     const val EXTRA_END_AT = "end_at"
     const val EXTRA_SAME_TIME = "same_time"
 
+    /** 预定触发时刻。触发时与实际时间相减，就能看出是系统延迟投递还是我们自己排错。 */
+    const val EXTRA_PLANNED_AT = "planned_at"
+
     const val KIND_LEAD_30 = "lead30"
     const val KIND_LEAD_15 = "lead15"
     const val KIND_START = "class_start"
@@ -167,6 +170,7 @@ object ClassReminderScheduler {
             putExtra(EXTRA_START_AT, next.startAt)
             putExtra(EXTRA_END_AT, next.endAt)
             putExtra(EXTRA_SAME_TIME, next.sameTimeCount)
+            putExtra(EXTRA_PLANNED_AT, at)
             putExtra(ReminderNotifier.EXTRA_WEEK, next.week)
         }
         val pi = PendingIntent.getBroadcast(

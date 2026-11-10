@@ -176,12 +176,23 @@ object AppLog {
                 val frames = line.substringAfter("帧数=").substringBefore(' ').toIntOrNull() ?: 0
                 if (pct == null) null else Triple(pct, frames, token)
             }
+        // 更新检查在摘要里单列一行：日志正文里的 [Update] 很分散（跳过 / 已是最新 / 失败），
+        // 不汇总的话，用户翻日志只能看到「装完弹了一次说明」，以为检查没跑
+        val updateLines = texts.filter { it.contains("[Update]") && !it.contains("展示更新内容") }
+        val updateState = when {
+            updateLines.isEmpty() -> "本次无记录"
+            updateLines.any { it.contains("发现新版本") } -> "发现新版本"
+            updateLines.any { it.contains("已是最新") } -> "已是最新"
+            updateLines.any { it.contains("本次跳过") } -> "跳过（未到间隔）"
+            updateLines.any { it.contains("失败") } -> "失败（看正文）"
+            else -> "已检查"
+        }
         // 优先用 ≥30 帧的样本；全是短样本时才退回全部，并如实报出帧数
         val worstDrop = drops.filter { it.second >= 30 }.ifEmpty { drops }.maxByOrNull { it.first }
         return buildList {
             add("摘要（读这几行就够）：")
             add("  启动 $launches 次 · 切周 $navRequests 次（其中瞬移 $teleports）")
-            add("  提醒重排 $reminders 次")
+            add("  提醒重排 $reminders 次 · 更新检查 $updateState")
             add("  [Assert] $asserts 条" + if (asserts == 0) "（正常）" else "（异常，看正文）")
             if (worstDrop != null) {
                 add("  最差一次滑动 掉帧=${worstDrop.third}（${worstDrop.second} 帧）")

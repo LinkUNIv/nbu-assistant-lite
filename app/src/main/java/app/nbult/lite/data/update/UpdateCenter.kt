@@ -26,6 +26,16 @@ object UpdateCenter {
     /** 串行化「到期才查」：启动检查与前台恢复可能同时触发，不加锁会打两次请求。 */
     private val dueMutex = kotlinx.coroutines.sync.Mutex()
 
+    /**
+     * 上一次记「跳过」的时间。
+     *
+     * 前台恢复每次都会调用 [checkIfDue]，不节流的话一天能写几十条一样的日志，
+     * 而日志只保留 500 条 —— 噪声会把真正有用的记录挤掉。
+     */
+    @Volatile
+    private var lastSkipLoggedAt = 0L
+    private const val SKIP_LOG_INTERVAL_MS = 30L * 60 * 1000
+
     /** 距上次检查是否已到期。从没查过也算到期。 */
     fun due(lastCheckAt: Long, now: Long = System.currentTimeMillis()): Boolean =
         lastCheckAt <= 0L || now - lastCheckAt >= AUTO_INTERVAL_MS
@@ -37,8 +47,22 @@ object UpdateCenter {
      * 两个调用方可能几乎同时进来，先到的那个查完已把时间刷新，后到的不该再打一次。
      */
     suspend fun checkIfDue(settings: SettingsStore): UpdateState? = dueMutex.withLock {
-        if (!due(settings.updateCheckedAt.first())) return@withLock null
-        refresh(settings)
+        val last = settings.updateCheckedAt.first()
+        if (!due(last)) {
+            // 静默跳过会让人以为「根本没检查」—— 日志里至少要能看出「跳过了、还剩多久」。
+            // 但只在半小时内记一次：回前台就写一条会淹没其他记录。
+            val now = System.currentTimeMillis()
+            if (now - lastSkipLoggedAt >= SKIP_LOG_INTERVAL_MS) {
+                lastSkipLoggedAt = now
+                val remainMinutes = (AUTO_INTERVAL_MS - (now - last)) / 60_000L
+                AppLog.log(
+                    "Update",
+                    "距上次检查不足 ${AUTO_INTERVAL_MS / 3_600_000} 小时，本次跳过（还有 $remainMinutes 分钟）"
+                )
+            }
+            return@withLock null
+        }
+        refreshLocked(settings)
     }
 
     /**
@@ -47,7 +71,15 @@ object UpdateCenter {
      * 只有拿到确定结果才写 `updateCheckedAt`：失败不写，否则会被当成「刚查过、没有新版」，
      * 下一次启动要再等 24 小时才会重试。
      */
-    suspend fun refresh(settings: SettingsStore): UpdateState {
+    suspend fun refresh(settings: SettingsStore): UpdateState = dueMutex.withLock {
+        refreshLocked(settings)
+    }
+
+    /**
+     * 真正的检查与落盘。**必须已持锁**：Mutex 不可重入，
+     * [refresh] 与 [checkIfDue] 都从这里走，避免「手动检查 + 自动复查」同时打两次请求。
+     */
+    private suspend fun refreshLocked(settings: SettingsStore): UpdateState {
         val result = AppUpdateChecker.check()
         val now = System.currentTimeMillis()
         when (result) {

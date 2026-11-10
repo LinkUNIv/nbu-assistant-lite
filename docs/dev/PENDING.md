@@ -22,8 +22,7 @@
 
 | 优先级 | 版本 | 主题 | 依赖 / 阻塞 |
 |---|---|---|---|
-| **P1** | 0.37.13 | 点名页：退出语义、交还预加载、路由即时切换 | 见第十节 10.1 / 10.2（闪烁已淡出，只做加固） |
-| P2 | 0.37.14 | 动效口径统一 + 7 列课程名截字阈值真机对比 | 见第十四节 14.6 与 `docs/design/MOTION.md` |
+| **P1** | 0.37.14 | 动效口径统一 + 7 列课程名截字阈值真机对比 | 见第十四节 14.6 与 `docs/design/MOTION.md` |
 | P1 | — | 安全地基：域名白名单拦截器、网络安全配置口径 | 无 |
 | P1 | 0.38.0 | 课表解析词典外置（资源包第三批） | 需要先做解析自检 |
 | P2 | — | 点名模块界面重做（先出静态稿） | 见第十节 10.3 |
@@ -207,7 +206,7 @@
 
 ---
 
-# 十、点名模块的界面与切换体验（0.37.13，P1）
+# 十、点名模块的界面与切换体验（10.1 / 10.2 已发，10.3 待排）
 
 三项都是真机试用后反馈的，都不碰数据、认证与网络，只动 `browser/` 的界面层与切换时机。
 
@@ -217,17 +216,17 @@
 可这个 Activity 是单开一页，网页历史属于考勤站自己 —— 于是「想退出点名」被解释成
 「在考勤站里后退一步」，用户要连按好几次才回得到课表。
 
-- [ ] 顶栏左侧改为「关闭」，直接 `finish()`，与网页历史无关
-- [ ] 「返回」（网页后退）降为图标按钮或收进溢出菜单，保留但不占主位
-- [ ] 系统返回键保持网页后退语义，但落到 `h5/student/schedule` 时再按一次即 `finish()`
-- [ ] 溢出菜单收纳「刷新 / 导出日志 / 学校原页面」
+- [x] 顶栏左侧改为「关闭」，直接 `finish()`，与网页历史无关（0.37.13）
+- [x] 「返回」（网页后退）降为图标按钮或收进溢出菜单，保留但不占主位（0.37.13）
+- [x] 系统返回键保持网页后退语义，但落到 `h5/student/schedule` 时再按一次即 `finish()`（0.37.13）
+- [x] 溢出菜单收纳「刷新 / 导出日志 / 学校原页面」（0.37.13，原页面走系统浏览器）
 
 **顺带要解决的效率问题**：`onDestroy` 现在无条件 `web.destroy()`，退出即销毁，
 下次进点名要重新加载整个 Nuxt 应用。预加载等于白做。
 
-- [ ] `PreloadedPage.release(web)`：把 WebView 摘下、塞回 1dp 隐形宿主，与 `claim()` 成对
-- [ ] 仅在「预加载开启 + 当前 URL 仍在 `attendance.nbu.edu.cn`」时交还，其余照旧销毁
-- [ ] 交还前 `cancelSignInput()` 并复位 `AttendanceSignal`
+- [x] `PreloadedPage.release(web)`：把 WebView 摘下、塞回 1dp 隐形宿主，与 `claim()` 成对（0.37.13）
+- [x] 仅在「预加载开启 + 当前 URL 仍在 `attendance.nbu.edu.cn` + 非认证页」时交还（0.37.13）
+- [x] 交还前 `cancelSignInput()` 并复位 `AttendanceSignal`（由 `nativeAuth.destroy()` 承担，0.37.13）
 
 ## 10.2 深色模式下切换时原网页闪现（已淡出，保留三项观察）
 
@@ -250,7 +249,7 @@
 
 - [ ] **加不透明遮罩层**：`browserFrame` 内、WebView 之上放一个普通 `View`，底色跟主题，
       默认可见，只有 `reveal()` 才移开。不再依赖 `web.alpha` 隐藏
-- [ ] **路由变化立刻切换**：`OBSERVER` 已 hook `pushState/replaceState/popstate/hashchange`
+- [x] **路由变化立刻切换**：`OBSERVER` 已 hook `pushState/replaceState/popstate/hashchange`
       并发出 `NBU_TRACE`。在 `onConsoleMessage` 里对这四个 kind 调 `routeChanged()` → 立即
       `inspect()`，把延迟从「最多 1 秒」压到「一帧」，轮询只作兜底
 - [ ] **`!trusted()` 不再自动 `reveal()`**：改为显示「需要在原页面继续」面板，
@@ -510,6 +509,29 @@ sha256 能挡住「下到半截的包」，挡不住「源被整体换掉」—�
 # 归档
 
 已发布的实现与历史验收。**只在上面章节需要引用其结论时才回来看**。
+
+## 已发布：0.37.13 Preview（2026-11-10）
+
+**退出语义（10.1 上半）**
+
+- 顶栏「返回」→「关闭」直接 `finish()`；网页后退 / 刷新 / 导出日志 / 系统浏览器打开收进「更多」
+- 系统返回键：课表页按一次即退出，其余仍网页后退
+
+**交还预加载（10.1 下半）**
+
+- `PreloadedPage.release(web)`：塞回 1dp 隐形宿主，下次进入不重载 Nuxt
+- 关键两行：解除活动侧 `webViewClient`/`webChromeClient`（匿名内部类持有 Activity）；
+  `MutableContextWrapper.baseContext` 换回 `applicationContext`
+- 宿主不在（预加载关闭 / 组合销毁）时照旧销毁
+
+**路由即时切换（10.2 第 1 条）**
+
+- `onConsoleMessage` 收到 `pushState/replaceState/popstate/hashchange` 直接 `routeChanged()` → `inspect()`
+- 轮询从主路径降为兜底
+
+**流水线三道闸首次实战通过**：确认 tag 未发布 ✓ / 发布后自检 ✓
+
+**出包**：22.87 MB，`versionCode=3713`，32 项单测 0 失败
 
 ## 已发布：0.37.12 Preview（2026-11-10）
 

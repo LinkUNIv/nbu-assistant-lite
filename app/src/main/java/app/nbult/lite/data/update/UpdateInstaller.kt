@@ -1,6 +1,7 @@
 package app.nbult.lite.data.update
 
 import android.content.Context
+import app.nbult.lite.BuildConfig
 import app.nbult.lite.util.ApkInstaller
 import app.nbult.lite.util.AppLog
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +54,15 @@ class UpdateInstaller(private val context: Context) {
 
     private var job: Job? = null
 
+    /** 最近一次下好的包，用于「等待系统安装」时再次唤起安装器。 */
+    private var lastReady: File? = null
+    private var lastName: String = ""
+
+    init {
+        // 装完新版后缓存里那份就没用了，启动时清掉，避免被当成「可安装」
+        pruneStaleCache()
+    }
+
     /**
      * 开始下载。已经在跑就直接返回 —— 重复点击不该并行下两份。
      */
@@ -81,6 +91,8 @@ class UpdateInstaller(private val context: Context) {
                     "Update",
                     "下载完成待安装 ${info.versionName} ${apkReady.length() / 1024}KB 耗时=${(System.currentTimeMillis() - startedAt) / 1000}s"
                 )
+                lastReady = apkReady
+                lastName = info.versionName
                 _state.value = InstallState.ReadyToInstall(info.versionName, apkReady)
             } else {
                 AppLog.log("Update", "下载或安装失败 ${info.versionName}：$failure")
@@ -94,9 +106,29 @@ class UpdateInstaller(private val context: Context) {
      * 否则「下载完成不自动装」会变成「下了装不了」。
      */
     fun cachedApk(versionCode: Int): File? {
-        if (versionCode <= 0) return null
+        // 必须比**已安装**的版本新。少了这句，装完新版后缓存里那份同版本包会被当成
+        // 「可安装」，点一下就是重装当前版本 —— 检查更新永远走不到真正的检查。
+        if (versionCode <= BuildConfig.VERSION_CODE) return null
         val file = File(File(appContext.cacheDir, "update"), "nbu-lite-$versionCode.apk")
         return file.takeIf { it.exists() && it.length() > 0 }
+    }
+
+    /**
+     * 清掉缓存里已经没有意义的安装包：版本号 ≤ 当前版本的（含刚装完的那份）。
+     *
+     * 安装器要读文件，所以不能在交出去的那一刻删；改为下次启动清。
+     */
+    fun pruneStaleCache() {
+        val dir = File(appContext.cacheDir, "update")
+        val files = dir.listFiles() ?: return
+        var removed = 0
+        files.forEach { file ->
+            val code = Regex("nbu-lite-(\\d+)\\.apk").find(file.name)?.groupValues?.get(1)?.toIntOrNull()
+            if (code == null || code <= BuildConfig.VERSION_CODE) {
+                if (file.delete()) removed += 1
+            }
+        }
+        if (removed > 0) AppLog.log("Update", "清理过期安装包 $removed 个（当前 ${BuildConfig.VERSION_NAME}）")
     }
 
     /** 装一个已经下好的包（重启后的入口）。 */
@@ -113,7 +145,12 @@ class UpdateInstaller(private val context: Context) {
 
     /** 用户点了「安装」：这时候才唤起系统安装器。 */
     fun installNow() {
-        val ready = _state.value as? InstallState.ReadyToInstall ?: return
+        // HandedOff 说明上一次已经交出去过，用户可能取消了系统弹窗，这里允许再唤一次
+        val ready = when (val current = _state.value) {
+            is InstallState.ReadyToInstall -> current
+            is InstallState.HandedOff -> lastReady?.let { InstallState.ReadyToInstall(lastName, it) }
+            else -> null
+        } ?: return
         val ok = ApkInstaller.install(appContext, ready.apk)
         if (ok) {
             AppLog.log("Update", "已交给系统安装 ${ready.versionName}")

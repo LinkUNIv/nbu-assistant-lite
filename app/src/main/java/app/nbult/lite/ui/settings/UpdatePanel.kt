@@ -164,8 +164,10 @@ internal fun VersionEntry(badge: Boolean) {
                     install is InstallState.Idle && state is VersionUi.Idle && cachedReady != null -> {
                         installer.installCached(latestCode.toInt(), latestName)
                     }
-                    // 正在跑：连点不该再开一份
-                    install is InstallState.Downloading || install is InstallState.HandedOff -> Unit
+                    // 已交给系统但用户取消了：再点一下重新唤起安装器
+                    install is InstallState.HandedOff -> installer.installNow()
+                    // 正在下载：连点不该再开一份
+                    install is InstallState.Downloading -> Unit
                     // 上一次失败：先清结果，再重新查一次
                     install is InstallState.Failed -> {
                         installer.reset()

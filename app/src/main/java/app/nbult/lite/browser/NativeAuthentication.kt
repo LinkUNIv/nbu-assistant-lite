@@ -42,6 +42,9 @@ internal class NativeAuthentication(private val web: WebView, private val contai
     private val signDigits = mutableStateOf("")
     private val signSubmitting = mutableStateOf(false)
     private val signKeys = java.util.ArrayDeque<String>()
+
+    /** 按键点击找不到目标时的重试次数。一次就够：页面没渲染完通常一两百毫秒就绪。 */
+    private val MAX_SIGN_CLICK_RETRY = 1
     private var signKeyRunning = false
     private var signInputGeneration = 0
     private val signInputScript by lazy { web.context.assets.open("sign-input.js").bufferedReader().use { it.readText() } }
@@ -86,7 +89,7 @@ internal class NativeAuthentication(private val web: WebView, private val contai
             signKeys.add(value); pumpSignKeys()
         }
     }
-    private fun pumpSignKeys() {
+    private fun pumpSignKeys(retry: Int = 0) {
         if (signKeyRunning || signKeys.isEmpty() || mode != "sign" || signSubmitting.value) return
         val value = signKeys.removeFirst()
         if ((value == "确认" && signDigits.value.length != 4) || (value.length == 1 && signDigits.value.length >= 4)) { pumpSignKeys(); return }
@@ -96,8 +99,19 @@ internal class NativeAuthentication(private val web: WebView, private val contai
         web.evaluateJavascript(signInputScript + "\nwindow.__nbuSignInput.click(" + JSONObject.quote(value) + ")") { clicked ->
             if (epoch != signInputGeneration || mode != "sign") return@evaluateJavascript
             if (clicked != "true") {
+                // 找不到网页上的按键，多半是页面还没渲染完。等一拍把这次按键放回队首重试，
+                // 不要立刻告诉用户「未就绪」—— 实测过提示出现时签到其实仍能提交，
+                // 失败的是我们的 DOM 探测，不是学校页面。真失败只留日志，供后续定位。
+                if (retry < MAX_SIGN_CLICK_RETRY) {
+                    signKeyRunning = false
+                    signKeys.addFirst(value)
+                    handler.postDelayed({
+                        if (epoch == signInputGeneration && mode == "sign" && !signKeyRunning) pumpSignKeys(retry + 1)
+                    }, 250L * (retry + 1))
+                    return@evaluateJavascript
+                }
                 signKeyRunning = false; signKeys.clear()
-                signMessage.value = "学校按键尚未就绪，请稍候或查看原页面。"; signVersion.value++
+                AppLog.log("Web", "sign_click_miss key=$value 重试=$retry path=${web.url?.substringAfter("attendance.nbu.edu.cn").orEmpty()}")
                 return@evaluateJavascript
             }
             if (value == "确认") {
@@ -140,7 +154,7 @@ internal class NativeAuthentication(private val web: WebView, private val contai
             panel = ComposeView(web.context).apply {
                 setBackgroundColor(attendanceBackground(web.context))
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-                setContent { SignCodeScreen(signMessage.value, digits = signDigits.value, submitting = signSubmitting.value, onKey = ::signKey, onOriginal = { useOriginal = true; reveal() }, success = signSuccess.value, resultVersion = signVersion.value, onScan = ::submitScan, onStopScan = { cancelSignInput() }) }
+                setContent { SignCodeScreen(signMessage.value, digits = signDigits.value, submitting = signSubmitting.value, onKey = ::signKey, success = signSuccess.value, resultVersion = signVersion.value, onScan = ::submitScan, onStopScan = { cancelSignInput() }) }
             }
             container.addView(panel, FrameLayout.LayoutParams(-1,-1))
         }
@@ -221,6 +235,19 @@ internal class NativeAuthentication(private val web: WebView, private val contai
     private fun trusted() = AttendanceLandingPolicy.isAuthentication(web.url.orEmpty())
     private fun hide() { panel?.let { it.disposeComposition(); container.removeView(it) }; panel = null; mode = "" }
     private fun reveal() { hide(); web.alpha = 1f }
+
+    /**
+     * 切回学校原页面（应用内显形，不是跳系统浏览器）。
+     *
+     * 只有正显示自绘面板时才有意义；没有面板时什么都不做，避免把 `useOriginal`
+     * 打开后 `inspect()` 再也不接管。
+     */
+    fun useOriginalPage(): Boolean {
+        if (panel == null) return false
+        useOriginal = true
+        reveal()
+        return true
+    }
     private fun inspect() {
         if (useOriginal) return
         if (schedule()) { inspectCourses(); return }

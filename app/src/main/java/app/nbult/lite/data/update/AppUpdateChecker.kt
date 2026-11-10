@@ -52,6 +52,9 @@ object AppUpdateChecker {
     private const val RELEASES_API =
         "https://api.github.com/repos/LinkUNIv/nbu-assistant-lite/releases?per_page=5"
 
+    /** 断连重试次数。三次足够覆盖偶发 reset，再多用户等不起。 */
+    private const val MAX_ATTEMPTS = 3
+
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -143,33 +146,67 @@ object AppUpdateChecker {
      * 校验不通过就删掉文件并抛错：半截的包交给系统安装器只会得到一个含义不明的失败，
      * 不如在下载阶段就把原因说清楚。
      */
+    /**
+     * 下载并校验 APK。
+     *
+     * GitHub 的下载链路会中途断（实测 `Connection reset`），而一次断开就作废整个更新 —
+     * 用户看到的是「更新失败」，只能自己去网页下。所以这里做两件事：
+     * **断点续传**（`Range: bytes=`）能接着上次的字节继续，**有限重试**兜住偶发断连。
+     */
     suspend fun download(
         context: Context,
         info: UpdateInfo,
         onProgress: (Int) -> Unit
     ): File = withContext(Dispatchers.IO) {
+        var lastError: Throwable? = null
+        repeat(MAX_ATTEMPTS) { attempt ->
+            try {
+                return@withContext downloadOnce(context, info, onProgress)
+            } catch (t: Throwable) {
+                lastError = t
+                val done = runCatching {
+                    File(context.cacheDir, "update/nbu-lite-${info.versionCode}.apk").length()
+                }.getOrDefault(0L)
+                AppLog.log(
+                    "Update",
+                    "下载中断（第 ${attempt + 1}/$MAX_ATTEMPTS 次，已下 ${done / 1024}KB）：${t.message}"
+                )
+                if (attempt < MAX_ATTEMPTS - 1) kotlinx.coroutines.delay(1_000L * (attempt + 1))
+            }
+        }
+        throw lastError ?: IllegalStateException("下载失败")
+    }
+
+    /** 一次下载尝试。目标文件已存在时用 Range 续传；服务端若忽略 Range 则从头重下。 */
+    private fun downloadOnce(
+        context: Context,
+        info: UpdateInfo,
+        onProgress: (Int) -> Unit
+    ): File {
         val dir = File(context.cacheDir, "update").apply { mkdirs() }
         val target = File(dir, "nbu-lite-${info.versionCode}.apk")
-        if (target.exists()) target.delete()
+        val existing = if (target.exists()) target.length() else 0L
 
-        val request = Request.Builder().url(info.apkUrl).build()
-        client.newCall(request).execute().use { response ->
+        val builder = Request.Builder().url(info.apkUrl)
+        if (existing > 0L) builder.header("Range", "bytes=$existing-")
+        client.newCall(builder.build()).execute().use { response ->
             if (!response.isSuccessful) error("下载失败：HTTP ${response.code}")
             val body = response.body ?: error("下载失败：响应为空")
-            val total = body.contentLength()
-            var read = 0L
+            val resumed = response.code == 206
+            if (!resumed && existing > 0L) target.delete()   // 服务端不支持续传
+            val base = if (resumed) existing else 0L
+            val total = if (resumed) base + body.contentLength() else body.contentLength()
+            var read = base
 
             body.byteStream().use { input ->
-                target.outputStream().use { output ->
+                java.io.FileOutputStream(target, resumed).use { output ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
                         val n = input.read(buffer)
                         if (n <= 0) break
                         output.write(buffer, 0, n)
                         read += n
-                        if (total > 0) {
-                            onProgress(((read * 100) / total).toInt().coerceIn(0, 100))
-                        }
+                        if (total > 0) onProgress(((read * 100) / total).toInt().coerceIn(0, 100))
                     }
                 }
             }
@@ -177,11 +214,12 @@ object AppUpdateChecker {
 
         val actual = sha256Of(target)
         if (!actual.equals(info.sha256, ignoreCase = true)) {
+            // 续传拼出的文件可能是坏的：丢掉重来一次，而不是把坏包交出去
             target.delete()
-            error("校验失败，已取消安装")
+            error("校验失败，已删除重下")
         }
         AppLog.log("Update", "下载完成 v${info.versionName} ${target.length() / 1024}KB")
-        target
+        return target
     }
 
     /** 取一个 URL 的文本内容；非 2xx 返回 null，由调用方决定文案。 */

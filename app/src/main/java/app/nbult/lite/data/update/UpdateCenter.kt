@@ -72,6 +72,8 @@ object UpdateCenter {
      * 下一次启动要再等 24 小时才会重试。
      */
     suspend fun refresh(settings: SettingsStore): UpdateState = dueMutex.withLock {
+        // 手动检查不受 6 小时限制，日志里标一下来源，否则「刚跳过 2 秒又发现新版本」像 bug
+        AppLog.log("Update", "手动检查更新")
         refreshLocked(settings)
     }
 

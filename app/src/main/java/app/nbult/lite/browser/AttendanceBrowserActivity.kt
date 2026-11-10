@@ -131,6 +131,10 @@ class AttendanceBrowserActivity : ComponentActivity() {
                                         onClick = { menuOpen = false; exportDiagnostics() }
                                     )
                                     DropdownMenuItem(
+                                        text = { Text("用学校原页面") },
+                                        onClick = { menuOpen = false; nativeAuth.useOriginalPage() }
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text("用系统浏览器打开") },
                                         onClick = { menuOpen = false; openInBrowser() }
                                     )

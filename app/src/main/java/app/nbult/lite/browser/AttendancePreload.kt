@@ -132,7 +132,9 @@ internal fun AttendancePreload(state: TimetableUiState) {
                     if (rows.isNotEmpty()) AttendanceSignal.state.value = "ready"
                     web.evaluateJavascript("window.__nbuAuthenticated===true") { if (it == "true" && !PreloadedPage.transferring && PreloadedPage.web === web) AttendanceSignal.state.value = "ready" }
                     val detection = "目标=${names.joinToString()}；列表=" + rows.joinToString { "${it.title}[open=${it.open},signed=${it.signed},status=${it.status}]" }
-                    if (lastDetection != detection) {
+                    // 列表为空说明页面还在加载，这种中间态不算「变化」。
+                    // 之前空/满交替，每 15 秒就刷两行，一小时 480 行，日志上限只有 500 条。
+                    if (rows.isNotEmpty() && lastDetection != detection) {
                         lastDetection = detection
                         app.nbult.lite.util.AppLog.log("AttendancePreload", detection)
                         app.nbult.lite.util.AppLog.log("AttendancePreload", "匹配结果=${matching?.title ?: "无"}")

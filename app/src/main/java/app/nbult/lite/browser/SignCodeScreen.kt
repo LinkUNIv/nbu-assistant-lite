@@ -19,7 +19,7 @@ import androidx.compose.ui.Alignment
 
 
 @Composable
-internal fun SignCodeScreen(message: String, digits: String, submitting: Boolean, onKey: (String) -> Unit, onOriginal: () -> Unit, success: Boolean, resultVersion: Int, onScan: (String) -> Unit, onStopScan: () -> Unit) {
+internal fun SignCodeScreen(message: String, digits: String, submitting: Boolean, onKey: (String) -> Unit, success: Boolean, resultVersion: Int, onScan: (String) -> Unit, onStopScan: () -> Unit) {
     var camera by remember { mutableStateOf(false) }
     var baseline by remember { mutableStateOf(0) }
     AttendanceTheme { _, _ ->
@@ -63,7 +63,6 @@ internal fun SignCodeScreen(message: String, digits: String, submitting: Boolean
                 OutlinedButton(onClick = { baseline = resultVersion; camera = true }, enabled = !success && !submitting, modifier = Modifier.fillMaxWidth()) { Text("相机识别签到码") }
                 if (camera) SignCameraDialog(success, resultVersion - baseline, message, onCode = onScan, onDismiss = { onStopScan(); camera = false })
                 Text(message, style = MaterialTheme.typography.bodyMedium)
-                TextButton(onClick = onOriginal) { Text("查看学校原页面") }
             }
         }
     }

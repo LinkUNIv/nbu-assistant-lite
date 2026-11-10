@@ -151,6 +151,11 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
+    # 同一个 tag 的发布串行化：0.37.1 那次同 tag 出现两条 release（一条已发布空壳、
+    # 一条草稿带资产，同一秒），最可能就是两次创建撞在一起。串行能直接消掉这种竞态。
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
@@ -244,6 +249,23 @@ jobs:
       # 而 action 的内部顺序是「创建 → 上传」，release 一旦立刻发布，
       # 后面的 APK 就一定传不上去（v0.32.2 就是这样失败的）。
       # draft 状态下可以上传，传完再用 gh 发布。
+      # 已发布的 release 既不能补传资产，也不能删 —— 删了 tag 会被不可变发布机制锁死
+      # （0.37.1 就是这么作废的）。所以在创建之前就把重复挡掉。
+      - name: 确认该 tag 尚未发布
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            state=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft')
+            if [ "$state" != "true" ]; then
+              echo "::error::同 tag 已存在已发布的 release，拒绝重复创建；请改版本号，不要删"
+              exit 1
+            fi
+            echo "已存在草稿 release，将复用并覆盖资产"
+          else
+            echo "该 tag 尚无 release"
+          fi
+
       - uses: softprops/action-gh-release@v2
         with:
           name: ${{ env.RELEASE_TITLE }}
@@ -262,3 +284,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "$GITHUB_REF_NAME" --draft=false
+
+      # 半成品比没有更糟：同 tag 多一条空壳会让应用内更新读到缺资产的清单。
+      # 这里断言「恰好一条、已发布、资产够数」，不满足就让任务红着，别留给人去发现。
+      - name: 发布后自检
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          api="repos/$GITHUB_REPOSITORY/releases?per_page=100"
+          pick="[.[] | select(.tag_name == \"$GITHUB_REF_NAME\")]"
+          dups=$(gh api "$api" --jq "${pick} | length")
+          draft=$(gh api "$api" --jq "${pick} | .[0].draft")
+          assets=$(gh api "$api" --jq "${pick} | .[0].assets | length")
+          echo "同 tag release 数=$dups 草稿=$draft 资产=$assets"
+          [ "$dups" = "1" ] || { echo "::error::同 tag 出现了 $dups 条 release"; exit 1; }
+          [ "$draft" = "false" ] || { echo "::error::发布后仍是草稿"; exit 1; }
+          [ "$assets" -ge 6 ] || { echo "::error::资产数不足：$assets"; exit 1; }

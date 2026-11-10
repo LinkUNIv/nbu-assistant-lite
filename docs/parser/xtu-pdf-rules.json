@@ -1,0 +1,51 @@
+{
+  "id": "xtu-pdf",
+  "school": "湘潭大学",
+  "displayName": "湘潭大学教务课表（PDF）",
+  "source": {
+    "kind": "pdf-table",
+    "signature": ["考核方式", "学分", "场地", "周", "星期"],
+    "note": "教务导出 PDF，两页；第 2 页是续表，没有表头。文本层可提取，不需要 OCR。"
+  },
+  "layout": {
+    "columns": {
+      "anchor": "星期X",
+      "anchorTokens": ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"],
+      "widthRule": "(x_星期日 - x_星期一) / 6",
+      "note": "表头文字居中，单元格文字左对齐，因此按列中心 ± 半列宽归列"
+    },
+    "rows": {
+      "strategy": "vertical-cluster",
+      "gapPoints": 14,
+      "note": "不要用节次数字切行：一节课跨两行、单元格垂直居中，按数字切必然把单元格劈开。同列相邻文本 y 差超过 14pt 才算新单元格。"
+    },
+    "headerFilter": {
+      "rule": "只跳过「本页表头以上」的片段",
+      "note": "第 2 页从页顶就是内容，若用固定 y 阈值会把整页丢掉"
+    }
+  },
+  "cell": {
+    "template": "${name}(${startSection}-${endSection}节)${weeks}/校区:${campus}/场地:${room}/教师:${teacher}/考核方式:${assessment}/学分:${credit}",
+    "regex": "^(?P<name>.+?)\\((?P<s1>\\d+)-(?P<s2>\\d+)节\\)(?P<weeks>[^/]+)/校区[:：](?P<campus>.+?)/场地[:：](?P<room>.+?)/教师[:：](?P<teacher>.+?)/考核方式[:：](?P<assess>.+?)/学分[:：](?P<credit>[\\d.]+)$",
+    "flags": "dotAll",
+    "note": "拼接同一单元格的多行片段时不加分隔符：中文换行处会切断词语（如「信息科技大楼北-」+「401」）"
+  },
+  "weeks": {
+    "syntax": ["N-M周", "第N周", "N-M周(单)", "N-M周(双)", "第N-M周(单)"],
+    "separator": ",",
+    "regexRange": "^第?(\\d+)-(\\d+)周(?:[(（]([单双])[)）])?$",
+    "regexSingle": "^第?(\\d+)周$",
+    "note": "单双周按起始周奇偶过滤，不是按周数序号"
+  },
+  "noise": {
+    "dropLines": ["调查学时", "线上学时", "上机学时", "听力学时", "实验学时", "实践学时", "理论学时", "讲座学时"],
+    "dropPrefixes": ["打印时间"],
+    "footerBlocks": ["实践课程", "其他课程"],
+    "note": "页脚的「实践课程 / 其他课程」列了周次但没有节次，不占格子，只能作为课程标签保留，不能生成课表格位"
+  },
+  "checks": {
+    "cellCount": "单元格数应等于全文「(数字-数字节)」出现次数",
+    "unparsed": "解析后未匹配条目必须为 0",
+    "weekSanity": "周次展开不得为空，且上限不超过 20（本校长学期）"
+  }
+}

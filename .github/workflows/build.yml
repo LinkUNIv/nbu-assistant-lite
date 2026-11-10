@@ -212,9 +212,27 @@ jobs:
           sha = open(glob.glob('apk/*.sha256')[0], encoding='utf-8').read().split()[0]
           tag = os.environ['GITHUB_REF_NAME']
           base = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}"
-          # 清单里的说明是给「使用者」看的：只取「## 更新内容」小节。
-          # 整篇正文里的包名、版本码、签名、单测条数、数据隔离声明都不该出现在更新弹窗里。
-          def user_notes(text):
+          # 清单里的说明直接取自 CHANGELOG 的该版条目 —— 与「更新日志」页同一个源。
+          # 以前取 docs/releases/<tag>.md，于是同一版在弹窗和日志页说的是两套话
+          # （0.37.15 实测连标题都不同）。同源之后不可能再漂移。
+          def changelog_notes(path, tag):
+              out, inside = [], False
+              for line in open(path, encoding="utf-8").read().splitlines():
+                  stripped = line.strip()
+                  if stripped.startswith("## v"):
+                      if inside:
+                          break
+                      inside = stripped[3:].strip().split()[0] == tag
+                      continue
+                  if inside:
+                      out.append(line)
+              body = "\n".join(out).strip()
+              body = re.sub(r"\n?-{3,}\s*$", "", body).strip()
+              # 弹窗标题已经写了版本号，这条在应用里是噪音
+              body = "\n".join(l for l in body.splitlines() if not l.strip().startswith("- 版本号提升至"))
+              return body.strip()
+
+          def section(text):
               out, inside = [], False
               for line in text.splitlines():
                   stripped = line.strip()
@@ -225,10 +243,24 @@ jobs:
                       continue
                   if inside:
                       out.append(line)
-              body = "\n".join(out).strip()
-              return body or text.strip()
+              return out
+
+          def flatten(lines):
+              # 只比内容不比折行：CHANGELOG 的续行缩进与正文排版不同，抹掉空白再比
+              return "".join("".join(lines).split())
 
           notes_path = f"docs/releases/{tag}.md"
+          doc = open(notes_path, encoding="utf-8").read() if os.path.exists(notes_path) else ""
+          notes = changelog_notes("CHANGELOG.md", tag)
+          if not notes:
+              raise SystemExit(f"CHANGELOG.md 里找不到 {tag} 的条目")
+          # GitHub 正文仍用手写的那份（要带「验证与限制」），但「更新内容」必须与 CHANGELOG 一致，
+          # 否则网页与弹窗会各自漂移。这里当场比对，不一致就让构建失败。
+          if doc and flatten(section(doc)) != flatten(notes.splitlines()):
+              import difflib
+              diff = "\n".join(difflib.unified_diff(
+                  section(doc), notes.splitlines(), "release-doc", "CHANGELOG", lineterm=""))
+              raise SystemExit(f"更新内容不一致：{notes_path} 与 CHANGELOG.md\n{diff}")
           manifest = {
               "versionCode": code,
               "versionName": name,
@@ -238,7 +270,7 @@ jobs:
               "sha256": sha,
               # 应用内用它在下载前给出体积预告（「下载约 23 MB」），不参与校验
               "size": os.path.getsize(apk),
-              "notes": user_notes(open(notes_path, encoding="utf-8").read() if os.path.exists(notes_path) else ""),
+              "notes": notes,
           }
           with open('apk/manifest.json', 'w', encoding='utf-8') as f:
               json.dump(manifest, f, ensure_ascii=False, indent=2)

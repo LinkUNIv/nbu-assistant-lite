@@ -74,7 +74,7 @@ fun <T : Any> AppBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
-        windowInsets = sheetWindowInsets(),
+        contentWindowInsets = { sheetWindowInsets() },
     ) {
         Surface(color = MaterialTheme.colorScheme.surface) {
             Box(

@@ -347,7 +347,7 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                             try {
                                                 if (distance > 3) {
                                                     // 逐页飞过去时沿途每页都要现渲染
-                                                    // （beyondBoundsPageCount = 1），从第 15 周
+                                                    // （beyondViewportPageCount = 1），从第 15 周
                                                     // 点「本周」等于看十次过场；远跳直接瞬移
                                                     pagerState.scrollToPage(target)
                                                 } else {
@@ -424,7 +424,7 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                         modifier = Modifier
                                             .weight(1f)
                                             .fillMaxHeight(),
-                                        beyondBoundsPageCount = 1,
+                                        beyondViewportPageCount = 1,
                                         pageSpacing = 0.dp,
                                         flingBehavior = PagerDefaults.flingBehavior(
                                             state = pagerState,

@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // 签名密钥。
@@ -55,8 +56,8 @@ android {
         // 版本号规则：主.次.修订；小改动只递增修订号
         // versionCode = 主*10000 + 次*100 + 修订，每版必须递增，保证可覆盖安装
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 3717
-        versionName = "0.37.17"
+        versionCode = 3719
+        versionName = "0.37.19"
         vectorDrawables.useSupportLibrary = true
         // 只保留手机实际会跑的架构。ML Kit 的 libmlkit_google_ocr_pipeline.so
         // 四个 ABI 合计 39MB，其中 x86/x86_64 在真机上永远加载不到，砍掉省 22MB。
@@ -126,9 +127,8 @@ android {
         buildConfig = true
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
-    }
+    // Kotlin 2.x 起 Compose 编译器由 org.jetbrains.kotlin.plugin.compose 接管，
+    // 不再有 kotlinCompilerExtensionVersion 这一项
 
     packaging {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}")
@@ -178,7 +178,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
     implementation("androidx.activity:activity-compose:1.9.0")
 
-    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    implementation(platform("androidx.compose:compose-bom:2024.09.03"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")

@@ -4,6 +4,18 @@
 
 ---
 
+## v0.37.19-Preview — 2026-11-11
+
+**开发工具链升级到 Kotlin 2.0 / Compose 1.7**
+
+- Kotlin 1.9.24 → 2.0.21，KSP 同步升级；Compose 编译器改由 Kotlin 插件接管。
+- Compose BOM 2024.06 → 2024.09（Compose 1.6.8 → 1.7.3）。
+- 仅随 API 更名调整三处参数：底部弹窗的 `contentWindowInsets`、两处翻页器的 `beyondViewportPageCount`。
+- 界面与行为不变；为后续UI实现做准备。
+- 版本号提升至 0.37.19（3719）。
+
+---
+
 ## v0.37.17-Preview — 2026-11-10
 
 **修复更新后反复提示安装同一版本**

@@ -205,7 +205,7 @@ internal fun NewsCardPager(
                 state = pagerState,
                 contentPadding = PaddingValues(horizontal = 32.dp),
                 pageSpacing = 12.dp,
-                beyondBoundsPageCount = 1,
+                beyondViewportPageCount = 1,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val offset = ((pagerState.currentPage - page) +

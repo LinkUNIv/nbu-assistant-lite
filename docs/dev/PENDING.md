@@ -516,6 +516,11 @@ sha256 能挡住「下到半截的包」，挡不住「源被整体换掉」—�
 
 参考清单与统一口径见 [`docs/design/MOTION.md`](../design/MOTION.md)。
 
+**前置验证结论（2026-11-11）**：Haze **0.7.3 可编译**（Compose 1.6.8 / Kotlin 1.9.24），
+AAR 仅 72KB，内部用 `RenderNodeImpl` + 版本门控，API 31+ 真模糊、以下退化。
+Haze 2.x 与 Cloudy 0.7.1 都依赖 kotlin-stdlib 2.4，**Kotlin 1.9 编译器读不了其元数据**，排除。
+故不升 BOM，走 Haze 0.7.3 + `acrylicPanel` 降级。
+
 **侧栏质感的形态已定（2026-11-10）：方案 A，保留右侧常驻侧栏，只换质感与动效。**
 不改底部导航（本项目没有 bottomBar，导航是 56dp 右侧胶囊，内容让位 64dp）。
 真模糊要 `RenderEffect`（API 31+），低版本退回现有 `acrylicPanel`；

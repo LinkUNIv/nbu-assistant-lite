@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  默认禁止明文；仅对 nbu.edu.cn 放行。
+  默认禁止明文，且**不再对 nbu.edu.cn 整域放行**。
 
-  说明：应用内的 WebView 抓取已下线，当前所有请求（资讯、校历、校时）均为 https，
-  这一段是为将来可能接入的校内 HTTP 资讯源留的口子，不影响现有安全边界。
-  跳转浏览器不受本文件约束（那是浏览器自己的策略）。
+  旧注释写着「WebView 抓取已下线，当前请求均为 https」，那已经不成立：
+  签到站（attendance.nbu.edu.cn）确实回到了 WebView。但核对过全部请求后确认：
+  应用发出的每一个请求都是 https，唯一的 http 链接是门户入口里的
+  `http://card.nbu.edu.cn` —— 它用 ACTION_VIEW 交给系统浏览器，不受本文件约束。
+
+  所以这里全量禁止明文。若将来确有校内页面需要 http（例如 WebView 加载混合内容），
+  必须在这里**逐个域名**开，并写清原因与影响面。
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">nbu.edu.cn</domain>
-    </domain-config>
 </network-security-config>

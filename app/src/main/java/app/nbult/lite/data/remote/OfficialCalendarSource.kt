@@ -1,5 +1,6 @@
 package app.nbult.lite.data.remote
 
+import app.nbult.lite.net.HttpClients
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,7 +29,7 @@ object OfficialCalendarSource {
 
     data class Entry(val year: String, val imageUrl: String)
 
-    private val client = OkHttpClient.Builder()
+    private val client = HttpClients.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()

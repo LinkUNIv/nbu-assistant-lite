@@ -123,7 +123,12 @@ internal fun AttendancePreload(state: TimetableUiState) {
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
                 var lastDetection = ""
-                app.nbult.lite.util.AppLog.log("AttendancePreload", "开始匹配当前课程：${currentNames.joinToString()}")
+                app.nbult.lite.util.AppLog.log(
+                    "AttendancePreload",
+                    // 没有待签课程时不要打一个空冒号，日志里那种行等于噪声
+                    if (currentNames.isEmpty()) "开始匹配当前课程：无（当前无待签课程）"
+                    else "开始匹配当前课程：${currentNames.joinToString()}"
+                )
                 auth = NativeAuthentication(web, this, silent = true) { rows ->
                     currentTargets.forEach { target ->
                         val signed = rows.filter { it.signed }.map { it.copy(open = true, signed = false) }

@@ -1,5 +1,6 @@
 package app.nbult.lite.data.remote
 
+import app.nbult.lite.net.HttpClients
 import android.content.Context
 import app.nbult.lite.data.news.NewsRules
 import app.nbult.lite.data.news.NewsSources
@@ -69,7 +70,7 @@ data class ArticleContent(
 
 class NewsCrawler(
     private val context: Context,
-    private val client: OkHttpClient = OkHttpClient.Builder()
+    private val client: OkHttpClient = HttpClients.newBuilder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .followRedirects(true)

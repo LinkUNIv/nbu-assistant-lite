@@ -1,5 +1,6 @@
 package app.nbult.lite.data.remote
 
+import app.nbult.lite.net.HttpClients
 import app.nbult.lite.data.db.NewsItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,7 +16,7 @@ object NewsConfig {
 }
 
 class NewsSource(
-    private val client: OkHttpClient = OkHttpClient.Builder()
+    private val client: OkHttpClient = HttpClients.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()

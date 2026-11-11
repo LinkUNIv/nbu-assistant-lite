@@ -2,6 +2,7 @@ package app.nbult.lite.data.update
 
 import android.content.Context
 import app.nbult.lite.BuildConfig
+import app.nbult.lite.net.HttpClients
 import app.nbult.lite.util.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -58,7 +59,7 @@ object AppUpdateChecker {
     private const val MAX_ATTEMPTS = 3
 
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        HttpClients.newBuilder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .followRedirects(true)

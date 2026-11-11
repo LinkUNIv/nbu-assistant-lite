@@ -601,6 +601,40 @@ Haze 2.x 与 Cloudy 0.7.1 都依赖 kotlin-stdlib 2.4，**Kotlin 1.9 编译器�
 
 ---
 
+## 14.10 常驻通知的形态与「焦点通知」（2026-11-11 调研）
+
+**现状**：`ReminderNotifier` 已用 `setRequestPromotedOngoing(true)`（Android 16 实时动态申请位）、
+`setUsesChronometer` 倒计时、`BigTextStyle`、`PRIORITY_LOW` + `CATEGORY_PROGRESS`。
+日志显示「申请位=true 可提升=true 允许申请=true」但**没有渲染成卡片**。
+
+**调研对象**：Aliothmoon/MAA-Meow（1835★，Kotlin）。它的做法是三级路由：
+
+```
+LivePublisherRouter
+├── HyperOsFocusPublisher        小米焦点通知（V3 岛协议，com.xzakota.hyper.notification:focus-api）
+├── AospPromotedPublisher        Android 16 实时动态
+└── PlainNotificationPublisher   普通通知兜底
+```
+
+**三条结论**：
+
+1. 他们的焦点通知**不依赖 Shizuku 才能发**，但为了稳定生效做了提权门闸：
+   `XmsfNetworkGate` 用已连接的提权进程在发通知瞬间断 `com.xiaomi.xmsf` 的网络，
+   让云端鉴权失败、落回本地渲染（代码注释："失败仍发岛"，即门闸是增强项）。
+   他们的 Shizuku 主要服务于 MAA 核心（注入触摸、抓帧、虚拟屏），通知门闸只是顺带。
+2. **不能学**：xmsf 门闸要 root/Shizuku，我们不可能要求。
+3. **可学**：路由分层（能力探测 → 选后端 → 统一 build）、内容模型、
+   以及 Android 16 的 `Notification.ProgressStyle`（分段进度，官方就有，无需第三方库）。
+
+- [ ] 通知加 `Notification.ProgressStyle`（API 36 分支；低版本继续用 chronometer）
+- [ ] 抽 `LivePublisher` 分层：能力探测 → 选后端 → build，为将来留位置
+- [ ] 标题精简：去掉「正在上课 · 」前缀（部分 OEM 会截断长标题）
+- [ ] 焦点通知探针：升 Kotlin 2.1+ → 引 `focus-api:1.4` → **裸发**（不做门闸），
+      在真机 HyperOS 上验证能否渲染；失败退 AOSP，无副作用
+- 已知风险：焦点通知是小米私有协议，随 HyperOS 版本失效；焦点权限需系统侧授予
+
+---
+
 # 归档
 
 已发布的实现与历史验收。**只在上面章节需要引用其结论时才回来看**。

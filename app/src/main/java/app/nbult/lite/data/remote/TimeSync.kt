@@ -5,6 +5,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import app.nbult.lite.net.HttpClients
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import app.nbult.lite.util.UserAgent
@@ -17,7 +18,7 @@ data class TimeSyncResult(
 )
 
 class TimeSync(
-    private val client: OkHttpClient = OkHttpClient.Builder()
+    private val client: OkHttpClient = HttpClients.newBuilder()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(8, TimeUnit.SECONDS)
         .build()

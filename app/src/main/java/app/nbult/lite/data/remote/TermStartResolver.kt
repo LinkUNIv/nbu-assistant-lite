@@ -8,6 +8,7 @@ import java.nio.charset.CodingErrorAction
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import app.nbult.lite.net.HttpClients
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
@@ -22,7 +23,7 @@ data class TermStartGuess(
 
 class TermStartResolver(
     private val context: android.content.Context,
-    private val client: OkHttpClient = OkHttpClient.Builder()
+    private val client: OkHttpClient = HttpClients.newBuilder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build()

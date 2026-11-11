@@ -2,6 +2,7 @@ package app.nbult.lite.data.pack
 
 import android.content.Context
 import app.nbult.lite.BuildConfig
+import app.nbult.lite.net.HttpClients
 import app.nbult.lite.util.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -60,7 +61,7 @@ object ResourcePackChecker {
         "https://cdn.jsdelivr.net/gh/LinkUNIv/nbu-assistant-lite@packs"
     )
 
-    private val client = OkHttpClient.Builder()
+    private val client = HttpClients.newBuilder()
         .connectTimeout(6, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build()

@@ -17,7 +17,7 @@ internal class WeekExpansionCache(private val file: File) {
     fun get(term: Term?, entries: List<TimetableEntry>, overrides: List<SlotOverride>): List<List<TimetableEntry>> {
         val count = (term?.totalWeeks ?: 20).coerceAtLeast(1)
         val source = "v1|$term|$entries|$overrides"
-        val key = MessageDigest.getInstance("SHA-256").digest(source.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        val key = app.nbult.lite.util.Digests.sha256(source.toByteArray(Charsets.UTF_8))
         if (memoryKey == key) memory?.let { return it }
         val courses = entries.associateBy { it.slot.id }
         val cached = runCatching {

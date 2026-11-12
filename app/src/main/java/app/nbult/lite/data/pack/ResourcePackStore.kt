@@ -215,13 +215,8 @@ object ResourcePackStore {
         }
     }
 
-    /** 与 [ResourcePackChecker] 共用，避免两处各写一份哈希。 */
-    internal fun sha256(bytes: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-        return buildString(digest.size * 2) {
-            for (b in digest) append("%02x".format(b))
-        }
-    }
+    /** 哈希实现收敛在 [app.nbult.lite.util.Digests]，这里只保留入口。 */
+    internal fun sha256(bytes: ByteArray): String = app.nbult.lite.util.Digests.sha256(bytes)
 }
 
 /** `202610311130` → `2026-10-31 11:30`。12 位连写没人愿意读。 */

@@ -31,11 +31,14 @@ internal class PdfTextExtractor(context: Context) {
                         if (trimmed.isEmpty() || textPositions.isEmpty()) return
                         // 一行可能由多段组成；取最左那段的坐标作为这一行的归属依据
                         val first = textPositions.minByOrNull { it.xDirAdj } ?: return
+                        // PDFBox 的 yDirAdj 是**自上而下递增**，而归列算法的前提是
+                        // 「y 越大越靠上」。这里取反，别让方向约定漏到上层去 ——
+                        // 湘潭那份样本上，方向搞反会让单元格里的多行按逆序拼接，正则直接不匹配。
                         fragments.add(
                             TextFragment(
                                 page = pageNumber,
                                 x = first.xDirAdj,
-                                y = first.yDirAdj,
+                                y = -first.yDirAdj,
                                 text = trimmed
                             )
                         )

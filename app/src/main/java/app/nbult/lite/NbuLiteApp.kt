@@ -74,7 +74,10 @@ class AppContainer(context: Context) {
      * 拿不到时返回 null，解析走代码里的硬编码（尚未切换，见 PENDING 0.38.0）。
      */
     internal val schoolRules: app.nbult.lite.school.SchoolRules? by lazy {
-        app.nbult.lite.school.SchoolCatalog.builtinRules(appContext)
+        app.nbult.lite.school.SchoolCatalog.rules(
+            appContext,
+            app.nbult.lite.school.SchoolPreference.schoolId(appContext)
+        )
     }
 
     /** 恢复出厂设置：课表、资讯、设置、网页数据、日志一并清空。 */
@@ -102,7 +105,12 @@ class NbuLiteApp : Application() {
         container = AppContainer(this)
         AppLog.log("App", "启动 v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         // 启动即加载一次：坏规则要在启动日志里暴露，而不是等用户导课表时才发现
-        container.schoolRules
+        container.schoolRules?.let { rules ->
+            // 该校域名要先进白名单，否则湘潭的资讯请求会被门禁拦掉
+            app.nbult.lite.net.HostWhitelist.registerSchoolDomains(rules.domains)
+            // 资讯栏目按学校换：宁大看宁大新闻，湘潭看湘潭新闻
+            app.nbult.lite.data.news.NewsSources.configure(rules.newsPath)
+        }
 
         appScope.launch {
             container.database.ensureDefaultPeriods()

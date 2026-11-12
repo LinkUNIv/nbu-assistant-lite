@@ -71,6 +71,22 @@ class SchoolRulesTest {
     }
 
     @Test
+    fun `两所学校的域名各自独立`() {
+        val nbu = (SchoolRules.parse(readAsset("schools/nbu/rules.json")) as SchoolRulesResult.Ok).rules
+        val xtu = (SchoolRules.parse(readAsset("schools/xtu/rules.json")) as SchoolRulesResult.Ok).rules
+        assertEquals(listOf("nbu.edu.cn"), nbu.domains)
+        assertEquals(listOf("xtu.edu.cn"), xtu.domains)
+    }
+
+    @Test
+    fun `湘潭的资讯源文件存在且有两个栏目`() {
+        val rules = (SchoolRules.parse(readAsset("schools/xtu/rules.json")) as SchoolRulesResult.Ok).rules
+        val news = readAsset(rules.newsPath!!)
+        assertTrue("应含综合新闻", news.contains("news.xtu.edu.cn"))
+        assertTrue("应含教务处", news.contains("jwc.xtu.edu.cn"))
+    }
+
+    @Test
     fun `缺少 capabilities 时默认全开`() {
         // 老规则文件没有这一段，行为要和过去一致
         val json = readAsset("schools/nbu/rules.json")

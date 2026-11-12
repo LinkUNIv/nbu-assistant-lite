@@ -42,6 +42,17 @@ internal object HostWhitelist {
 
     private const val SCHOOL = "nbu.edu.cn"
 
+    /**
+     * 当前学校的域名。由容器在启动时按规则写入 ——
+     * 湘潭的资讯在 xtu.edu.cn 下，写死宁大的域它一条都取不到。
+     */
+    @Volatile
+    private var schoolDomains: Set<String> = emptySet()
+
+    fun registerSchoolDomains(domains: List<String>) {
+        schoolDomains = domains.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+    }
+
     /** 本仓库在 GitHub 上的路径前缀，`github.com` 只放行这一段。 */
     private const val REPO_PREFIX = "/LinkUNIv/nbu-assistant-lite/"
 
@@ -61,6 +72,7 @@ internal object HostWhitelist {
         val host = rawHost.lowercase().removeSuffix(".")
         if (host.isEmpty()) return false
         if (host == SCHOOL || host.endsWith(".$SCHOOL")) return true
+        if (schoolDomains.any { host == it || host.endsWith(".$it") }) return true
         if (host == "github.com") return path.startsWith(REPO_PREFIX)
         return host in EXTERNAL
     }

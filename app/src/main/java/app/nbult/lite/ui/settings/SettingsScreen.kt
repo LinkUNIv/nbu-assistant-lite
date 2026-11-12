@@ -428,8 +428,23 @@ SettingCard(title = "工作日志") {
 
             if (section == "about") {
             val badges = rememberUpdateBadges()
+            val context = LocalContext.current
+            var unlocked by remember { mutableStateOf(app.nbult.lite.school.SchoolPreference.isUnlocked(context)) }
 SettingCard(title = "版本") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // 隐藏入口：连点版本行 5 次解锁「学校」。不做成明面选项，
+            // 是因为绝大多数用户只属于一所学校，多一个开关只会增加疑问
+            var taps by remember { mutableStateOf(0) }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable {
+                    taps += 1
+                    if (taps >= 5) {
+                        taps = 0
+                        app.nbult.lite.school.SchoolPreference.unlock(context)
+                        unlocked = true
+                    }
+                }
+            ) {
                 Column(Modifier.weight(1f)) {
                     Text("宁大助手 Lite", style = MaterialTheme.typography.bodyLarge)
                     Text(
@@ -442,6 +457,9 @@ SettingCard(title = "版本") {
             }
             VersionEntry(badge = false)
             UpdatePopupEntry()
+        }
+        if (unlocked) {
+            SchoolCard()
         }
 SettingCard(title = "资源") {
             PackEntry()
@@ -794,4 +812,77 @@ private fun sectionTitle(section: String): String = when (section) {
     "more" -> "数据与日志"
     "about" -> "关于"
     else -> "设置"
+}
+
+/**
+ * 学校切换（隐藏入口解锁后出现）。
+ *
+ * 切换会换掉规则、作息与资讯源，而这些东西在容器里是 lazy 的 —— 已经建好的实例
+ * 不会自己更新。所以这里只负责写偏好，然后提示重启，由用户决定何时重来。
+ */
+@Composable
+private fun SchoolCard() {
+    val context = LocalContext.current
+    val current = app.nbult.lite.school.SchoolPreference.schoolId(context)
+    val entries = remember { app.nbult.lite.school.SchoolCatalog.entries(context) }
+    val currentName = entries.firstOrNull { it.id == current }?.name ?: current
+    var picking by remember { mutableStateOf(false) }
+
+    SettingCard(title = "学校") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(currentName, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = if (current == app.nbult.lite.school.SchoolPreference.DEFAULT_ID) {
+                        "默认学校"
+                    } else {
+                        "切换后需要重启应用"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = "切换",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { picking = true }
+            )
+        }
+    }
+
+    if (picking) {
+        AlertDialog(
+            onDismissRequest = { picking = false },
+            title = { Text("选择学校") },
+            text = {
+                Column {
+                    entries.forEach { entry ->
+                        Text(
+                            text = entry.name + if (entry.id == current) "（当前）" else "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (entry.id == current) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = entry.id != current) {
+                                    picking = false
+                                    if (entry.id != current) {
+                                        app.nbult.lite.school.SchoolPreference.setSchoolId(context, entry.id)
+                                        app.nbult.lite.school.SchoolPreference.restart(context)
+                                    }
+                                }
+                                .padding(vertical = 10.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { picking = false }) { Text("关闭") }
+            }
+        )
+    }
 }

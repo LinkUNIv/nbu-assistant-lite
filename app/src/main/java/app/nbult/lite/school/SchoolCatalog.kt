@@ -46,10 +46,19 @@ internal object SchoolCatalog {
      * 内置学校的规则。失败返回 null —— 调用方应退回代码里的硬编码规则，
      * 而不是让「课表导入」整体不可用。
      */
-    fun builtinRules(context: Context, id: String = "nbu"): SchoolRules? {
-        val entry = entries(context).firstOrNull { it.id == id && it.builtin }
+    fun builtinRules(context: Context, id: String = "nbu"): SchoolRules? =
+        rules(context, id)
+
+    /**
+     * 按 id 加载任意学校的规则。
+     *
+     * 源既可能是内置资产，也可能是以后从资源包下发的文件 —— 对调用方没有区别，
+     * 因为两者都经 [ResourcePackStore] 同一条路径读取。
+     */
+    fun rules(context: Context, id: String): SchoolRules? {
+        val entry = entries(context).firstOrNull { it.id == id }
         if (entry == null) {
-            AppLog.log("School", "内置学校 $id 不在清单里")
+            AppLog.log("School", "学校 $id 不在清单里")
             return null
         }
         return loadRules(context, entry)
@@ -66,13 +75,15 @@ internal object SchoolCatalog {
             rules.calendarPath?.let { "作息" to it },
             rules.newsPath?.let { "资讯源" to it }
         ).forEach { (label, path) ->
-            val ok = runCatching { context.assets.open(path).close() }.isSuccess
+            val ok = app.nbult.lite.data.pack.ResourcePackStore.readText(context, path) != null
             if (!ok) AppLog.log("School", "${rules.name} 的$label 不存在：$path")
         }
     }
 
     private fun loadRules(context: Context, entry: Entry): SchoolRules? = runCatching {
-        val json = context.assets.open(entry.rulesPath).bufferedReader().use { it.readText() }
+        // 先看资源包再看内置：以后把规则改成下发时，这里不用再动
+        val json = app.nbult.lite.data.pack.ResourcePackStore.readText(context, entry.rulesPath)
+            ?: error("规则文件不存在：${entry.rulesPath}")
         when (val result = SchoolRules.parse(json)) {
             is SchoolRulesResult.Ok -> {
                 AppLog.log("School", "规则已加载 ${result.rules.name} v${result.rules.version}")

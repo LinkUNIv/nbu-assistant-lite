@@ -85,5 +85,8 @@
     "作息未采集，暂不指定 calendar，时间沿用内置模板",
     "签到系统未知，attendance 关闭",
     "资讯源两条：新闻网 UTF-8 / 教务处 GB2312"
+  ],
+  "domains": [
+    "xtu.edu.cn"
   ]
 }

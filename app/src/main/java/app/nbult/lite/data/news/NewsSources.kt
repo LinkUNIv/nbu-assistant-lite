@@ -68,6 +68,18 @@ object NewsSources {
 
     private const val ASSET = "news/sources.json"
 
+    /**
+     * 当前学校的资讯源路径。由容器按规则设置 ——
+     * 不同学校的栏目、地址、来源都不同，写死宁大那份等于没有多校。
+     */
+    @Volatile
+    private var assetPath: String = ASSET
+
+    fun configure(path: String?) {
+        assetPath = path?.takeIf { it.isNotBlank() } ?: ASSET
+        cached = null
+    }
+
     @Volatile
     private var cached: NewsSourceConfig? = null
 
@@ -84,7 +96,7 @@ object NewsSources {
         val packVersion = ResourcePackStore.state(context).version
         cached?.let { if (cachedPackVersion == packVersion) return it }
 
-        val text = ResourcePackStore.readText(context, ASSET)
+        val text = ResourcePackStore.readText(context, assetPath)
         val parsed = text?.let { parse(it) }
         val config = parsed ?: builtin(context) ?: NewsSourceConfig(
             columns = emptyList(),

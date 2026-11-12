@@ -51,6 +51,8 @@ private val IMPORT_MIME_TYPES = arrayOf(
     "application/msword",
     "application/rtf",
     "text/rtf",
+    // 湘潭等学校只给 PDF。扫描件会在解析时明确报错，不会静默失败
+    "application/pdf",
     "application/octet-stream"
 )
 

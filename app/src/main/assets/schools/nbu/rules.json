@@ -79,5 +79,8 @@
     "attendance": true,
     "login": true,
     "widget": true
-  }
+  },
+  "domains": [
+    "nbu.edu.cn"
+  ]
 }

@@ -28,7 +28,9 @@ internal data class SchoolRules(
     /** 导入器参数。不同学校的表格差异写在这里，而不是写进代码。 */
     val importer: SchoolImporter = SchoolImporter(),
     /** 该校具备哪些模块。湘潭没有签到系统，这里必须关掉，否则入口永远打不开。 */
-    val capabilities: SchoolCapabilities = SchoolCapabilities()
+    val capabilities: SchoolCapabilities = SchoolCapabilities(),
+    /** 该校的域名。网络白名单要靠它放行，否则湘潭的资讯一条都取不到。 */
+    val domains: List<String> = emptyList()
 ) {
     companion object {
         const val SUPPORTED_SCHEMA = 1
@@ -91,7 +93,8 @@ internal data class SchoolRules(
                 calendarPath = root.optString("calendar").takeIf { it.isNotBlank() },
                 newsPath = root.optString("news").takeIf { it.isNotBlank() },
                 importer = root.optJSONObject("importer")?.toImporter() ?: SchoolImporter(),
-                capabilities = root.optJSONObject("capabilities")?.toCapabilities() ?: SchoolCapabilities()
+                capabilities = root.optJSONObject("capabilities")?.toCapabilities() ?: SchoolCapabilities(),
+                domains = root.optJSONArray("domains").toStringList()
             )
             SchoolRulesResult.Ok(rules)
           } catch (e: Exception) {

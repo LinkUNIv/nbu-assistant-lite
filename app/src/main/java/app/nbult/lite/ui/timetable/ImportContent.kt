@@ -243,6 +243,7 @@ private fun sourceLabel(preview: ParseResult): String = when (preview.source) {
     ParseSource.TEXT_GRID -> "文本"
     ParseSource.EXCEL -> "Excel"
     ParseSource.WORD -> "Word"
+    ParseSource.PDF_TABLE -> "PDF"
     ParseSource.UNKNOWN -> "未知"
 }
 

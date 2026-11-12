@@ -122,7 +122,8 @@ fun AppRoot() {
             repository = it.timetableRepository,
             settings = it.settings,
             calendarRepository = it.calendarRepository,
-            termStartResolver = it.termStartResolver
+            termStartResolver = it.termStartResolver,
+            pdfParse = it.pdfParse
         )
     }
     val newsVm = rememberViewModel { NewsViewModel(it.newsRepository, it.networkMonitor) }

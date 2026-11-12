@@ -117,7 +117,9 @@ internal data class SchoolRules(
                 PdfImportParams(
                     columnAnchor = it.optString("columnAnchor", "星期"),
                     rowGapPt = it.optDouble("rowGapPt", 14.0).toFloat(),
-                    headerPerPage = it.optBoolean("headerPerPage", true)
+                    headerPerPage = it.optBoolean("headerPerPage", true),
+                    cellRegex = it.optString("cellRegex").takeIf { s -> s.isNotBlank() },
+                    noiseDrop = it.optJSONArray("noiseDrop").toStringList()
                 )
             }
             return SchoolImporter(
@@ -194,7 +196,11 @@ internal data class PdfImportParams(
     /** 同列纵向间距超过这个值才算新单元格，否则是同格的换行。 */
     val rowGapPt: Float = 14f,
     /** 每页都重新找表头：续表没有表头，固定阈值会整页丢失。 */
-    val headerPerPage: Boolean = true
+    val headerPerPage: Boolean = true,
+    /** 单元格文本的模板正则（命名分组 name/s1/s2/weeks/teacher/room）。 */
+    val cellRegex: String? = null,
+    /** 噪声行：整段等于这些词的片段直接丢掉（学时统计等）。 */
+    val noiseDrop: List<String> = emptyList()
 )
 
 /** 模块开关。关掉的模块在界面上不出现，路由也拦住。 */

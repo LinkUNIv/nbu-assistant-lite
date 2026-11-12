@@ -136,6 +136,12 @@ android {
 
     packaging {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}")
+        // pdfbox 依赖 bouncycastle 处理加密 PDF，而 BC 里带着后量子算法的大表
+        // （lowmc/sike/picnic，压缩前近 7MB）。解析课表永远用不到它们。
+        resources.excludes += setOf(
+            "org/bouncycastle/pqc/**",
+            "org/bouncycastle/jcajce/provider/asymmetric/**"
+        )
     }
 
     // 变更记录随包分发。仓库根目录的 CHANGELOG.md 是唯一来源，构建时复制进 assets，
@@ -195,6 +201,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
+    // PDF 课表：湘潭这类教务导出的 PDF 只有文本层 + 坐标，没有表格结构，
+    // 需要按坐标归列。pdfbox-android 是唯一在 Android 上成熟的方案。
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")

@@ -42,6 +42,14 @@ class AppContainer(context: Context) {
     val pendingWeekJump = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
     val termStartResolver: TermStartResolver by lazy { TermStartResolver(appContext) }
     val timetableRepository: TimetableRepository by lazy { TimetableRepository(database, settings) }
+    /** PDF 导入：取词库是 Android 依赖，参数来自学校规则。 */
+    private val pdfImporter: app.nbult.lite.parser.pdf.PdfImporter by lazy {
+        app.nbult.lite.parser.pdf.PdfImporter(appContext, schoolRules)
+    }
+
+    /** 以函数形式暴露，避免内部类型出现在公开签名里。 */
+    val pdfParse: (ByteArray) -> app.nbult.lite.parser.ParseResult = { pdfImporter.parse(it) }
+
     val calendarRepository: CalendarRepository by lazy {
         // 按学校取校历：规则里指定了就用它，没指定（如湘潭尚未采集作息）退回内置
         val path = schoolRules?.calendarPath

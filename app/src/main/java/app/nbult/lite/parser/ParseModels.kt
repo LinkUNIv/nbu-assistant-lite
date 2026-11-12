@@ -1,6 +1,6 @@
 package app.nbult.lite.parser
 
-enum class ParseSource { HTML_TABLE, TEXT_GRID, EXCEL, WORD, UNKNOWN }
+enum class ParseSource { HTML_TABLE, TEXT_GRID, EXCEL, WORD, PDF_TABLE, UNKNOWN }
 
 data class ParsedSlot(
     val name: String,

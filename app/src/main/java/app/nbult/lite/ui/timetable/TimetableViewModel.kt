@@ -133,7 +133,12 @@ class TimetableViewModel(
     private val repository: TimetableRepository,
     private val settings: app.nbult.lite.data.SettingsStore,
     private val calendarRepository: CalendarRepository,
-    private val termStartResolver: TermStartResolver
+    private val termStartResolver: TermStartResolver,
+    /**
+     * PDF 导入：取词库依赖 Android，参数来自学校规则，由容器注入。
+     * 用函数而不是 Parser 类型，是为了不让内部类型穿过公开构造函数的签名。
+     */
+    private val pdfParse: ((ByteArray) -> ParseResult)? = null
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(TimetableUiState())
@@ -289,7 +294,14 @@ class TimetableViewModel(
     }
 
     fun previewFile(fileName: String, bytes: ByteArray) {
-        val result = runCatching { TimetableParser.parseFile(fileName, bytes) }
+        val result = runCatching {
+            if (fileName.lowercase().endsWith(".pdf")) {
+                val parse = pdfParse ?: throw app.nbult.lite.parser.ParseException("当前版本不支持 PDF 导入")
+                parse(bytes)
+            } else {
+                TimetableParser.parseFile(fileName, bytes)
+            }
+        }
         _state.value = result.fold(
             onSuccess = { _state.value.copy(preview = it, previewError = null) },
             onFailure = { _state.value.copy(preview = null, previewError = it.message ?: "解析失败") }

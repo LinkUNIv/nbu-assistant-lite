@@ -29,3 +29,8 @@
 
 # kotlinx.coroutines 的调试类（release 下用不到）
 -dontwarn kotlinx.coroutines.**
+
+# PDFBox-Android：内部大量反射与资源加载，压缩后会在运行时才炸（且只在发布包里）
+-keep class com.tom_roush.pdfbox.** { *; }
+-dontwarn com.tom_roush.pdfbox.**
+-dontwarn org.apache.**

@@ -62,7 +62,18 @@
     "pdf": {
       "columnAnchor": "星期",
       "rowGapPt": 14.0,
-      "headerPerPage": true
+      "headerPerPage": true,
+      "cellRegex": "^(?<name>.+?)\\((?<s1>\\d+)-(?<s2>\\d+)节\\)(?<weeks>[^/]+)/校区[:：](?<campus>.+?)/场地[:：](?<room>.+?)/教师[:：](?<teacher>.+?)/考核方式[:：](?<assess>.+?)/学分[:：](?<credit>[\\d.]+)$",
+      "noiseDrop": [
+        "调查学时",
+        "线上学时",
+        "上机学时",
+        "听力学时",
+        "实验学时",
+        "实践学时",
+        "理论学时",
+        "讲座学时"
+      ]
     }
   },
   "capabilities": {

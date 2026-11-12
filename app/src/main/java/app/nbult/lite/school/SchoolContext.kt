@@ -78,6 +78,29 @@ internal class SchoolContext(private val context: Context) {
         return created
     }
 
+    /**
+     * 该校作息预设。课表上的时间是按**节次**存的，落到"几点几分"靠这份预设；
+     * 湘潭第五节 14:30、宁大 13:30，用错一份整张表都会偏。
+     *
+     * 读不出就返回空 —— 宁可保留用户当前作息，也不要清空。
+     */
+    fun periodsPreset(): List<Pair<String, String>> {
+        val path = rules?.calendarPath ?: return emptyList()
+        val text = app.nbult.lite.data.pack.ResourcePackStore.readText(context, path) ?: return emptyList()
+        return runCatching {
+            val root = org.json.JSONObject(text)
+            val items = root.optJSONArray("periods")
+                ?.optJSONObject(0)
+                ?.optJSONArray("items") ?: return emptyList()
+            (0 until items.length()).mapNotNull { i ->
+                val o = items.optJSONObject(i) ?: return@mapNotNull null
+                val start = o.optString("start")
+                val end = o.optString("end")
+                if (start.isBlank() || end.isBlank()) null else start to end
+            }.sortedBy { it.first }
+        }.getOrDefault(emptyList())
+    }
+
     fun pdf(): PdfImporter {
         val key = id
         val cached = pdfImporter

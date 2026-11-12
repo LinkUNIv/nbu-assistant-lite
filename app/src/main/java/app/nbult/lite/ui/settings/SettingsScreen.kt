@@ -838,7 +838,7 @@ private fun SchoolCard() {
                     text = if (current == app.nbult.lite.school.SchoolPreference.DEFAULT_ID) {
                         "默认学校"
                     } else {
-                        "切换后需要重启应用"
+                        "切换后立即生效，无需重启"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

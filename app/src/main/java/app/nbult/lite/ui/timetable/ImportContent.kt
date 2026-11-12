@@ -96,14 +96,23 @@ fun ImportContent(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("导入课表", style = MaterialTheme.typography.titleMedium)
+        // 「信息门户 / WebVPN」是宁波大学才有的路径。湘潭没有登录体系，
+        // 摆一个点进去打不开的按钮，比不摆更糟
+        val hasPortal = app.nbult.lite.ui.LocalAppContainer.current
+            .schoolRules?.capabilities?.login != false
         Text(
-            text = "两种方式：导入教务导出的 Word / Excel 文件，或手动逐门输入。",
+            text = if (hasPortal) {
+                "两种方式：导入教务导出的 Word / Excel 文件，或手动逐门输入。"
+            } else {
+                "两种方式：导入教务导出的 PDF / Word / Excel 文件，或手动逐门输入。"
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         // 大多数人是「卡在没有文件」这一步：把去教务导出做成一步能点到的动作，
         // 而不是让他自己去翻「入口」页找链接。仍然只跳转，不读页面、不碰登录态。
+        if (hasPortal) {
         OutlinedButton(
             onClick = {
                 val opened = openInBrowser(context, NbuUrls.PORTAL)
@@ -142,6 +151,7 @@ fun ImportContent(
             ) {
                 Text("连接 WebVPN", style = MaterialTheme.typography.labelSmall)
             }
+        }
         }
         jumpTip?.let {
             Text(
@@ -272,18 +282,23 @@ fun TimetableEmptyHint(onImport: () -> Unit) {
             onClick = onImport,
             modifier = Modifier.padding(top = 20.dp)
         ) { Text("导入课表") }
-        // 空态是「最不知道怎么开始」的位置，直接把导出入口摆在底下
+        // 空态是「最不知道怎么开始」的位置，直接把导出入口摆在底下；
+        // 没有信息门户的学校不显示，避免指向一个打不开的地址
+        val hasPortal = app.nbult.lite.ui.LocalAppContainer.current
+            .schoolRules?.capabilities?.login != false
         val context = LocalContext.current
         val clipboard = LocalClipboardManager.current
-        TextButton(
-            onClick = {
-                if (!openInBrowser(context, NbuUrls.PORTAL)) {
-                    clipboard.setText(AnnotatedString(NbuUrls.PORTAL))
-                }
-            },
-            modifier = Modifier.padding(top = 4.dp)
-        ) {
-            Text("没有文件？打开信息门户导出课表", style = MaterialTheme.typography.labelMedium)
+        if (hasPortal) {
+            TextButton(
+                onClick = {
+                    if (!openInBrowser(context, NbuUrls.PORTAL)) {
+                        clipboard.setText(AnnotatedString(NbuUrls.PORTAL))
+                    }
+                },
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                Text("没有文件？打开信息门户导出课表", style = MaterialTheme.typography.labelMedium)
+            }
         }
     }
 }

@@ -29,6 +29,9 @@ class AppContainer(context: Context) {
 
     private val appContext = context.applicationContext
 
+    /** 容器内部的后台任务（切学校后应用作息等），生命周期与进程一致。 */
+    private val containerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     val database: AppDatabase by lazy { AppDatabase.build(appContext) }
     val settings: SettingsStore by lazy { SettingsStore(appContext) }
     val networkMonitor: NetworkMonitor by lazy { NetworkMonitor(appContext) }
@@ -57,8 +60,25 @@ class AppContainer(context: Context) {
 
     val calendarRepository: CalendarRepository get() = schoolContext.calendar()
 
-    /** 切换学校：写偏好 → 换上下文 → 通知界面重建，不退出应用。 */
-    fun switchSchool(id: String): Boolean = schoolContext.switchTo(id)
+    /**
+     * 切换学校：写偏好 → 换上下文 → 应用该校作息 → 通知界面重建，不退出应用。
+     *
+     * 作息必须跟着换：课表存的是节次，第五节在湘潭是 14:30、在宁大是 13:30。
+     */
+    fun switchSchool(id: String): Boolean {
+        if (!schoolContext.switchTo(id)) return false
+        val preset = schoolContext.periodsPreset()
+        if (preset.isNotEmpty()) {
+            containerScope.launch {
+                runCatching { timetableRepository.applyPeriodPreset(preset) }
+                    .onFailure { AppLog.log("School", "应用作息失败：${it.message}") }
+                    .onSuccess { AppLog.log("School", "已应用 ${preset.size} 节作息") }
+            }
+        } else {
+            AppLog.log("School", "该校无作息预设，保留当前作息")
+        }
+        return true
+    }
     val newsRepository: NewsRepository by lazy {
         NewsRepository(appContext, database, newsSource, newsCrawler, networkMonitor)
     }

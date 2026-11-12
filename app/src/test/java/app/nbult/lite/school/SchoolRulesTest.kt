@@ -65,8 +65,9 @@ class SchoolRulesTest {
         assertFalse("湘潭没有签到系统，必须关闭", rules.capabilities.attendance)
         assertTrue(rules.importer.supports("pdf"))
         assertFalse("湘潭不走 Excel 导入", rules.importer.supports("xlsx"))
-        // 作息尚未采集，不能凭空指定
-        assertEquals(null, rules.calendarPath)
+        // 作息已按《湘潭大学夏季作息时间表》落地，且文件必须真实存在
+        assertEquals("schools/xtu/calendar.json", rules.calendarPath)
+        assertNotNull("缺作息文件", readAsset(rules.calendarPath!!))
         assertNotNull("资讯源应指向文件", rules.newsPath)
     }
 

@@ -21,21 +21,43 @@ internal object SchoolPreference {
     fun schoolId(context: Context): String =
         prefs(context).getString(KEY_ID, DEFAULT_ID)?.takeIf { it.isNotBlank() } ?: DEFAULT_ID
 
-    fun setSchoolId(context: Context, id: String) {
-        prefs(context).edit().putString(KEY_ID, id).apply()
-    }
+    /**
+     * 必须用 commit 而不是 apply。
+     *
+     * apply 是异步写盘，而切换学校后我们会立刻杀进程重启 —— 写还没落盘，进程就没了，
+     * 下次启动读到的还是默认值。真机上表现为「切了也没用，永远是宁波大学」。
+     */
+    fun setSchoolId(context: Context, id: String): Boolean =
+        prefs(context).edit().putString(KEY_ID, id).commit()
 
     fun isUnlocked(context: Context): Boolean = prefs(context).getBoolean(KEY_UNLOCKED, false)
 
     fun unlock(context: Context) {
-        prefs(context).edit().putBoolean(KEY_UNLOCKED, true).apply()
+        prefs(context).edit().putBoolean(KEY_UNLOCKED, true).commit()
     }
 
-    /** 切换学校后容器里的规则、校历都是旧的，必须重建进程才对得上。 */
+    /**
+     * 切换学校后容器里的规则、校历都是旧的，必须重建进程才对得上。
+     *
+     * 不用「先 startActivity 再 exit」那套：新起的 Activity 和被杀的是同一个进程，
+     * 会一起没。改用 AlarmManager 预约一次启动，再退出 —— 这是在 Android 10+
+     * 后台启动限制下仍然可靠的自重启方式。
+     */
     fun restart(context: Context) {
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return
-        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        context.startActivity(intent)
+        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return
+        launch.addFlags(
+            android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+        )
+        val pending = android.app.PendingIntent.getActivity(
+            context,
+            0,
+            launch,
+            android.app.PendingIntent.FLAG_CANCEL_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarm = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        // 300ms 足够让退出完成，又不至于让用户觉得卡住
+        alarm.set(android.app.AlarmManager.RTC, System.currentTimeMillis() + 300, pending)
         Runtime.getRuntime().exit(0)
     }
 

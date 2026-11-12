@@ -871,8 +871,15 @@ private fun SchoolCard() {
                                 .clickable(enabled = entry.id != current) {
                                     picking = false
                                     if (entry.id != current) {
-                                        app.nbult.lite.school.SchoolPreference.setSchoolId(context, entry.id)
-                                        app.nbult.lite.school.SchoolPreference.restart(context)
+                                        val saved = app.nbult.lite.school.SchoolPreference
+                                            .setSchoolId(context, entry.id)
+                                        app.nbult.lite.util.AppLog.log(
+                                            "School",
+                                            "切换到 ${entry.id}：写入${if (saved) "成功" else "失败"}，准备重启"
+                                        )
+                                        if (saved) {
+                                            app.nbult.lite.school.SchoolPreference.restart(context)
+                                        }
                                     }
                                 }
                                 .padding(vertical = 10.dp)

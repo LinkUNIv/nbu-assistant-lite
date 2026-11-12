@@ -56,8 +56,8 @@ android {
         // 版本号规则：主.次.修订；小改动只递增修订号
         // versionCode = 主*10000 + 次*100 + 修订，每版必须递增，保证可覆盖安装
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 3800
-        versionName = "0.38.0"
+        versionCode = 3801
+        versionName = "0.38.1"
         vectorDrawables.useSupportLibrary = true
         // 只保留手机实际会跑的架构。ML Kit 的 libmlkit_google_ocr_pipeline.so
         // 四个 ABI 合计 39MB，其中 x86/x86_64 在真机上永远加载不到，砍掉省 22MB。

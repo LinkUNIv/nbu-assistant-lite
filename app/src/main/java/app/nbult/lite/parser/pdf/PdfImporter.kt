@@ -21,6 +21,11 @@ internal class PdfImporter(
         val pdf = rules?.importer?.pdf
             ?: throw ParseException("当前学校未配置 PDF 导入参数")
 
+        if (pdf.cellRegex.isNullOrBlank()) {
+            // 宁大这类不提供 PDF 课表的学校没有配单元格正则，此时不该假装在解析
+            throw ParseException("当前学校未配置 PDF 导入规则")
+        }
+
         val fragments = extractor.extract(bytes)
         if (fragments.isEmpty()) {
             // 没有文本层 = 扫描件。这条要说清楚，否则用户只会看到"解析失败"

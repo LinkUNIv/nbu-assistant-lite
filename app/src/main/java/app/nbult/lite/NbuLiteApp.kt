@@ -105,6 +105,10 @@ class NbuLiteApp : Application() {
         container = AppContainer(this)
         AppLog.log("App", "启动 v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         // 启动即加载一次：坏规则要在启动日志里暴露，而不是等用户导课表时才发现
+        AppLog.log(
+            "School",
+            "当前学校=${app.nbult.lite.school.SchoolPreference.schoolId(this)}"
+        )
         container.schoolRules?.let { rules ->
             // 该校域名要先进白名单，否则湘潭的资讯请求会被门禁拦掉
             app.nbult.lite.net.HostWhitelist.registerSchoolDomains(rules.domains)

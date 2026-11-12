@@ -1,12 +1,12 @@
 {
-  "versionCode": 3719,
-  "versionName": "0.37.19",
+  "versionCode": 3720,
+  "versionName": "0.37.20",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.37.19-Preview/nbu-assistant-lite-0.37.19-Preview.apk",
-  "sha256": "406ad8a5300687f7c488631a70e83a0e993b6acc5fd41e9fca2fb3916d258f20",
-  "size": 24135967,
-  "notes": "**开发工具链升级到 Kotlin 2.0 / Compose 1.7**\n\n- Kotlin 1.9.24 → 2.0.21，KSP 同步升级；Compose 编译器改由 Kotlin 插件接管。\n- Compose BOM 2024.06 → 2024.09（Compose 1.6.8 → 1.7.3）。\n- 仅随 API 更名调整三处参数：底部弹窗的 `contentWindowInsets`、两处翻页器的 `beyondViewportPageCount`。\n- 界面与行为不变；为后续UI实现做准备。",
-  "generatedAt": 1794454398797,
-  "tag": "v0.37.19-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.37.20-Preview/nbu-assistant-lite-0.37.20-Preview.apk",
+  "sha256": "03d8ed62ac24184eaeb3973dad4c9a75fe5973628e8cb383450a99bc8f701bd7",
+  "size": 24136063,
+  "notes": "**请求白名单与更新检查的可用性**\n\n- 新增统一白名单门禁。\n- 明文流量全量禁止。核对后确认应用内的请求均为 https，唯一的 http 入口走系统浏览器，不受此限制。\n- 检查更新不再依赖 GitHub 的资产域名。\n- 更新检查的超时从 30 秒降到 8 秒，失败原因（主机、耗时、异常类型）写入日志。",
+  "generatedAt": 1794458025041,
+  "tag": "v0.37.20-Preview"
 }

@@ -319,6 +319,40 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "$GITHUB_REF_NAME" --draft=false
 
+      # 应用内「检查更新」读的是这里写出的静态清单，不是 Release API。
+      #
+      # 原因：校园网下 `github.com` 与 `release-assets.githubusercontent.com` 时通时断，
+      # 一次失败要卡 60 秒（15 秒连接超时 × 重试）。静态清单走 raw / jsDelivr —— 资源包
+      # 已经在用这两条，实测可用。文件内容就是 manifest.json 加两个字段。
+      - name: 同步静态清单到 packs 分支
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          channel=$(python3 -c "import json;print(json.load(open('apk/manifest.json'))['channel'])")
+          path="release/latest-${channel}.json"
+          python3 - "$path" <<'PY'
+          import base64, json, os, subprocess, sys, time
+          path = sys.argv[1]
+          manifest = json.load(open('apk/manifest.json', encoding='utf-8'))
+          manifest['generatedAt'] = int(time.time() * 1000)
+          manifest['tag'] = os.environ['GITHUB_REF_NAME']
+          body = json.dumps(manifest, ensure_ascii=False, indent=2)
+          repo = os.environ['GITHUB_REPOSITORY']
+          # 已存在就带上 sha，否则 API 会拒绝更新
+          sha = subprocess.run(
+              ['gh', 'api', f'repos/{repo}/contents/{path}?ref=packs', '--jq', '.sha'],
+              capture_output=True, text=True)
+          args = ['gh', 'api', '-X', 'PUT', f'repos/{repo}/contents/{path}',
+                  '-f', f'message=chore(packs): 同步 {os.environ["GITHUB_REF_NAME"]} 的静态清单',
+                  '-f', f'content={base64.b64encode(body.encode()).decode()}',
+                  '-f', 'branch=packs']
+          if sha.returncode == 0 and sha.stdout.strip():
+              args += ['-f', f'sha={sha.stdout.strip()}']
+          subprocess.run(args, check=True, capture_output=True)
+          print(f'已写入 {path}（versionCode={manifest["versionCode"]}）')
+          PY
+
       # 半成品比没有更糟：同 tag 多一条空壳会让应用内更新读到缺资产的清单。
       # 这里断言「恰好一条、已发布、资产够数」，不满足就让任务红着，别留给人去发现。
       - name: 发布后自检

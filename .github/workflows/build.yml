@@ -96,6 +96,16 @@ jobs:
       - name: 测试与编译
         run: ./gradlew --no-daemon --console=plain ":app:test${BUILD_VARIANT}UnitTest" ":app:assemble$BUILD_VARIANT"
 
+      # 资产不会因为缺文件而报错，只会静默少打包 —— 0.37.20 就是这样把学校规则
+      # 漏在了包外。这里断言关键资产真的在包里，缺了就让流水线红。
+      - name: 校验关键资产已打包
+        run: |
+          apk=$(ls app/build/outputs/apk/preview/*.apk | head -1)
+          for need in assets/schools/index.json assets/schools/nbu/rules.json assets/changelog/CHANGELOG.md; do
+            unzip -l "$apk" | grep -q "$need" || { echo "::error::包内缺少 $need"; exit 1; }
+          done
+          echo "关键资产齐全"
+
       - name: 校验签名
         # 把证书指纹打进日志。签名一旦退回 debug，这行会立刻显示
         # 「CN=Android Debug」而不是「CN=NBU Assistant Lite」，不必等装机才发现

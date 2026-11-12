@@ -1,12 +1,12 @@
 {
-  "versionCode": 3721,
-  "versionName": "0.37.21",
+  "versionCode": 3722,
+  "versionName": "0.37.22",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.37.21-Preview/nbu-assistant-lite-0.37.21-Preview.apk",
-  "sha256": "b99a8eda5b5b189c1b06bf8e088df1d6ad379597e6edd0970022dadbd8e6571e",
-  "size": 24137465,
-  "notes": "**补入上一版遗漏的学校规则文件**\n\n- 0.37.20 构建时，学校解析规则没有随包分发；本版补上。\n- 该规则目前只做加载与校验，尚未接管解析，因此上一版没有出现功能异常。\n- 新增构建期检查：资源文件缺失时直接让流水线失败，不再静默产包。",
-  "generatedAt": 1794459521676,
-  "tag": "v0.37.21-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.37.22-Preview/nbu-assistant-lite-0.37.22-Preview.apk",
+  "sha256": "f0d2208b64eb1be79608125159c989b058da033b3cf1d6c27687efd76df9828e",
+  "size": 24153997,
+  "notes": "**修复：下载中断后可能把半截安装包当成品交出**\n\n- 下载改为先写临时文件，校验通过才改成正式文件名。\n- 只有带校验标记的安装包才被认定为可安装；交给系统安装器前再核一次哈希。\n- 启动清理会连临时文件一并清掉。\n- 升级后旧的缓存包没有标记，会被要求重新下载。",
+  "generatedAt": 1794460842581,
+  "tag": "v0.37.22-Preview"
 }

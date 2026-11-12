@@ -175,34 +175,58 @@ object AppUpdateChecker {
      * 清单判定。静态镜像与 API 链路共用这一份 —— 两条路拿到的 JSON 结构相同
      * （CI 写的静态文件就是 `apk/manifest.json` 的副本），判定逻辑不该有两套。
      */
-    internal fun evaluateManifest(json: JSONObject): UpdateState {
+    internal fun evaluateManifest(json: JSONObject): UpdateState = evaluateManifest(
+        ManifestData(
+            versionCode = json.optInt("versionCode", 0),
+            versionName = json.optString("versionName", ""),
+            channel = json.optString("channel"),
+            apkUrl = json.optString("apkUrl"),
+            sha256 = json.optString("sha256"),
+            notes = json.optString("notes", ""),
+            size = json.optLong("size", 0L)
+        )
+    )
+
+    /**
+     * 判定的**纯数据**入口。
+     *
+     * 拆出这一层是因为单测里 `org.json` 会撞上 Android 的桩实现（方法直接抛
+     * RuntimeException），本地能过、CI 上挂 —— 与其赌类路径顺序，不如让判定不碰 JSON。
+     */
+    internal fun evaluateManifest(data: ManifestData): UpdateState {
         // 二次核对：tag 与清单里的 channel 应当一致，不一致说明 CI 或人工哪边出了错
-        val manifestChannel = json.optString("channel")
-        if (manifestChannel.isNotBlank() && !manifestChannel.equals(UpdateChannel.current, ignoreCase = true)) {
-            AppLog.log("Update", "清单通道 $manifestChannel 与安装包 ${UpdateChannel.current} 不符，已忽略")
+        if (data.channel.isNotBlank() && !data.channel.equals(UpdateChannel.current, ignoreCase = true)) {
+            AppLog.log("Update", "清单通道 ${data.channel} 与安装包 ${UpdateChannel.current} 不符，已忽略")
             return UpdateState.UpToDate
         }
-        val remoteCode = json.optInt("versionCode", 0)
-        val apkUrl = json.optString("apkUrl")
-        val digest = json.optString("sha256")
-
-        if (remoteCode <= BuildConfig.VERSION_CODE) return UpdateState.UpToDate
+        if (data.versionCode <= BuildConfig.VERSION_CODE) return UpdateState.UpToDate
 
         // 缺下载地址或校验值的清单一律不认：装一个没有校验的包，
         // 不如不装 —— 这是唯一能挡住「下到半截的包」的东西
-        if (apkUrl.isBlank() || digest.isBlank()) return UpdateState.Failed("版本信息不完整")
+        if (data.apkUrl.isBlank() || data.sha256.isBlank()) return UpdateState.Failed("版本信息不完整")
 
         return UpdateState.Available(
             UpdateInfo(
-                versionCode = remoteCode,
-                versionName = json.optString("versionName", ""),
-                apkUrl = apkUrl,
-                sha256 = digest,
-                notes = json.optString("notes", ""),
-                size = json.optLong("size", 0L)
+                versionCode = data.versionCode,
+                versionName = data.versionName,
+                apkUrl = data.apkUrl,
+                sha256 = data.sha256,
+                notes = data.notes,
+                size = data.size
             )
         )
     }
+
+    /** 清单的可比较字段。解析只在 [evaluateManifest] 的 JSON 重载里做一次。 */
+    internal data class ManifestData(
+        val versionCode: Int,
+        val versionName: String,
+        val channel: String,
+        val apkUrl: String,
+        val sha256: String,
+        val notes: String,
+        val size: Long
+    )
 
     /**
      * 读静态清单：raw 优先，jsDelivr 兜底。

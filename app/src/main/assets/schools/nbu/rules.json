@@ -4,7 +4,13 @@
   "name": "宁波大学",
   "version": "2026.11.12",
   "source": "内置：与 FieldExtractor 的硬编码规则一一对应，切换解析路径前用它做双跑对比",
-  "signature": ["星期", "节", "周", "教师", "教室"],
+  "signature": [
+    "星期",
+    "节",
+    "周",
+    "教师",
+    "教室"
+  ],
   "patterns": {
     "weekRange": "(\\d{1,2})\\s*[-~—－至]\\s*(\\d{1,2})\\s*周",
     "weekList": "((?:\\d{1,2}\\s*[,，、]\\s*)+\\d{1,2})\\s*周",
@@ -19,7 +25,10 @@
     "room": "([\\u4e00-\\u9fa5]{2,10}(?:楼|馆|室|中心|操场|体育馆|场)[A-Za-z]?\\s*\\d{0,4}|[A-Za-z]{1,2}\\s?\\d{2,4}(?:[-—]\\d{2,4})?)"
   },
   "tokens": {
-    "dayPrefixes": ["星期", "周"],
+    "dayPrefixes": [
+      "星期",
+      "周"
+    ],
     "dayWords": {
       "一": 1,
       "二": 2,
@@ -32,11 +41,43 @@
     },
     "weekUnit": "周",
     "sectionUnit": "节",
-    "teacherLabels": ["教师", "老师", "任课教师"],
-    "roomLabels": ["教室", "场地", "地点", "上课地点"]
+    "teacherLabels": [
+      "教师",
+      "老师",
+      "任课教师"
+    ],
+    "roomLabels": [
+      "教室",
+      "场地",
+      "地点",
+      "上课地点"
+    ]
   },
   "limits": {
     "maxWeeks": 20,
     "maxSections": 12
+  },
+  "calendar": "calendar/nbu_calendar.json",
+  "news": "news/sources.json",
+  "importer": {
+    "formats": [
+      "xlsx",
+      "xlsm",
+      "docx",
+      "doc",
+      "txt",
+      "html",
+      "htm"
+    ],
+    "pdf": {
+      "columnAnchor": "星期",
+      "rowGapPt": 14.0,
+      "headerPerPage": true
+    }
+  },
+  "capabilities": {
+    "attendance": true,
+    "login": true,
+    "widget": true
   }
 }

@@ -1,6 +1,7 @@
 package app.nbult.lite.school
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -42,6 +43,41 @@ class SchoolRulesTest {
         assertNotNull("节次区间", rules.patterns.sectionRange.find("第1-2节"))
         assertNotNull("星期", rules.patterns.dayPattern.find("星期一"))
         assertNotNull("教师", rules.patterns.teacherLabelled.find("教师：张三"))
+    }
+
+    @Test
+    fun `宁大规则带四段附属配置且指向真实文件`() {
+        val rules = (SchoolRules.parse(readAsset("schools/nbu/rules.json")) as SchoolRulesResult.Ok).rules
+        assertEquals("calendar/nbu_calendar.json", rules.calendarPath)
+        assertEquals("news/sources.json", rules.newsPath)
+        assertTrue(rules.capabilities.attendance)
+        assertTrue(rules.importer.supports("xlsx"))
+        assertNotNull("PDF 参数应存在", rules.importer.pdf)
+        // 引用的文件必须真的存在，否则线上只能靠日志发现
+        assertNotNull("缺作息文件", readAsset(rules.calendarPath!!))
+        assertNotNull("缺资讯源文件", readAsset(rules.newsPath!!))
+    }
+
+    @Test
+    fun `湘潭规则关闭签到且只认 PDF`() {
+        val rules = (SchoolRules.parse(readAsset("schools/xtu/rules.json")) as SchoolRulesResult.Ok).rules
+        assertEquals("xtu", rules.id)
+        assertFalse("湘潭没有签到系统，必须关闭", rules.capabilities.attendance)
+        assertTrue(rules.importer.supports("pdf"))
+        assertFalse("湘潭不走 Excel 导入", rules.importer.supports("xlsx"))
+        // 作息尚未采集，不能凭空指定
+        assertEquals(null, rules.calendarPath)
+        assertNotNull("资讯源应指向文件", rules.newsPath)
+    }
+
+    @Test
+    fun `缺少 capabilities 时默认全开`() {
+        // 老规则文件没有这一段，行为要和过去一致
+        val json = readAsset("schools/nbu/rules.json")
+            .replace(Regex(",\\s*\"capabilities\": \\{[^}]*\\}"), "")
+        val rules = (SchoolRules.parse(json) as SchoolRulesResult.Ok).rules
+        assertTrue(rules.capabilities.attendance)
+        assertTrue(rules.capabilities.login)
     }
 
     @Test

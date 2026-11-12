@@ -20,7 +20,15 @@ internal data class SchoolRules(
     val patterns: SchoolPatterns,
     val tokens: SchoolTokens,
     val maxWeeks: Int,
-    val maxSections: Int
+    val maxSections: Int,
+    /** 作息与学年：`schools/<id>/calendar.json`。为空表示沿用内置作息。 */
+    val calendarPath: String? = null,
+    /** 资讯源：`schools/<id>/news.json`。为空表示没有资讯模块。 */
+    val newsPath: String? = null,
+    /** 导入器参数。不同学校的表格差异写在这里，而不是写进代码。 */
+    val importer: SchoolImporter = SchoolImporter(),
+    /** 该校具备哪些模块。湘潭没有签到系统，这里必须关掉，否则入口永远打不开。 */
+    val capabilities: SchoolCapabilities = SchoolCapabilities()
 ) {
     companion object {
         const val SUPPORTED_SCHEMA = 1
@@ -79,7 +87,11 @@ internal data class SchoolRules(
                     roomLabels = t.optJSONArray("roomLabels").toStringList()
                 ),
                 maxWeeks = root.optJSONObject("limits")?.optInt("maxWeeks", 20) ?: 20,
-                maxSections = root.optJSONObject("limits")?.optInt("maxSections", 12) ?: 12
+                maxSections = root.optJSONObject("limits")?.optInt("maxSections", 12) ?: 12,
+                calendarPath = root.optString("calendar").takeIf { it.isNotBlank() },
+                newsPath = root.optString("news").takeIf { it.isNotBlank() },
+                importer = root.optJSONObject("importer")?.toImporter() ?: SchoolImporter(),
+                capabilities = root.optJSONObject("capabilities")?.toCapabilities() ?: SchoolCapabilities()
             )
             SchoolRulesResult.Ok(rules)
           } catch (e: Exception) {
@@ -98,6 +110,28 @@ internal data class SchoolRules(
                 throw PatternError("patterns.$key 无法编译：${e.message}")
             }
         }
+
+        private fun JSONObject.toImporter(): SchoolImporter {
+            val formats = optJSONArray("formats").toStringList()
+            val pdf = optJSONObject("pdf")?.let {
+                PdfImportParams(
+                    columnAnchor = it.optString("columnAnchor", "星期"),
+                    rowGapPt = it.optDouble("rowGapPt", 14.0).toFloat(),
+                    headerPerPage = it.optBoolean("headerPerPage", true)
+                )
+            }
+            return SchoolImporter(
+                formats = formats.ifEmpty { listOf("xlsx", "docx", "txt", "html") },
+                pdf = pdf
+            )
+        }
+
+        private fun JSONObject.toCapabilities(): SchoolCapabilities = SchoolCapabilities(
+            // 默认全开：老规则文件没有这一段，行为要与过去一致
+            attendance = optBoolean("attendance", true),
+            login = optBoolean("login", true),
+            widget = optBoolean("widget", true)
+        )
 
         private fun org.json.JSONArray?.toStringList(): List<String> {
             if (this == null) return emptyList()
@@ -138,4 +172,34 @@ internal data class SchoolTokens(
     val sectionUnit: String,
     val teacherLabels: List<String>,
     val roomLabels: List<String>
+)
+
+/** 导入器配置：支持哪些格式、PDF 怎么切。 */
+internal data class SchoolImporter(
+    val formats: List<String> = listOf("xlsx", "docx", "txt", "html"),
+    val pdf: PdfImportParams? = null
+) {
+    fun supports(extension: String): Boolean = formats.any { it.equals(extension, ignoreCase = true) }
+}
+
+/**
+ * PDF 课表的取格参数。
+ *
+ * 这三条来自湘潭那份样本的实测（见 `docs/parser/xtu-pdf.md`）：
+ * 不能按节次数字切行、表头要逐页判断、周次支持 (单)/(双)。
+ */
+internal data class PdfImportParams(
+    /** 列锚：表头里出现这个前缀的单元格，其 x 作为该列的起点。 */
+    val columnAnchor: String = "星期",
+    /** 同列纵向间距超过这个值才算新单元格，否则是同格的换行。 */
+    val rowGapPt: Float = 14f,
+    /** 每页都重新找表头：续表没有表头，固定阈值会整页丢失。 */
+    val headerPerPage: Boolean = true
+)
+
+/** 模块开关。关掉的模块在界面上不出现，路由也拦住。 */
+internal data class SchoolCapabilities(
+    val attendance: Boolean = true,
+    val login: Boolean = true,
+    val widget: Boolean = true
 )

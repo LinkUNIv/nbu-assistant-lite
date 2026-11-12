@@ -55,11 +55,28 @@ internal object SchoolCatalog {
         return loadRules(context, entry)
     }
 
+    /**
+     * 规则里引用的附属文件是否存在。
+     *
+     * 只记日志不拦截：缺作息还能用内置模板，缺资讯源只是少一个模块 ——
+     * 但这类"少了一半"的情况必须在日志里看得见，否则排查起来只能靠猜。
+     */
+    private fun checkReferences(context: Context, rules: SchoolRules) {
+        listOfNotNull(
+            rules.calendarPath?.let { "作息" to it },
+            rules.newsPath?.let { "资讯源" to it }
+        ).forEach { (label, path) ->
+            val ok = runCatching { context.assets.open(path).close() }.isSuccess
+            if (!ok) AppLog.log("School", "${rules.name} 的$label 不存在：$path")
+        }
+    }
+
     private fun loadRules(context: Context, entry: Entry): SchoolRules? = runCatching {
         val json = context.assets.open(entry.rulesPath).bufferedReader().use { it.readText() }
         when (val result = SchoolRules.parse(json)) {
             is SchoolRulesResult.Ok -> {
                 AppLog.log("School", "规则已加载 ${result.rules.name} v${result.rules.version}")
+                checkReferences(context, result.rules)
                 result.rules
             }
             is SchoolRulesResult.Failed -> {

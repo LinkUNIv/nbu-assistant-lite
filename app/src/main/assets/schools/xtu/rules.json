@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "id": "xtu",
+  "name": "湘潭大学",
+  "version": "2026.11.12",
+  "source": "随资源包下发。PDF 规则见 docs/parser/xtu-pdf.md，资讯源为 2026-11-12 实测",
+  "signature": [
+    "星期",
+    "节",
+    "周"
+  ],
+  "patterns": {
+    "weekRange": "(\\d{1,2})\\s*[-~—－至]\\s*(\\d{1,2})\\s*周",
+    "weekList": "((?:\\d{1,2}\\s*[,，、]\\s*)+\\d{1,2})\\s*周",
+    "weekSingle": "(\\d{1,2})\\s*周",
+    "weekOdd": "\\(\\s*单\\s*\\)|（\\s*单\\s*）|单周",
+    "weekEven": "\\(\\s*双\\s*\\)|（\\s*双\\s*）|双周",
+    "sectionRange": "第?\\s*(\\d{1,2})\\s*[-~—－至]\\s*(\\d{1,2})\\s*节",
+    "sectionSingle": "第?\\s*(\\d{1,2})\\s*节",
+    "dayPattern": "(?:星期|周)\\s*([一二三四五六日天])",
+    "teacherLabelled": "(?:教师|老师|任课教师)\\s*[:：]?\\s*([\\u4e00-\\u9fa5]{2,4})",
+    "teacherSuffix": "([\\u4e00-\\u9fa5]{2,4})\\s*老师",
+    "room": "(?:场地|教室|地点)\\s*[:：]\\s*([^\\s,，;；]{2,20})"
+  },
+  "tokens": {
+    "dayPrefixes": [
+      "星期",
+      "周"
+    ],
+    "dayWords": {
+      "一": 1,
+      "二": 2,
+      "三": 3,
+      "四": 4,
+      "五": 5,
+      "六": 6,
+      "日": 7,
+      "天": 7
+    },
+    "weekUnit": "周",
+    "sectionUnit": "节",
+    "teacherLabels": [
+      "教师",
+      "老师",
+      "任课教师"
+    ],
+    "roomLabels": [
+      "场地",
+      "教室",
+      "地点"
+    ]
+  },
+  "limits": {
+    "maxWeeks": 20,
+    "maxSections": 14
+  },
+  "news": "schools/xtu/news.json",
+  "importer": {
+    "formats": [
+      "pdf"
+    ],
+    "pdf": {
+      "columnAnchor": "星期",
+      "rowGapPt": 14.0,
+      "headerPerPage": true
+    }
+  },
+  "capabilities": {
+    "attendance": false,
+    "login": false,
+    "widget": false
+  },
+  "notes": [
+    "作息未采集，暂不指定 calendar，时间沿用内置模板",
+    "签到系统未知，attendance 关闭",
+    "资讯源两条：新闻网 UTF-8 / 教务处 GB2312"
+  ]
+}

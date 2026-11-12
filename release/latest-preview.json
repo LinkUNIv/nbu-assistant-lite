@@ -1,12 +1,12 @@
 {
-  "versionCode": 3722,
-  "versionName": "0.37.22",
+  "versionCode": 3800,
+  "versionName": "0.38.0",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.37.22-Preview/nbu-assistant-lite-0.37.22-Preview.apk",
-  "sha256": "f0d2208b64eb1be79608125159c989b058da033b3cf1d6c27687efd76df9828e",
-  "size": 24153997,
-  "notes": "**修复：下载中断后可能把半截安装包当成品交出**\n\n- 下载改为先写临时文件，校验通过才改成正式文件名。\n- 只有带校验标记的安装包才被认定为可安装；交给系统安装器前再核一次哈希。\n- 启动清理会连临时文件一并清掉。\n- 升级后旧的缓存包没有标记，会被要求重新下载。",
-  "generatedAt": 1794460842581,
-  "tag": "v0.37.22-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.0-Preview/nbu-assistant-lite-0.38.0-Preview.apk",
+  "sha256": "899d95fd73fa0d37952f3c8f2f844d50f622c4cb44e7650efdb516c6d4c4fc1b",
+  "size": 26493770,
+  "notes": "**多校支持：湘潭大学可导入、可看新闻**\n\n- 新增学校规则机制：解析规则、作息、资讯源、导入参数、功能开关都写在规则文件里，更新无须修改代码。\n- 支持 PDF 课表导入（湘潭教务导出的 PDF）：按坐标归列，跨页续表能接上。\n- 设置页连点版本行 5 次可切换学校，默认仍为宁波大学。\n- 资讯源按学校切换；湘潭接入新闻网与教务处两条。\n- 湘潭没有签到系统，点名入口在该校下不出现。\n- 空课表时不再加载校历，减少启动开销。\n- 引入 PDF 解析库，安装包增大约 2.2MB。",
+  "generatedAt": 1794469149629,
+  "tag": "v0.38.0-Preview"
 }

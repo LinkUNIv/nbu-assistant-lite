@@ -67,6 +67,10 @@ object AppUpdateChecker {
     /** 静态清单的失效期：7 天。 */
     private const val STALE_MS = 7L * 24 * 60 * 60 * 1000
 
+    /** 安装包与续传临时文件的命名。UpdateInstaller 也按这套规则找文件。 */
+    fun apkName(versionCode: Int) = "nbu-lite-$versionCode.apk"
+    fun partName(versionCode: Int) = "nbu-lite-$versionCode.apk.part"
+
     /** 断连重试次数。三次足够覆盖偶发 reset，再多用户等不起。 */
     private const val MAX_ATTEMPTS = 3
 
@@ -301,8 +305,20 @@ object AppUpdateChecker {
         onProgress: (Int) -> Unit
     ): File {
         val dir = File(context.cacheDir, "update").apply { mkdirs() }
-        val target = File(dir, "nbu-lite-${info.versionCode}.apk")
-        val existing = if (target.exists()) target.length() else 0L
+        val target = File(dir, apkName(info.versionCode))
+        // 先写 .part：最终文件名必须**只代表完整且校验过的包**。
+        // 之前直接写最终名，进程被中途杀掉就留下半截文件，重启后被当成"已下好"交给安装器，
+        // 系统报「解析软件包时出现问题 (33) packageInfo is null」。
+        val part = File(dir, partName(info.versionCode))
+        if (target.exists()) {
+            if (sha256Of(target).equals(info.sha256, ignoreCase = true)) {
+                AppLog.log("Update", "已有完整包，跳过下载 v${info.versionName}")
+                markVerified(target, info)
+                return target
+            }
+            target.delete()
+        }
+        val existing = if (part.exists()) part.length() else 0L
 
         val builder = Request.Builder().url(info.apkUrl)
         if (existing > 0L) builder.header("Range", "bytes=$existing-")
@@ -310,13 +326,13 @@ object AppUpdateChecker {
             if (!response.isSuccessful) error("下载失败：HTTP ${response.code}")
             val body = response.body ?: error("下载失败：响应为空")
             val resumed = response.code == 206
-            if (!resumed && existing > 0L) target.delete()   // 服务端不支持续传
+            if (!resumed && existing > 0L) part.delete()   // 服务端不支持续传
             val base = if (resumed) existing else 0L
             val total = if (resumed) base + body.contentLength() else body.contentLength()
             var read = base
 
             body.byteStream().use { input ->
-                java.io.FileOutputStream(target, resumed).use { output ->
+                java.io.FileOutputStream(part, resumed).use { output ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
                         val n = input.read(buffer)
@@ -329,14 +345,50 @@ object AppUpdateChecker {
             }
         }
 
-        val actual = sha256Of(target)
+        val actual = sha256Of(part)
         if (!actual.equals(info.sha256, ignoreCase = true)) {
             // 续传拼出的文件可能是坏的：丢掉重来一次，而不是把坏包交出去
-            target.delete()
+            part.delete()
             error("校验失败，已删除重下")
         }
+        // 校验通过才落成最终名字。rename 失败就当这次没下成，不留半成品
+        if (!part.renameTo(target)) {
+            part.delete()
+            error("无法写入安装包")
+        }
+        markVerified(target, info)
         AppLog.log("Update", "下载完成 v${info.versionName} ${target.length() / 1024}KB")
         return target
+    }
+
+    /**
+     * 写「已校验」标记。
+     *
+     * 只有带这个标记的文件才会被认作可安装 —— 光看文件存在与大小是不够的：
+     * 半截包同样「存在且非空」。标记里记下大小，读取时能便宜地挡掉明显不符的文件。
+     */
+    /**
+     * 文件是否真的可用：大小与标记一致，且 sha256 与标记里记的一致。
+     *
+     * 没有标记的文件一律不认 —— 下载只有在**校验通过之后**才写标记，
+     * 所以"有标记"本身就代表"这份包是完整且经过校验的"。
+     */
+    internal fun isVerifiedApk(apk: File): Boolean {
+        if (!apk.exists() || apk.length() <= 0L) return false
+        val mark = File(apk.parentFile, apk.name + ".ok")
+        if (!mark.exists()) return false
+        val parts = runCatching { mark.readText().split('|') }.getOrNull() ?: return false
+        val sha = parts.getOrNull(1).orEmpty()
+        if (sha.length != 64) return false
+        if (parts.getOrNull(2)?.toLongOrNull() != apk.length()) return false
+        return runCatching { sha256Of(apk) }.getOrNull()?.equals(sha, ignoreCase = true) == true
+    }
+
+    private fun markVerified(apk: File, info: UpdateInfo) {
+        runCatching {
+            File(apk.parentFile, apk.name + ".ok")
+                .writeText("${info.versionCode}|${info.sha256}|${apk.length()}")
+        }.onFailure { AppLog.log("Update", "写校验标记失败：${it.message}") }
     }
 
     /** 取一个 URL 的文本内容；非 2xx 返回 null，由调用方决定文案。 */
@@ -370,7 +422,7 @@ object AppUpdateChecker {
         }.getOrNull()
     }
 
-    private fun sha256Of(file: File): String {
+    internal fun sha256Of(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().use { input ->
             val buffer = ByteArray(64 * 1024)

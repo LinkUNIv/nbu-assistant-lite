@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /** 一次下载安装的进度。`Idle` 之外的每个状态都代表「上一次点过更新」。 */
@@ -109,8 +110,19 @@ class UpdateInstaller(private val context: Context) {
         // 必须比**已安装**的版本新。少了这句，装完新版后缓存里那份同版本包会被当成
         // 「可安装」，点一下就是重装当前版本 —— 检查更新永远走不到真正的检查。
         if (versionCode <= BuildConfig.VERSION_CODE) return null
-        val file = File(File(appContext.cacheDir, "update"), "nbu-lite-$versionCode.apk")
-        return file.takeIf { it.exists() && it.length() > 0 }
+        val dir = File(appContext.cacheDir, "update")
+        val file = File(dir, AppUpdateChecker.apkName(versionCode))
+        // 只认「完整且校验过」的包：光判断存在与非空是不够的，半截文件同样满足，
+        // 交出去系统只会回一句「解析软件包时出现问题 (33) packageInfo is null」。
+        val mark = File(dir, file.name + ".ok")
+        if (!file.exists() || file.length() <= 0L || !mark.exists()) return null
+        val expected = mark.readText().split('|').getOrNull(2)?.toLongOrNull()
+        if (expected != null && expected != file.length()) {
+            AppLog.log("Update", "缓存包大小不符（期望 $expected 实际 ${file.length()}），已丢弃")
+            file.delete(); mark.delete()
+            return null
+        }
+        return file
     }
 
     /**
@@ -123,7 +135,8 @@ class UpdateInstaller(private val context: Context) {
         val files = dir.listFiles() ?: return
         var removed = 0
         files.forEach { file ->
-            val code = Regex("nbu-lite-(\\d+)\\.apk").find(file.name)?.groupValues?.get(1)?.toIntOrNull()
+            // 名字可能是 nbu-lite-3721.apk / .apk.part / .apk.ok，统一取版本号
+            val code = Regex("nbu-lite-(\\d+)\\.").find(file.name)?.groupValues?.get(1)?.toIntOrNull()
             if (code == null || code <= BuildConfig.VERSION_CODE) {
                 if (file.delete()) removed += 1
             }
@@ -151,6 +164,22 @@ class UpdateInstaller(private val context: Context) {
             is InstallState.HandedOff -> lastReady?.let { InstallState.ReadyToInstall(lastName, it) }
             else -> null
         } ?: return
+        // 交出去之前的最后一道闸：完整性与校验值。半截包交给系统只会得到
+        // 「解析软件包时出现问题 (33)」，用户完全不知道该怎么办。
+        scope.launch {
+            val intact = withContext(Dispatchers.IO) { AppUpdateChecker.isVerifiedApk(ready.apk) }
+            if (!intact) {
+                ready.apk.delete()
+                File(ready.apk.parentFile, ready.apk.name + ".ok").delete()
+                AppLog.log("Update", "安装包校验失败，已删除 ${ready.apk.name}")
+                _state.value = InstallState.Failed("安装包不完整，请重新下载")
+                return@launch
+            }
+            installVerified(ready)
+        }
+    }
+
+    private fun installVerified(ready: InstallState.ReadyToInstall) {
         val ok = ApkInstaller.install(appContext, ready.apk)
         if (ok) {
             AppLog.log("Update", "已交给系统安装 ${ready.versionName}")

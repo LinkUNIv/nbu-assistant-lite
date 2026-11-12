@@ -1,12 +1,12 @@
 {
-  "versionCode": 3720,
-  "versionName": "0.37.20",
+  "versionCode": 3721,
+  "versionName": "0.37.21",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.37.20-Preview/nbu-assistant-lite-0.37.20-Preview.apk",
-  "sha256": "03d8ed62ac24184eaeb3973dad4c9a75fe5973628e8cb383450a99bc8f701bd7",
-  "size": 24136063,
-  "notes": "**请求白名单与更新检查的可用性**\n\n- 新增统一白名单门禁。\n- 明文流量全量禁止。核对后确认应用内的请求均为 https，唯一的 http 入口走系统浏览器，不受此限制。\n- 检查更新不再依赖 GitHub 的资产域名。\n- 更新检查的超时从 30 秒降到 8 秒，失败原因（主机、耗时、异常类型）写入日志。",
-  "generatedAt": 1794458025041,
-  "tag": "v0.37.20-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.37.21-Preview/nbu-assistant-lite-0.37.21-Preview.apk",
+  "sha256": "b99a8eda5b5b189c1b06bf8e088df1d6ad379597e6edd0970022dadbd8e6571e",
+  "size": 24137465,
+  "notes": "**补入上一版遗漏的学校规则文件**\n\n- 0.37.20 构建时，学校解析规则没有随包分发；本版补上。\n- 该规则目前只做加载与校验，尚未接管解析，因此上一版没有出现功能异常。\n- 新增构建期检查：资源文件缺失时直接让流水线失败，不再静默产包。",
+  "generatedAt": 1794459521676,
+  "tag": "v0.37.21-Preview"
 }

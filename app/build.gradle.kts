@@ -122,6 +122,10 @@ android {
         jvmTarget = "17"
     }
 
+    sourceSets.getByName("test") {
+        // 规则文件在 assets 里，单测直接按类路径读同一份文件 —— 避免测试里再抄一份
+        resources.srcDir("src/main/assets")
+    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -172,6 +176,9 @@ dependencies {
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
     implementation("androidx.webkit:webkit:1.12.1")
     testImplementation("junit:junit:4.13.2")
+    // Android 自带的 org.json 在 JVM 单测里是空壳（方法全返回默认值），
+    // 规则解析要真跑，所以给测试侧一份可用实现
+    testImplementation("org.json:json:20240303")
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")

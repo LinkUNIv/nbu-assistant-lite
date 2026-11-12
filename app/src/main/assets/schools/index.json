@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "version": "2026.11.12",
+  "schools": [
+    {
+      "id": "nbu",
+      "name": "宁波大学",
+      "builtin": true,
+      "rules": "schools/nbu/rules.json"
+    },
+    {
+      "id": "xtu",
+      "name": "湘潭大学",
+      "builtin": false,
+      "rules": "schools/xtu/rules.json",
+      "note": "随资源包下发；PDF 模板见 docs/parser/xtu-pdf.md"
+    }
+  ]
+}

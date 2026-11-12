@@ -42,7 +42,16 @@ class AppContainer(context: Context) {
     val pendingWeekJump = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
     val termStartResolver: TermStartResolver by lazy { TermStartResolver(appContext) }
     val timetableRepository: TimetableRepository by lazy { TimetableRepository(database, settings) }
-    val calendarRepository: CalendarRepository by lazy { CalendarRepository(appContext) }
+    val calendarRepository: CalendarRepository by lazy {
+        // 按学校取校历：规则里指定了就用它，没指定（如湘潭尚未采集作息）退回内置
+        val path = schoolRules?.calendarPath
+        if (path == null) {
+            AppLog.log("Calendar", "该校未指定作息，使用内置模板")
+            CalendarRepository(appContext)
+        } else {
+            CalendarRepository(appContext, path)
+        }
+    }
     val newsRepository: NewsRepository by lazy {
         NewsRepository(appContext, database, newsSource, newsCrawler, networkMonitor)
     }

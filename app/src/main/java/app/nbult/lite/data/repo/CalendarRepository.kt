@@ -22,7 +22,14 @@ import org.json.JSONObject
  * 以及下载到 `filesDir/pack/` 的资源包（路径相同，优先使用）。
  * 校历每学年必变，走资源包更新可以不必发版 —— 学校按学年发通知，改数据比改 APK 快得多。
  */
-class CalendarRepository(private val context: Context) {
+class CalendarRepository(
+    private val context: Context,
+    /**
+     * 该校的校历文件。规则里没指定时用内置的宁大那份 ——
+     * 宁可显示一套"可能不准"的作息，也不要让课表整片空白。
+     */
+    private val assetPath: String = ASSET_PATH
+) {
 
     @Volatile
     private var cached: SchoolCalendar? = null
@@ -30,11 +37,11 @@ class CalendarRepository(private val context: Context) {
     suspend fun load(): SchoolCalendar = withContext(Dispatchers.IO) {
         cached?.let { return@withContext it }
         // 先看有没有下载的资源包，没有再读内置。内置那份永远能跑，这是底线
-        val text = ResourcePackStore.readText(context, ASSET_PATH)
-            ?: error("校历数据缺失：$ASSET_PATH")
+        val text = ResourcePackStore.readText(context, assetPath)
+            ?: error("校历数据缺失：$assetPath")
         val parsed = parse(text)
         cached = parsed
-        AppLog.log("Calendar", "校历加载完成：${parsed.years.size} 个学年，${parsed.periods.size} 套作息")
+        AppLog.log("Calendar", "校历加载完成：${parsed.years.size} 个学年，${parsed.periods.size} 套作息（$assetPath）")
         parsed
     }
 

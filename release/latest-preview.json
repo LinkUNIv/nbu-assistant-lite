@@ -1,0 +1,12 @@
+{
+  "versionCode": 3719,
+  "versionName": "0.37.19",
+  "applicationId": "app.nbult.lite.preview",
+  "channel": "preview",
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.37.19-Preview/nbu-assistant-lite-0.37.19-Preview.apk",
+  "sha256": "406ad8a5300687f7c488631a70e83a0e993b6acc5fd41e9fca2fb3916d258f20",
+  "size": 24135967,
+  "notes": "**开发工具链升级到 Kotlin 2.0 / Compose 1.7**\n\n- Kotlin 1.9.24 → 2.0.21，KSP 同步升级；Compose 编译器改由 Kotlin 插件接管。\n- Compose BOM 2024.06 → 2024.09（Compose 1.6.8 → 1.7.3）。\n- 仅随 API 更名调整三处参数：底部弹窗的 `contentWindowInsets`、两处翻页器的 `beyondViewportPageCount`。\n- 界面与行为不变；为后续UI实现做准备。",
+  "generatedAt": 1794454398797,
+  "tag": "v0.37.19-Preview"
+}

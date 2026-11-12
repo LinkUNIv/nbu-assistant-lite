@@ -78,27 +78,45 @@ internal class SchoolContext(private val context: Context) {
         return created
     }
 
+    /** 一套作息：哪一套、几点到几点。 */
+    data class Preset(val id: String, val name: String, val items: List<Pair<String, String>>) {
+        /** 用于判断"这套是否已经应用过"。 */
+        val key: String get() = "$id/$name/${items.firstOrNull()?.first ?: ""}"
+    }
+
     /**
-     * 该校作息预设。课表上的时间是按**节次**存的，落到"几点几分"靠这份预设；
-     * 湘潭第五节 14:30、宁大 13:30，用错一份整张表都会偏。
+     * 该校当前该用的作息。课表存的是**节次**，落到"几点几分"靠这份预设：
+     * 湘潭第五节冬季 14:00、夏季 14:30，宁大 13:30 —— 用错整张表都会偏。
      *
-     * 读不出就返回空 —— 宁可保留用户当前作息，也不要清空。
+     * 学校可以给多套（按 `months` 区分季节）。按当前月份挑；挑不到用第一套；
+     * 一套都没有返回 null，保留用户现有作息，绝不清空。
      */
-    fun periodsPreset(): List<Pair<String, String>> {
-        val path = rules?.calendarPath ?: return emptyList()
-        val text = app.nbult.lite.data.pack.ResourcePackStore.readText(context, path) ?: return emptyList()
+    fun periodPreset(): Preset? {
+        val path = rules?.calendarPath ?: return null
+        val text = app.nbult.lite.data.pack.ResourcePackStore.readText(context, path) ?: return null
         return runCatching {
-            val root = org.json.JSONObject(text)
-            val items = root.optJSONArray("periods")
-                ?.optJSONObject(0)
-                ?.optJSONArray("items") ?: return emptyList()
-            (0 until items.length()).mapNotNull { i ->
-                val o = items.optJSONObject(i) ?: return@mapNotNull null
-                val start = o.optString("start")
-                val end = o.optString("end")
-                if (start.isBlank() || end.isBlank()) null else start to end
-            }.sortedBy { it.first }
-        }.getOrDefault(emptyList())
+            val periods = org.json.JSONObject(text).optJSONArray("periods") ?: return null
+            val sets = (0 until periods.length()).mapNotNull { periods.optJSONObject(it) }
+            if (sets.isEmpty()) return null
+
+            val month = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1
+            val chosen = sets.firstOrNull { set ->
+                val months = set.optJSONArray("months") ?: return@firstOrNull false
+                (0 until months.length()).any { months.optInt(it) == month }
+            } ?: sets.first()
+
+            val items = chosen.optJSONArray("items") ?: return null
+            Preset(
+                id = chosen.optString("id"),
+                name = chosen.optString("name"),
+                items = (0 until items.length()).mapNotNull { i ->
+                    val o = items.optJSONObject(i) ?: return@mapNotNull null
+                    val start = o.optString("start")
+                    val end = o.optString("end")
+                    if (start.isBlank() || end.isBlank()) null else start to end
+                }.sortedBy { it.first }
+            )
+        }.getOrNull()
     }
 
     fun pdf(): PdfImporter {

@@ -15,6 +15,15 @@ internal object SchoolPreference {
     private const val FILE = "school"
     private const val KEY_ID = "schoolId"
     private const val KEY_UNLOCKED = "unlocked"
+    private const val KEY_PERIOD_PRESET = "periodPreset"
+
+    /** 上次自动应用过的作息标识；相同就不再覆盖，保留用户手调结果。 */
+    fun appliedPeriodPreset(context: Context): String? =
+        prefs(context).getString(KEY_PERIOD_PRESET, null)
+
+    fun setAppliedPeriodPreset(context: Context, key: String) {
+        prefs(context).edit().putString(KEY_PERIOD_PRESET, key).commit()
+    }
 
     const val DEFAULT_ID = "nbu"
 

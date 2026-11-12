@@ -67,15 +67,27 @@ class AppContainer(context: Context) {
      */
     fun switchSchool(id: String): Boolean {
         if (!schoolContext.switchTo(id)) return false
-        val preset = schoolContext.periodsPreset()
-        if (preset.isNotEmpty()) {
-            containerScope.launch {
-                runCatching { timetableRepository.applyPeriodPreset(preset) }
-                    .onFailure { AppLog.log("School", "应用作息失败：${it.message}") }
-                    .onSuccess { AppLog.log("School", "已应用 ${preset.size} 节作息") }
-            }
+        // 默认学校不套用预设：宁大有主校区/梅山两套，自动覆盖会误伤选了梅山的人；
+        // 而内置默认作息本就等于主校区，套用没有收益
+        val preset = if (schoolContext.id == app.nbult.lite.school.SchoolPreference.DEFAULT_ID) {
+            null
         } else {
+            schoolContext.periodPreset()
+        }
+        if (preset == null || preset.items.isEmpty()) {
             AppLog.log("School", "该校无作息预设，保留当前作息")
+        } else {
+            containerScope.launch {
+                runCatching {
+                    timetableRepository.applyPeriodPreset(preset.items)
+                    app.nbult.lite.school.SchoolPreference.setAppliedPeriodPreset(
+                        appContext,
+                        "${schoolContext.id}/${preset.key}"
+                    )
+                }
+                    .onFailure { AppLog.log("School", "应用作息失败：${it.message}") }
+                    .onSuccess { AppLog.log("School", "已应用作息：${preset.name}（${preset.items.size} 节）") }
+            }
         }
         return true
     }
@@ -125,6 +137,25 @@ class NbuLiteApp : Application() {
         )
         // 白名单与资讯源由 SchoolContext 初始化时按当前学校注册，这里只需触发一次
         container.schoolContext
+
+        // 作息按季节切换：同一所学校冬夏两套时间，启动时对齐一次。
+        // 只在"与当前不同"时才写，避免把用户手动调过的时间冲掉。
+        appScope.launch {
+            runCatching {
+                if (container.schoolContext.id == app.nbult.lite.school.SchoolPreference.DEFAULT_ID) {
+                    return@runCatching
+                }
+                val preset = container.schoolContext.periodPreset() ?: return@runCatching
+                if (preset.items.isEmpty()) return@runCatching
+                val applied = "${container.schoolContext.id}/${preset.key}"
+                if (app.nbult.lite.school.SchoolPreference.appliedPeriodPreset(this@NbuLiteApp) == applied) {
+                    return@runCatching   // 同一套已经应用过，别冲掉用户手调
+                }
+                container.timetableRepository.applyPeriodPreset(preset.items)
+                app.nbult.lite.school.SchoolPreference.setAppliedPeriodPreset(this@NbuLiteApp, applied)
+                AppLog.log("School", "作息已对齐：${preset.name}（${preset.items.size} 节）")
+            }.onFailure { AppLog.log("School", "作息对齐失败：${it.message}") }
+        }
 
         appScope.launch {
             container.database.ensureDefaultPeriods()

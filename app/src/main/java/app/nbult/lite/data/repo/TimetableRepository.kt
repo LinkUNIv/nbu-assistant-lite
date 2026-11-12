@@ -12,6 +12,7 @@ import app.nbult.lite.domain.WeekMask
 import app.nbult.lite.parser.ParseResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -204,6 +205,9 @@ class TimetableRepository(
     }
 
     suspend fun updateCourse(course: Course) = dao.updateCourse(course)
+
+    /** 当前生效的作息，用于和学校预设比对。 */
+    suspend fun periodsOnce(): List<PeriodTime> = dao.observePeriods().first()
 
     suspend fun applyPeriodPreset(periods: List<Pair<String, String>>) {
         dao.upsertPeriods(

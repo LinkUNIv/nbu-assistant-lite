@@ -474,6 +474,9 @@ fun AppRoot() {
                 railScope.launch { container.settings.setDarkMode(target) }
             },
             bottomInset = bottomInset,
+            // 两条都要满足：导入过课表，且该校有签到系统（湘潭的规则里 attendance=false）
+            showAttendance = timetableState.entries.isNotEmpty() &&
+                (container.schoolRules?.capabilities?.attendance != false),
             // 长按圆钮直进外观页
             onOpenAppearance = { navController.navigateOnce("settings/appearance") },
             onSelect = { route ->

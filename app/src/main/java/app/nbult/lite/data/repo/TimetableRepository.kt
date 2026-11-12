@@ -157,6 +157,9 @@ class TimetableRepository(
 
     suspend fun currentTerm(): Term? = dao.currentTerm()
 
+    /** 一条课表记录都没有。空课表时不必加载校历，也不必显示点名入口。 */
+    suspend fun hasAnySlot(): Boolean = dao.countSlots() > 0
+
     suspend fun addCourse(
         termId: Long,
         name: String,

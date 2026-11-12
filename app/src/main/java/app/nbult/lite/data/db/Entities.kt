@@ -12,7 +12,9 @@ data class Term(
     val name: String,
     val startEpochDay: Long,
     val totalWeeks: Int = 20,
-    val isCurrent: Boolean = true
+    val isCurrent: Boolean = true,
+    /** 该学期属于哪所学校。多校切换后，历史学期仍按自己的规则解释。 */
+    @ColumnInfo(defaultValue = "'nbu'") val schoolId: String = "nbu"
 )
 
 @Entity(tableName = "course")
@@ -21,7 +23,8 @@ data class Course(
     val termId: Long,
     val name: String,
     val teacher: String = "",
-    val colorSeed: Int = 0
+    val colorSeed: Int = 0,
+    @ColumnInfo(defaultValue = "'nbu'") val schoolId: String = "nbu"
 )
 
 @Entity(

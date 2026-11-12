@@ -92,7 +92,9 @@ fun SideRail(
     /** 底部手势区高度，由 AppRoot 在 Scaffold 之外量好传进来（见下）。 */
     bottomInset: Dp,
     onSelect: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** 是否显示点名入口。没有课表、或该校没有签到系统时传 false。 */
+    showAttendance: Boolean = true,
 ) {
     if (!visible || tabs.isEmpty()) return
 
@@ -126,28 +128,32 @@ fun SideRail(
             Spacer(Modifier.height(RailMetrics.ToggleToProgress))
             ProgressCapsule(progress)
             Spacer(Modifier.height(8.dp))
-            Box(
-                Modifier.width(RailMetrics.Width).height(48.dp)
-                    .acrylicPanel(RoundedCornerShape(24.dp))
-                    .background(when (app.nbult.lite.browser.AttendanceSignal.state.collectAsState().value) {
-                        "loading" -> if (app.nbult.lite.BuildConfig.BUILD_KIND == "preview") androidx.compose.ui.graphics.Color.Transparent else androidx.compose.ui.graphics.Color.Red.copy(alpha = 0.22f)
-                        "ready" -> if (app.nbult.lite.BuildConfig.BUILD_KIND == "preview") androidx.compose.ui.graphics.Color.Transparent else androidx.compose.ui.graphics.Color.Green.copy(alpha = 0.20f)
-                        else -> androidx.compose.ui.graphics.Color.Transparent
-                    }, RoundedCornerShape(24.dp))
-                    .combinedClickable(onLongClick = {
-                        browserContext.startActivity(android.content.Intent(browserContext, app.nbult.lite.browser.AttendanceSettingsActivity::class.java))
-                    }, onClick = {
-                        if (app.nbult.lite.browser.AttendanceSignal.active.value) app.nbult.lite.browser.PreloadedPage.claim()
-                        browserContext.startActivity(android.content.Intent(
-                            browserContext, app.nbult.lite.browser.AttendanceBrowserActivity::class.java
-                        ).putExtra("preferred_course", if (app.nbult.lite.browser.AttendanceSignal.active.value) app.nbult.lite.browser.AttendanceSignal.courseName else null))
-                    }),
-                contentAlignment = Alignment.Center
-            ) {
-                val active by app.nbult.lite.browser.AttendanceSignal.active.collectAsState()
-                val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "attendance")
-                val glow by pulse.animateFloat(0.35f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(900), androidx.compose.animation.core.RepeatMode.Reverse), label = "glow")
-                androidx.compose.material3.Text(if(active) "● 点名" else "点名", color = MaterialTheme.colorScheme.primary.copy(alpha = if(active) glow else 1f))
+            // 没有课表、或该校没有签到系统时整块不出现 —— 入口摆在那里却打不开，
+            // 比没有入口更让人困惑
+            if (showAttendance) {
+                Box(
+                    Modifier.width(RailMetrics.Width).height(48.dp)
+                        .acrylicPanel(RoundedCornerShape(24.dp))
+                        .background(when (app.nbult.lite.browser.AttendanceSignal.state.collectAsState().value) {
+                            "loading" -> if (app.nbult.lite.BuildConfig.BUILD_KIND == "preview") androidx.compose.ui.graphics.Color.Transparent else androidx.compose.ui.graphics.Color.Red.copy(alpha = 0.22f)
+                            "ready" -> if (app.nbult.lite.BuildConfig.BUILD_KIND == "preview") androidx.compose.ui.graphics.Color.Transparent else androidx.compose.ui.graphics.Color.Green.copy(alpha = 0.20f)
+                            else -> androidx.compose.ui.graphics.Color.Transparent
+                        }, RoundedCornerShape(24.dp))
+                        .combinedClickable(onLongClick = {
+                            browserContext.startActivity(android.content.Intent(browserContext, app.nbult.lite.browser.AttendanceSettingsActivity::class.java))
+                        }, onClick = {
+                            if (app.nbult.lite.browser.AttendanceSignal.active.value) app.nbult.lite.browser.PreloadedPage.claim()
+                            browserContext.startActivity(android.content.Intent(
+                                browserContext, app.nbult.lite.browser.AttendanceBrowserActivity::class.java
+                            ).putExtra("preferred_course", if (app.nbult.lite.browser.AttendanceSignal.active.value) app.nbult.lite.browser.AttendanceSignal.courseName else null))
+                        }),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val active by app.nbult.lite.browser.AttendanceSignal.active.collectAsState()
+                    val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "attendance")
+                    val glow by pulse.animateFloat(0.35f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(900), androidx.compose.animation.core.RepeatMode.Reverse), label = "glow")
+                    androidx.compose.material3.Text(if(active) "● 点名" else "点名", color = MaterialTheme.colorScheme.primary.copy(alpha = if(active) glow else 1f))
+                }
             }
 
         }

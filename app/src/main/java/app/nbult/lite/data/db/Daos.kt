@@ -47,6 +47,10 @@ interface TimetableDao {
     @Query("SELECT * FROM course_slot WHERE id = :id")
     suspend fun slotById(id: Long): CourseSlot?
 
+    /** 有没有导入过任何课表。没有的话，校历和签到入口都不该被拉起。 */
+    @Query("SELECT COUNT(*) FROM course_slot")
+    suspend fun countSlots(): Int
+
     @Update
     suspend fun updateSlot(slot: CourseSlot)
 

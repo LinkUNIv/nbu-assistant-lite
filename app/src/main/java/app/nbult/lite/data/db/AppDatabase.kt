@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NewsItem::class,
         SlotOverride::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -155,9 +155,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 5 → 6：给学期与课程补 `schoolId`。
+         *
+         * 用 `DEFAULT 'nbu'` 而不是先加空列再回填：存量数据一定来自宁大，
+         * 默认值让迁移变成一条语句，也避免"中间态有空值"的窗口。
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `term` ADD COLUMN `schoolId` TEXT NOT NULL DEFAULT 'nbu'")
+                db.execSQL("ALTER TABLE `course` ADD COLUMN `schoolId` TEXT NOT NULL DEFAULT 'nbu'")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "nbu-lite.db")
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .fallbackToDestructiveMigration()
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

@@ -204,6 +204,9 @@ class TimetableViewModel(
      */
     private suspend fun bootstrapTermStart() {
         if (settings.termManual.first()) return
+        // 还没有任何课表时不去读校历：那是几百 KB 的资源解析，而用户此时
+        // 连课表都没有，算不出第几周，读了也没处用
+        if (!runCatching { repository.hasAnySlot() }.getOrDefault(false)) return
         val today = AppClock.todayEpochDay()
         val calendarStart = runCatching {
             calendarRepository.load().yearOf(today)?.semesterOf(today)?.startDay

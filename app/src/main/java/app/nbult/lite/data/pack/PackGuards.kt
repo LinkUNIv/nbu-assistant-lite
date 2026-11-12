@@ -28,7 +28,8 @@ internal object PackGuards {
 
         val builtin = builtinUrls(context)
         if (builtin.isEmpty()) return null // 内置清单读不出来时不叠加规则，避免误杀
-        val allowedHosts = builtin.mapNotNull { Uri.parse(it).host }.toSet()
+        val allowedHosts = builtin.mapNotNull { Uri.parse(it).host }.toSet() +
+            builtinSchoolDomains(context)
         val httpHosts = builtin.filter { it.startsWith("http://", ignoreCase = true) }
             .mapNotNull { Uri.parse(it).host }
             .toSet()
@@ -69,13 +70,48 @@ internal object PackGuards {
         }.getOrDefault(emptyList())
         if (builtin.isEmpty()) return null
 
-        val allowed = builtin.mapNotNull { Uri.parse(it.listUrl).host }.toSet()
+        // 允许集合 = 内置栏目的域名 + 内置学校的域名（来自 APK 里的规则文件）。
+        // 关键：域名以**随包的**规则为准，而不是资源包自己声明的 —— 否则一个坏包
+        // 只要在 rules.json 里写上任意域名就能把资讯引过去。
+        val allowed = builtin.mapNotNull { Uri.parse(it.listUrl).host }.toSet() +
+            builtinSchoolDomains(context)
         for (column in config.columns) {
             val host = Uri.parse(column.listUrl).host
                 ?: return "栏目「${column.name}」的链接无法解析"
             if (host !in allowed) return "栏目「${column.name}」引入了新域名：$host"
         }
         return null
+    }
+
+    /**
+     * 内置学校声明的域名，只读 APK 里 assets/schools 目录下的规则文件。
+     *
+     * 湘潭的资讯在 xtu.edu.cn 下，而内置栏目只有宁大的域名；不放行这两处，
+     * 「新增学校」就永远得发版。
+     */
+    private fun builtinSchoolDomains(context: Context): Set<String> {
+        return runCatching {
+            val index = context.assets.open("schools/index.json").bufferedReader().use { it.readText() }
+            val array = JSONObject(index).optJSONArray("schools") ?: return@runCatching emptySet()
+            val domains = mutableSetOf<String>()
+            for (i in 0 until array.length()) {
+                val entry = array.optJSONObject(i) ?: continue
+                // 只信内置学校：资源包里新加的学校不在这里
+                if (!entry.optBoolean("builtin", false)) continue
+                val path = entry.optString("rules")
+                if (path.isBlank()) continue
+                val rules = runCatching {
+                    context.assets.open(path).bufferedReader().use { it.readText() }
+                }.getOrNull() ?: continue
+                JSONObject(rules).optJSONArray("domains")?.let { list ->
+                    for (j in 0 until list.length()) {
+                        list.optString(j).trim().lowercase()
+                            .takeIf { it.isNotEmpty() }?.let { domains.add(it) }
+                    }
+                }
+            }
+            domains
+        }.getOrDefault(emptySet())
     }
 
     private fun builtinUrls(context: Context): List<String> = runCatching {

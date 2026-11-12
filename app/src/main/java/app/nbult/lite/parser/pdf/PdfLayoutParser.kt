@@ -99,7 +99,7 @@ internal object PdfLayoutParser {
         val end = m.groups["s2"]?.value?.toIntOrNull()
         val weeks = m.groups["weeks"]?.value.orEmpty()
         if (name.isEmpty() || start == null || end == null) return null
-        val mask = FieldExtractor.weekMask(weeks) ?: return null
+        val mask = app.nbult.lite.parser.WeekParser.mask(weeks, params.weekSyntax) ?: return null
 
         return ParsedSlot(
             name = name,

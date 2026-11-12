@@ -117,7 +117,9 @@ private fun isForward(fromRoute: String?, toRoute: String?, fallback: Boolean): 
 @Composable
 fun AppRoot() {
     val container = LocalAppContainer.current
-    val timetableVm = rememberViewModel {
+    // 学校切换后规则与作息都变了，课表 VM 必须重建，否则仍拿着旧校历
+    val schoolTick by container.schoolTick.collectAsStateWithLifecycle()
+    val timetableVm = rememberViewModel(key = "timetable-$schoolTick") {
         TimetableViewModel(
             repository = it.timetableRepository,
             settings = it.settings,

@@ -39,7 +39,8 @@ internal class PdfImporter(
                 rowGapPt = pdf.rowGapPt,
                 headerPerPage = pdf.headerPerPage,
                 cellRegex = pdf.cellRegex,
-                noiseDrop = pdf.noiseDrop
+                noiseDrop = pdf.noiseDrop,
+                weekSyntax = rules?.weekSyntax ?: app.nbult.lite.parser.WeekSyntax()
             )
         )
         if (result.slots.isEmpty()) {

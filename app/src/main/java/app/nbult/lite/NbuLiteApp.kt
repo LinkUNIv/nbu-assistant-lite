@@ -42,24 +42,23 @@ class AppContainer(context: Context) {
     val pendingWeekJump = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
     val termStartResolver: TermStartResolver by lazy { TermStartResolver(appContext) }
     val timetableRepository: TimetableRepository by lazy { TimetableRepository(database, settings) }
-    /** PDF 导入：取词库是 Android 依赖，参数来自学校规则。 */
-    private val pdfImporter: app.nbult.lite.parser.pdf.PdfImporter by lazy {
-        app.nbult.lite.parser.pdf.PdfImporter(appContext, schoolRules)
+    /**
+     * 学校上下文。规则、作息、PDF 参数都挂在它上面，切换学校时整体替换 ——
+     * 这样不必重启进程（以前是 lazy 一次定死，只能杀进程重来）。
+     */
+    internal val schoolContext: app.nbult.lite.school.SchoolContext by lazy {
+        app.nbult.lite.school.SchoolContext(appContext)
     }
+
+    val schoolTick: kotlinx.coroutines.flow.StateFlow<Int> get() = schoolContext.tick
 
     /** 以函数形式暴露，避免内部类型出现在公开签名里。 */
-    val pdfParse: (ByteArray) -> app.nbult.lite.parser.ParseResult = { pdfImporter.parse(it) }
+    val pdfParse: (ByteArray) -> app.nbult.lite.parser.ParseResult get() = { schoolContext.pdf().parse(it) }
 
-    val calendarRepository: CalendarRepository by lazy {
-        // 按学校取校历：规则里指定了就用它，没指定（如湘潭尚未采集作息）退回内置
-        val path = schoolRules?.calendarPath
-        if (path == null) {
-            AppLog.log("Calendar", "该校未指定作息，使用内置模板")
-            CalendarRepository(appContext)
-        } else {
-            CalendarRepository(appContext, path)
-        }
-    }
+    val calendarRepository: CalendarRepository get() = schoolContext.calendar()
+
+    /** 切换学校：写偏好 → 换上下文 → 通知界面重建，不退出应用。 */
+    fun switchSchool(id: String): Boolean = schoolContext.switchTo(id)
     val newsRepository: NewsRepository by lazy {
         NewsRepository(appContext, database, newsSource, newsCrawler, networkMonitor)
     }
@@ -73,12 +72,7 @@ class AppContainer(context: Context) {
      * 学校解析规则。内置随包，坏包会被 [app.nbult.lite.school.SchoolRules.parse] 拒绝；
      * 拿不到时返回 null，解析走代码里的硬编码（尚未切换，见 PENDING 0.38.0）。
      */
-    internal val schoolRules: app.nbult.lite.school.SchoolRules? by lazy {
-        app.nbult.lite.school.SchoolCatalog.rules(
-            appContext,
-            app.nbult.lite.school.SchoolPreference.schoolId(appContext)
-        )
-    }
+    internal val schoolRules: app.nbult.lite.school.SchoolRules? get() = schoolContext.rules
 
     /** 恢复出厂设置：课表、资讯、设置、网页数据、日志一并清空。 */
     suspend fun factoryReset() {
@@ -109,12 +103,8 @@ class NbuLiteApp : Application() {
             "School",
             "当前学校=${app.nbult.lite.school.SchoolPreference.schoolId(this)}"
         )
-        container.schoolRules?.let { rules ->
-            // 该校域名要先进白名单，否则湘潭的资讯请求会被门禁拦掉
-            app.nbult.lite.net.HostWhitelist.registerSchoolDomains(rules.domains)
-            // 资讯栏目按学校换：宁大看宁大新闻，湘潭看湘潭新闻
-            app.nbult.lite.data.news.NewsSources.configure(rules.newsPath)
-        }
+        // 白名单与资讯源由 SchoolContext 初始化时按当前学校注册，这里只需触发一次
+        container.schoolContext
 
         appScope.launch {
             container.database.ensureDefaultPeriods()

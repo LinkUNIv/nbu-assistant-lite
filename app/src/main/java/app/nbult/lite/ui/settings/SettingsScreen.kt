@@ -823,6 +823,8 @@ private fun sectionTitle(section: String): String = when (section) {
 @Composable
 private fun SchoolCard() {
     val context = LocalContext.current
+    // CompositionLocal 只能在 @Composable 作用域读，点击回调里读会编译不过
+    val container = app.nbult.lite.ui.LocalAppContainer.current
     val current = app.nbult.lite.school.SchoolPreference.schoolId(context)
     val entries = remember { app.nbult.lite.school.SchoolCatalog.entries(context) }
     val currentName = entries.firstOrNull { it.id == current }?.name ?: current
@@ -871,14 +873,13 @@ private fun SchoolCard() {
                                 .clickable(enabled = entry.id != current) {
                                     picking = false
                                     if (entry.id != current) {
-                                        val saved = app.nbult.lite.school.SchoolPreference
-                                            .setSchoolId(context, entry.id)
-                                        app.nbult.lite.util.AppLog.log(
-                                            "School",
-                                            "切换到 ${entry.id}：写入${if (saved) "成功" else "失败"}，准备重启"
-                                        )
-                                        if (saved) {
-                                            app.nbult.lite.school.SchoolPreference.restart(context)
+                                        // 不重启：容器里的学校上下文整体替换，界面随 tick 重建
+                                        val ok = container.switchSchool(entry.id)
+                                        if (!ok) {
+                                            app.nbult.lite.util.AppLog.log(
+                                                "School",
+                                                "切换 ${entry.id} 失败：偏好未写入"
+                                            )
                                         }
                                     }
                                 }

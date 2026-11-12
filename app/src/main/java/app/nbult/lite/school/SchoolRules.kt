@@ -30,7 +30,9 @@ internal data class SchoolRules(
     /** 该校具备哪些模块。湘潭没有签到系统，这里必须关掉，否则入口永远打不开。 */
     val capabilities: SchoolCapabilities = SchoolCapabilities(),
     /** 该校的域名。网络白名单要靠它放行，否则湘潭的资讯一条都取不到。 */
-    val domains: List<String> = emptyList()
+    val domains: List<String> = emptyList(),
+    /** 周次写法。学校换一种写法时改这里，不用改算法。 */
+    val weekSyntax: app.nbult.lite.parser.WeekSyntax = app.nbult.lite.parser.WeekSyntax()
 ) {
     companion object {
         const val SUPPORTED_SCHEMA = 1
@@ -94,7 +96,16 @@ internal data class SchoolRules(
                 newsPath = root.optString("news").takeIf { it.isNotBlank() },
                 importer = root.optJSONObject("importer")?.toImporter() ?: SchoolImporter(),
                 capabilities = root.optJSONObject("capabilities")?.toCapabilities() ?: SchoolCapabilities(),
-                domains = root.optJSONArray("domains").toStringList()
+                domains = root.optJSONArray("domains").toStringList(),
+                weekSyntax = root.optJSONObject("weekSyntax")?.let { w ->
+                    app.nbult.lite.parser.WeekSyntax(
+                        separators = w.optString("separators", ",，、"),
+                        range = w.optString("range", app.nbult.lite.parser.WeekSyntax().range),
+                        single = w.optString("single", app.nbult.lite.parser.WeekSyntax().single),
+                        odd = w.optString("odd", app.nbult.lite.parser.WeekSyntax().odd),
+                        even = w.optString("even", app.nbult.lite.parser.WeekSyntax().even)
+                    )
+                } ?: app.nbult.lite.parser.WeekSyntax()
             )
             SchoolRulesResult.Ok(rules)
           } catch (e: Exception) {

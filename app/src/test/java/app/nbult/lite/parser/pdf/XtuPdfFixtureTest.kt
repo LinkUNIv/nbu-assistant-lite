@@ -70,6 +70,14 @@ class XtuPdfFixtureTest {
     }
 
     @Test
+    fun `第 10 周应有 17 门课`() {
+        // 事故复现：复合周次只取第一段时，这里只剩 2 门（周次恰好是单段的那些）
+        val slots = PdfLayoutParser.parse(fragments(), params).slots
+        val inWeek10 = slots.filter { WeekMask.isOn(it.weekMask, 10) }
+        assertEquals("第 10 周的课程数不对：${inWeek10.map { it.name }}", 17, inWeek10.size)
+    }
+
+    @Test
     fun `单元格里的教师与场地都取到了`() {
         val slots = PdfLayoutParser.parse(fragments(), params).slots
         assertTrue("应至少有一条带场地", slots.count { it.room.isNotBlank() } >= 24)

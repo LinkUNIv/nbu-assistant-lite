@@ -129,36 +129,11 @@ object FieldExtractor {
         return null
     }
 
-    fun weekMask(text: String): Int? {
-        var mask: Int? = null
-        weekRange.find(text)?.let { m ->
-            val a = m.groupValues[1].toInt()
-            val b = m.groupValues[2].toInt()
-            if (a in 1..WeekMask.MAX_WEEKS && b in 1..WeekMask.MAX_WEEKS) {
-                mask = WeekMask.range(minOf(a, b), maxOf(a, b))
-            }
-        }
-        if (mask == null) {
-            weekList.find(text)?.let { m ->
-                val weeks = m.groupValues[1].split(Regex("""[,，、]"""))
-                    .mapNotNull { it.trim().toIntOrNull() }
-                    .filter { it in 1..WeekMask.MAX_WEEKS }
-                if (weeks.isNotEmpty()) mask = weeks.fold(0) { acc, w -> acc or WeekMask.bit(w) }
-            }
-        }
-        if (mask == null) {
-            weekSingle.find(text)?.let { m ->
-                val a = m.groupValues[1].toInt()
-                if (a in 1..WeekMask.MAX_WEEKS) mask = WeekMask.bit(a)
-            }
-        }
-        val base = mask ?: return null
-        return when {
-            oddFlag.containsMatchIn(text) -> base and oddMask()
-            evenFlag.containsMatchIn(text) -> base and evenMask()
-            else -> base
-        }
-    }
+    /**
+     * 周次 → 掩码。实现收敛到 [WeekParser]：复合写法（`2-5周,7-18周`）必须按段合并，
+     * 而旧实现在这里用 find 只取第一段，导致湘潭课表第 10 周少了 15 门课。
+     */
+    fun weekMask(text: String): Int? = WeekParser.mask(text)
 
     private fun oddMask(): Int = WeekMask.oddOf(1, WeekMask.MAX_WEEKS)
 

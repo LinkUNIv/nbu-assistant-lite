@@ -1,12 +1,12 @@
 {
-  "versionCode": 3802,
-  "versionName": "0.38.2",
+  "versionCode": 3803,
+  "versionName": "0.38.3",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.2-Preview/nbu-assistant-lite-0.38.2-Preview.apk",
-  "sha256": "ed125546eb97ab8d017e7ea5a253e964c32e17633c26a8bce7bf4349254377b0",
-  "size": 26494230,
-  "notes": "**修复一些已知问题**\n\n- 周次解析改为按段处理。原先只读第一段，`2-5周,10-15周` 这类写法会丢掉后半段，\n  湘潭课表第 10 周因此少了 15 门课。\n- 周次语法外置到学校规则，该校换一种写法无需改代码。\n- 切换学校后界面直接刷新，不再需要重启应用。\n- 资源包可下发新学校的资讯源，不再局限于内置学校的域名。",
-  "generatedAt": 1794482063145,
-  "tag": "v0.38.2-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.3-Preview/nbu-assistant-lite-0.38.3-Preview.apk",
+  "sha256": "d0d9db57e95aa0063ca10bf7667897755685dbf48ebd7fdb2d19816929332845",
+  "size": 26495452,
+  "notes": "**湘潭作息按季节切换，切回宁大恢复原作息；配色统一**\n\n- 湘潭补入夏季和冬季作息。\n- 按当前月份自动选用：10 月至次年 4 月用冬季，5 月至 9 月用夏季；换季后首次启动即对齐，\n  同一所学校同一季只写一次。\n- 从湘潭切回宁波大学，作息恢复为上次使用（主校区或梅山），\n  不再留着湘潭的时间使整张课表偏移半小时。\n- 在设置里选过校区会保存，默认使用主校区。\n- 学校卡的文案删除。\n- 湘潭没有统一认证，导入页不再显示信息门户按钮、路径说明与 WebVPN 提示，\n  课表空态也不再出现「打开信息门户」。\n- 课程设置UI优化。\n- 同一批配色修正覆盖点名页数字键盘、入口页分隔线与反色条，以及对话框、菜单的容器底色。",
+  "generatedAt": 1794546408889,
+  "tag": "v0.38.3-Preview"
 }

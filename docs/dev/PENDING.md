@@ -14,7 +14,7 @@
 - **按重要性从上到下排列**。做完的整段移入文末「归档」，不在正文留残影；
   只有当下面的未做项**依赖它的结论**时，才在对应章节里保留精简版。
 
-> 2026-11-12 重整：版本号按当前进度重排（0.38.2 已发，0.38.3 待发），
+> 2026-11-13 重整：版本号按当前进度重排（0.38.3 已发），
 > 安全地基等已完成项移入归档，归档只保留仍有引用价值的结论，逐版细节看 `CHANGELOG.md`。
 
 ---
@@ -25,22 +25,20 @@
 
 | 优先级 | 版本 | 主题 | 依赖 / 阻塞 |
 |---|---|---|---|
-| **P0** | 0.38.3 | 湘潭作息按季节切换 + 切回宁大还原作息（**代码已完成，待发版**） | 只差更新说明改词 |
-| **P1** | 0.38.4 | 湘潭链路补采（学期起止、教务处栏目、作息按钮分流）+ 配色回落修复（抽屉紫带、chip 选中色） | 学期起止 ⛔ 需校历图 |
+| **P1** | 0.38.4 | 湘潭链路补采：学期起止、教务处栏目、作息按钮分流 | 学期起止 ⛔ 需校历图 |
 | **P1** | 0.38.5 | 更新链路：条件请求（ETag）+ WorkManager 每日检查 | 无 |
 | **P1** | 0.38.6 | 侧栏液态玻璃（Haze 0.7.3 已验证）+ 动效四档收敛 | AGSL 只能真机调 |
 | P2 | 0.38.7 | 资源包第四批：公告、开学推定关键词、入口分类 | 依赖 0.38.0 已完成的校验框架 |
 | P2 | — | 课表截图 OCR（与签到码识别是两条线） | 复用现有 ML Kit 依赖 |
-| P2 | — | 点名模块界面重做（先出静态稿） | 见第七节 |
+| P2 | — | 点名模块界面重做（先出静态稿） | 见第六节 |
 | P3 | 0.39.0 | 新手引导 | 声明文案已定稿 |
 | P4 | 0.40.0 | 多校深化：`schoolId` 贯穿 + 改名拍板 | 命名需拍板 |
 | P4 | 0.41.0 | 前台服务持有常驻通知 | 无 |
-| P4 | 观察 | 技术栈迁移（Flutter，条件触发，不占版本） | 见第十节；0.40.0 评估，三条硬条件 |
+| P4 | 观察 | 技术栈迁移（Flutter，条件触发，不占版本） | 见第九节；0.40.0 评估，三条硬条件 |
 | P4 | — | 双指缩放、相册图片背景、Baseline Profile | 无 |
 
 排序依据：
 
-- **0.38.3 先收尾**：代码、单测、包都已完成，只差更新说明改词。攒着只会让 0.38.4 的基线变脏。
 - **0.38.4 排最前**：湘潭是 0.38.x 引入的第二所学校，现在「能导入能看新闻」，但学期起止没采集、
   教务处栏目没真机验 —— 这两条不解决，湘潭用户的「第几周」永远是错的。
 - **0.38.5 次之**：条件请求是省流量与降限流，WorkManager 解决「不开 App 就不知道有新版本」，
@@ -50,24 +48,7 @@
 
 ---
 
-# 一、0.38.3 收尾（代码已完成，只差发版）
-
-已落在工作区（未提交）：
-
-- 湘潭冬季作息 + 按月份自动选套（`schools/xtu/calendar.json` 两套各带 `months`）
-- `school/PeriodPresetPolicy.kt`：换校/换季该不该写作息的纯判定，9 项单测
-- `AppContainer.alignPeriods()` 统一承担切学校 / 启动 / 恢复出厂三处
-- 设置页选主校区/梅山时记 `SchoolPreference.lastDefaultPresetId`
-- 学校卡副标题、导入页信息门户与 WebVPN 文案按 `capabilities.login` 分流
-
-- [ ] 更新说明改词 → `python tools/check-release-notes.py v0.38.3-Preview` → 提交 → 打标签 → 验收 → 归档
-- [ ] **[日志]** 切到湘潭后 `[School] 作息已应用（切学校）：winter，11 节`，且未再出现「需要重启」
-- [ ] **[日志]** 从湘潭切回宁大：`[School] 作息已应用（切学校）：meishan|main`
-- [ ] **[目视]** 湘潭课表第 5 节显示 14:00（冬季），宁大课表第 5 节显示 13:30
-
----
-
-# 二、湘潭链路补采（0.38.4，P1）
+# 一、湘潭链路补采（0.38.4，P1）
 
 0.38.x 把湘潭从「加个学校」做到了「能导入、能看新闻」，剩下三件事让它真正可用。
 
@@ -96,46 +77,7 @@
 - [ ] 非宁大时不显示也不写 `lastDefaultPresetId`（`noteDefaultSchoolPreset` 已有 guard，界面这层还没有）
 - [ ] **[目视]** 湘潭下该卡只剩「逐节编辑」，没有校区模板按钮
 
-## 2.4 配色回落修复（2026-11-13 用户反馈）
-
-**现象**：课程设置抽屉顶部有一条粉紫色横带；「正常上课」选中时是淡紫底 + 深紫字。
-
-**归因（已用截图取色 + 代码核对确认）**：`ui/theme/Appearance.kt` 的
-`lightScheme` / `darkScheme` 只覆盖了 primary 一族与 `surface` / `surfaceVariant` / `outline` 等，
-**`secondaryContainer`、`onSecondaryContainer`、`surfaceContainer*`、`outlineVariant`、
-`inverseSurface`、`inverseOnSurface` 一个都没定义**。这几个 token 于是回落到
-`lightColorScheme()` 自带的 M3 基线调色板 —— 那套是**带紫调的**（`standard` purple seed）。
-
-取色证据：抽屉顶部 `#F4F1F8`（基线 `surfaceContainerLow` 的紫白），
-「正常上课」填充 `#E3DEF5`（基线 `secondaryContainer` 的淡紫）。
-
-受影响的落点（不止截图里那两处）：
-
-| 落点 | 用的 token | 现状 |
-|---|---|---|
-| `ui/common/AppBottomSheet.kt:74` | `ModalBottomSheet` 默认 `surfaceContainerLow` | 抽屉顶部紫带 |
-| `FilterChip` 选中态（`CourseEditorSheet` / `AddCourseSheet` / `DebugScreen`） | `secondaryContainer` | 淡紫选中 |
-| `browser/SignCodeScreen.kt:55` 数字键 | `secondaryContainer` + `onSecondaryContainer` | 淡紫键面 + 深紫字 |
-| `ui/portal/PortalScreen.kt:143` 分隔线 | `outlineVariant` | 灰紫描边 |
-| `ui/portal/PortalScreen.kt:165/174` 反色条 | `inverseSurface` / `inverseOnSurface` | 深紫底 |
-| 各处 `AlertDialog` / `DropdownMenu` | `surfaceContainerHigh` | 容器偏紫 |
-
-- [ ] `AppBottomSheet`：`ModalBottomSheet(containerColor = MaterialTheme.colorScheme.surface, …)`，
-      与内层 `Surface` 同源，顶部不再出现第二种底色
-- [ ] `Appearance.kt` 两套 scheme 补齐（**按 seed 派生，不写死蓝**）：
-      `secondaryContainer = lerp(White, p, 0.10f)`、`onSecondaryContainer = lerp(Black, p, 0.78f)`；
-      `surfaceContainerLowest/Low/High/Highest` 与 `surfaceContainer` 走现有中性阶梯
-      （`#FFFFFF / #FBFCFE / #F8FAFD / #F3F6FA / surfaceVariant`）；
-      `outlineVariant = #DDE3EC`、`inverseSurface = #2A3038`、`inverseOnSurface = #F2F4F8`；深色同构一份
-- [ ] 不改任何调用点：chip、数字键盘、入口页自动跟随，无需逐个传色
-- [ ] **[目视]** 课程设置抽屉顶部无紫带；「正常上课」选中色 = 当前种子的淡色调
-- [ ] **[目视]** 5 个种子 × 深浅两套各看一次，重点看 chip 选中、数字键盘、对话框、入口页分隔线
-
-**注意**：补齐 token 会让所有对话框 / 菜单底色从「紫白」变「冷白」，属预期；
-但 0.38.4 是修订位，这一项**只碰颜色**，不动布局与组件结构 —— 与 PENDING 第四节
-（侧栏液态玻璃）不是一回事，别混在一版验。
-
-## 2.5 真机验收清单
+## 2.4 真机验收清单
 
 - [ ] **[日志]** 切学校不重启：`[School] 当前学校=xtu`，界面直接刷新
 - [ ] **[日志]** 重新导入 PDF：`[Parse] PDF 取词完成：154 段 / 2 页`，得到 17 门课
@@ -144,7 +86,7 @@
 
 ---
 
-# 三、更新链路（0.38.5，P1）
+# 二、更新链路（0.38.5，P1）
 
 用户反馈「MAA 的更新总是更及时」。查过 MAA 官方文档，差距不在实现复杂度，在四处：
 
@@ -168,7 +110,7 @@
 - [ ] 每日一次 + 启动检查（两条路都留，启动那次解决「刚打开就想看」）
 - [ ] 仅在联网时跑；失败退避重试，不要每小时重试
 - [ ] 与「更新弹窗」开关联动：关掉只记状态不弹，小红点仍然亮
-- [ ] 注意省电策略与厂商后台限制，需真机验证（与第九节前台服务是两件事，别混）
+- [ ] 注意省电策略与厂商后台限制，需真机验证（与第八节前台服务是两件事，别混）
 
 ## 3.3 缓存包状态判定抽纯函数
 
@@ -194,7 +136,7 @@ sha256 能挡住「下到半截的包」，挡不住「源被整体换掉」—�
 
 ---
 
-# 四、侧栏液态玻璃与动效（0.38.6，P1）
+# 三、侧栏液态玻璃与动效（0.38.6，P1）
 
 产品口径已定：**包体不是约束**，最终形态是「功能完整 + 动画精美 + 设计感强」，一百兆上下可以接受。
 评估动效只看两件事：**有没有明确的使用场景**、**会不会破坏统一节奏**，不再以「多几兆」为由否决。
@@ -241,7 +183,7 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 
 ---
 
-# 五、资源包第四批（0.38.7，P2）
+# 四、资源包第四批（0.38.7，P2）
 
 依赖 0.38.0 的校验框架（已落地）。判断标准：**变动频率高 × 出错后果可控 × 是纯数据**。
 
@@ -264,7 +206,7 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 
 ---
 
-# 六、课表截图 OCR（P2，不占版本）
+# 五、课表截图 OCR（P2，不占版本）
 
 课表导入的第三条路。**与已落地的签到码识别是两条线，别混为一谈**：
 
@@ -289,7 +231,7 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 
 ---
 
-# 七、点名模块（P2）
+# 六、点名模块（P2）
 
 ## 7.1 界面重做（10.3）
 
@@ -340,7 +282,7 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 
 ---
 
-# 八、新手引导（0.39.0，P3）
+# 七、新手引导（0.39.0，P3）
 
 首次打开时课表是空的，只有一个 `TimetableEmptyHint`。同学拿到包，大概率卡在「怎么导入」。
 
@@ -356,7 +298,7 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 
 ---
 
-# 九、前台服务持有常驻通知（0.41.0，P4）
+# 八、前台服务持有常驻通知（0.41.0，P4）
 
 - [ ] `ResidentNotificationService`（`foregroundServiceType="specialUse"`），
       把「上课中」常驻通知从 `notify()` 改为服务持有
@@ -364,7 +306,7 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 - 理由：进程被杀后通知还挂着但不再更新；OPPO/vivo 清理比小米激进
 - 代价：清单权限与耗电审查
 
-## 9.1 通知形态与「焦点通知」（2026-11-11 调研）
+## 8.1 通知形态与「焦点通知」（2026-11-11 调研）
 
 **现状**：`ReminderNotifier` 已用 `setRequestPromotedOngoing(true)`（Android 16 实时动态申请位）、
 `setUsesChronometer` 倒计时、`BigTextStyle`、`PRIORITY_LOW` + `CATEGORY_PROGRESS`。
@@ -383,7 +325,7 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 
 ---
 
-# 十、多校深化与改名（0.40.0，P4）
+# 九、多校深化与改名（0.40.0，P4）
 
 > 0.38.x 已落地大部分（规则外置、湘潭 PDF 导入、免重启切换、资讯源按校、作息按季节），
 > 架构见 `docs/dev/SCHOOL_RULES.md`。下面是**仍未做**的部分。
@@ -418,7 +360,7 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 
 ---
 
-# 十一、验收打点（P3，随版本顺带）
+# 十、验收打点（P3，随版本顺带）
 
 `AppLog.event()`、`assert()`、`dump()` 摘要区已完成，**本节只剩补打点**。
 
@@ -434,7 +376,7 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 
 ---
 
-# 十二、小项（P4）
+# 十一、小项（P4）
 
 - [ ] 课表双指缩放：现状课表**没有任何滚动容器**（整屏自适应，`cellHeight` 夹 30–64dp），
       要先改成可滚动，再上 `graphicsLayer` + `transformable`；手势要与 `HorizontalPager` 消歧
@@ -470,7 +412,7 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 
 **只在上面章节需要引用其结论时才回来看。** 逐版细节以 `CHANGELOG.md` 与 `docs/releases/` 为准。
 
-## 0.38.x（2026-11-12，多校 + 湘潭）
+## 0.38.x（2026-11-12 → 11-13，多校 + 湘潭）
 
 - **0.38.0**：规则外置（`schools/<id>/rules.json`）、湘潭 PDF 导入（坐标归列、跨页续表）、
   免重启切学校、资讯源按校、`Term`/`Course` 加 `schoolId`（DB 5→6）。
@@ -482,8 +424,12 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
   `2-5周,10-15周` 丢掉后半段（湘潭第 10 周应 17 门，实际 2 门），且奇偶标记作用于整串。
   新增 `WeekParser` 按段解析，语法外置 `weekSyntax`。
   **踩坑：KDoc 里写 `assets/schools/*` 会触发嵌套注释，整文件吞掉。**
-- **0.38.3（待发）**：`period_time` 无 schoolId 导致「切回宁大留着湘潭时间」，
-  改为写入记来源、切回按来源还原（`school/PeriodPresetPolicy.kt`）。
+- **0.38.3**（2026-11-13）：湘潭冬夏两套作息按月份自动选用；`period_time` 无 schoolId
+  导致「切回宁大留着湘潭时间」，改为**写入记来源**、切回按来源还原
+  （`school/PeriodPresetPolicy.kt`，9 项单测）；学校卡副标题删除；
+  `Appearance.kt` 补齐 `secondaryContainer` / `surfaceContainer*` 等 7 个 token ——
+  此前它们回落到 M3 基线的紫色调色板，表现为抽屉顶部粉紫横带与 chip 淡紫选中。
+  **约定：Material 组件会自己伸手取的 token 必须显式给出，否则整页会半蓝半紫。**
 
 ## 安全地基（0.37.20，已收口）
 

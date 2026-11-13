@@ -74,6 +74,9 @@ fun <T : Any> AppBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
+        // 默认容器色是 surfaceContainerLow，会与内层 Surface 的白底差出一圈颜色 ——
+        // 展开时表现为抽屉顶部一条横带。这里统一成 surface，整块只有一种底色。
+        containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = { sheetWindowInsets() },
     ) {
         Surface(color = MaterialTheme.colorScheme.surface) {

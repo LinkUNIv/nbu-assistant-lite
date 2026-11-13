@@ -13,7 +13,10 @@ import app.nbult.lite.data.repo.NewsRepository
 import app.nbult.lite.data.repo.CalendarRepository
 import app.nbult.lite.data.repo.TimetableRepository
 import app.nbult.lite.domain.AppClock
+import app.nbult.lite.domain.PeriodPresets
 import app.nbult.lite.net.NetworkMonitor
+import app.nbult.lite.school.PeriodPresetPolicy
+import app.nbult.lite.school.SchoolPreference
 import app.nbult.lite.util.AppLog
 import app.nbult.lite.util.AppReset
 import app.nbult.lite.util.CrashHandler
@@ -67,30 +70,66 @@ class AppContainer(context: Context) {
      */
     fun switchSchool(id: String): Boolean {
         if (!schoolContext.switchTo(id)) return false
-        // 默认学校不套用预设：宁大有主校区/梅山两套，自动覆盖会误伤选了梅山的人；
-        // 而内置默认作息本就等于主校区，套用没有收益
-        val preset = if (schoolContext.id == app.nbult.lite.school.SchoolPreference.DEFAULT_ID) {
-            null
-        } else {
-            schoolContext.periodPreset()
-        }
-        if (preset == null || preset.items.isEmpty()) {
-            AppLog.log("School", "该校无作息预设，保留当前作息")
-        } else {
-            containerScope.launch {
-                runCatching {
-                    timetableRepository.applyPeriodPreset(preset.items)
-                    app.nbult.lite.school.SchoolPreference.setAppliedPeriodPreset(
-                        appContext,
-                        "${schoolContext.id}/${preset.key}"
-                    )
-                }
-                    .onFailure { AppLog.log("School", "应用作息失败：${it.message}") }
-                    .onSuccess { AppLog.log("School", "已应用作息：${preset.name}（${preset.items.size} 节）") }
-            }
-        }
+        alignPeriods("切学校")
         return true
     }
+
+    /**
+     * 让库里的作息对齐当前学校与季节；切学校、启动各调一次。
+     *
+     * 判定全在 [PeriodPresetPolicy]：库里那份是别的学校写的才动手，用户手调的、
+     * 从未自动写过的都不动。宁大有主校区 / 梅山两套，切回来时还原上次所选。
+     */
+    internal fun alignPeriods(reason: String) {
+        containerScope.launch {
+            runCatching {
+                val schoolId = schoolContext.id
+                val own = schoolContext.periodPreset()
+                val target = own?.takeIf { it.items.isNotEmpty() }?.let {
+                    PeriodPresetPolicy.Target(it.id, PeriodPresetPolicy.key(schoolId, it.key))
+                }
+                val decision = PeriodPresetPolicy.decide(
+                    schoolId = schoolId,
+                    appliedKey = SchoolPreference.appliedPeriodPreset(appContext),
+                    defaultSchoolId = SchoolPreference.DEFAULT_ID,
+                    ownPreset = target,
+                    rememberedDefaultPresetId = SchoolPreference.lastDefaultPresetId(appContext),
+                    defaultFallbackPresetId = PeriodPresets.HEADQUARTERS.id
+                )
+                when (decision) {
+                    is PeriodPresetPolicy.Decision.Keep ->
+                        AppLog.log("School", "作息不动（$reason）：${decision.reason}")
+
+                    is PeriodPresetPolicy.Decision.Apply -> {
+                        val items = if (schoolId == SchoolPreference.DEFAULT_ID) {
+                            PeriodPresets.byId(decision.presetId).periods
+                        } else {
+                            own?.items.orEmpty()
+                        }
+                        if (items.isEmpty()) {
+                            AppLog.log("School", "作息不动（$reason）：取不到时间表")
+                        } else {
+                            timetableRepository.applyPeriodPreset(items)
+                            SchoolPreference.setAppliedPeriodPreset(appContext, decision.recordKey)
+                            AppLog.log("School", "作息已应用（$reason）：${decision.presetId}，${items.size} 节")
+                        }
+                    }
+                }
+            }.onFailure { AppLog.log("School", "作息对齐失败（$reason）：${it.message}") }
+        }
+    }
+
+    /** 用户在设置里手选了宁大的作息模板；记下来，切学校回来时按它还原。 */
+    fun noteDefaultSchoolPreset(presetId: String) {
+        if (schoolContext.id != SchoolPreference.DEFAULT_ID) return
+        SchoolPreference.setLastDefaultPresetId(appContext, presetId)
+        SchoolPreference.setAppliedPeriodPreset(
+            appContext,
+            PeriodPresetPolicy.key(SchoolPreference.DEFAULT_ID, presetId)
+        )
+        AppLog.log("School", "已手选宁大作息：$presetId")
+    }
+
     val newsRepository: NewsRepository by lazy {
         NewsRepository(appContext, database, newsSource, newsCrawler, networkMonitor)
     }
@@ -113,6 +152,9 @@ class AppContainer(context: Context) {
             clearDatabase = { app.nbult.lite.browser.AttendanceSignedSessions.clear(appContext); timetableRepository.clearExpansionCache(); database.clearAllTables(); database.ensureDefaultPeriods() },
             resetSettings = { settings.resetAll() }
         )
+        // 数据库回到内置作息，这条「已应用」记录一并作废，否则非默认学校会停在宁大时间上
+        SchoolPreference.clearAppliedPeriodPreset(appContext)
+        alignPeriods("恢复出厂")
         AppClock.setOffset(0L)
     }
 }
@@ -138,24 +180,9 @@ class NbuLiteApp : Application() {
         // 白名单与资讯源由 SchoolContext 初始化时按当前学校注册，这里只需触发一次
         container.schoolContext
 
-        // 作息按季节切换：同一所学校冬夏两套时间，启动时对齐一次。
-        // 只在"与当前不同"时才写，避免把用户手动调过的时间冲掉。
-        appScope.launch {
-            runCatching {
-                if (container.schoolContext.id == app.nbult.lite.school.SchoolPreference.DEFAULT_ID) {
-                    return@runCatching
-                }
-                val preset = container.schoolContext.periodPreset() ?: return@runCatching
-                if (preset.items.isEmpty()) return@runCatching
-                val applied = "${container.schoolContext.id}/${preset.key}"
-                if (app.nbult.lite.school.SchoolPreference.appliedPeriodPreset(this@NbuLiteApp) == applied) {
-                    return@runCatching   // 同一套已经应用过，别冲掉用户手调
-                }
-                container.timetableRepository.applyPeriodPreset(preset.items)
-                app.nbult.lite.school.SchoolPreference.setAppliedPeriodPreset(this@NbuLiteApp, applied)
-                AppLog.log("School", "作息已对齐：${preset.name}（${preset.items.size} 节）")
-            }.onFailure { AppLog.log("School", "作息对齐失败：${it.message}") }
-        }
+        // 作息对齐：同一所学校冬夏两套时间，换季与切学校都要对一次。
+        // 只在「库里那份确定是别的学校 / 别的季节写的」时才写，用户手调的不动。
+        container.alignPeriods("启动")
 
         appScope.launch {
             container.database.ensureDefaultPeriods()

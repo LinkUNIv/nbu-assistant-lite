@@ -80,6 +80,16 @@ fun Backdrop.brushFor(dark: Boolean, background: Color): Brush = when (this) {
     )
 }
 
+/**
+ * 浅色配色表。
+ *
+ * **凡是 Material 组件会自己伸手去取的 token，都必须在这里给出值**，否则会回落到
+ * `lightColorScheme()` 自带的 M3 基线调色板 —— 那套的种子是紫色，于是抽屉顶部、
+ * chip 选中态、对话框容器会凭空带上粉紫调，与这里的冷白中性色打架（0.38.3 修）。
+ *
+ * 中性阶梯从 `surface` 往外推，用的是既有色值系列（`#F7F9FC` / `#EEF2F8` / `#B9C2D0`），
+ * 不引入新色相。
+ */
 internal fun lightScheme(seed: SeedColor): ColorScheme {
     val p = seed.light
     return lightColorScheme(
@@ -89,17 +99,32 @@ internal fun lightScheme(seed: SeedColor): ColorScheme {
         onPrimaryContainer = lerp(Color.Black, p, 0.78f),
         secondary = seed.dark,
         onSecondary = Color.White,
+        // 比 primaryContainer 更淡一档：chip 选中是「轻强调」，不该压过课表里的选中行
+        secondaryContainer = lerp(Color.White, p, 0.10f),
+        onSecondaryContainer = lerp(Color.Black, p, 0.78f),
         background = Color(0xFFF7F9FC),
         onBackground = Color(0xFF151A21),
         surface = Color.White,
         onSurface = Color(0xFF151A21),
         surfaceVariant = Color(0xFFEEF2F8),
         onSurfaceVariant = Color(0xFF4A5565),
+        // 容器阶梯：抽屉、对话框、菜单、卡片都按这一组取色
+        surfaceContainerLowest = Color.White,
+        surfaceContainerLow = Color(0xFFFBFCFE),
+        surfaceContainer = Color(0xFFF8FAFD),
+        surfaceContainerHigh = Color(0xFFF3F6FA),
+        surfaceContainerHighest = Color(0xFFEEF2F8),
         outline = Color(0xFFB9C2D0),
+        outlineVariant = Color(0xFFDDE3EC),
+        inverseSurface = Color(0xFF2A3038),
+        inverseOnSurface = Color(0xFFF2F4F8),
         error = Color(0xFFC1272D)
     )
 }
 
+/**
+ * 深色配色表。补齐的 token 与浅色一一对应，见 [lightScheme] 的说明。
+ */
 internal fun darkScheme(seed: SeedColor): ColorScheme {
     val p = seed.dark
     return darkColorScheme(
@@ -109,13 +134,24 @@ internal fun darkScheme(seed: SeedColor): ColorScheme {
         onPrimaryContainer = lerp(Color.White, p, 0.72f),
         secondary = seed.light,
         onSecondary = Color(0xFF0B1220),
+        secondaryContainer = lerp(Color.Black, p, 0.24f),
+        onSecondaryContainer = lerp(Color.White, p, 0.72f),
         background = Color(0xFF0F1216),
         onBackground = Color(0xFFE6EAF0),
         surface = Color(0xFF161A20),
         onSurface = Color(0xFFE6EAF0),
         surfaceVariant = Color(0xFF1E242C),
         onSurfaceVariant = Color(0xFFAAB4C2),
+        surfaceContainerLowest = Color(0xFF0B0E12),
+        surfaceContainerLow = Color(0xFF12161B),
+        surfaceContainer = Color(0xFF161A20),
+        surfaceContainerHigh = Color(0xFF1B2027),
+        surfaceContainerHighest = Color(0xFF1E242C),
         outline = Color(0xFF3A424D),
+        outlineVariant = Color(0xFF2C333C),
+        inverseSurface = Color(0xFFE6EAF0),
+        inverseOnSurface = Color(0xFF1A2028),
         error = Color(0xFFF09595)
     )
 }
+

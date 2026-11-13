@@ -346,9 +346,12 @@ SettingCard(title = "作息时间") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = {
                     timetableVm.applyPeriodPreset(PeriodPresets.HEADQUARTERS.periods)
+                    // 记下这次选择：切到别的学校再切回来时，按它还原
+                    container.noteDefaultSchoolPreset(PeriodPresets.HEADQUARTERS.id)
                 }) { Text("主校区") }
                 TextButton(onClick = {
                     timetableVm.applyPeriodPreset(PeriodPresets.MEISHAN.periods)
+                    container.noteDefaultSchoolPreset(PeriodPresets.MEISHAN.id)
                 }) { Text("梅山校区") }
             }
             Text(
@@ -817,8 +820,11 @@ private fun sectionTitle(section: String): String = when (section) {
 /**
  * 学校切换（隐藏入口解锁后出现）。
  *
- * 切换会换掉规则、作息与资讯源，而这些东西在容器里是 lazy 的 —— 已经建好的实例
- * 不会自己更新。所以这里只负责写偏好，然后提示重启，由用户决定何时重来。
+ * 切换由 `AppContainer.switchSchool()` 完成：规则、作息、白名单、资讯源一起换掉，
+ * 界面靠 `schoolTick` 重建，**不需要重启**。这里只负责选校。
+ *
+ * 副标题一行已按 0.38.3 的发布文案删除：切换本来就即时生效，不必再写一遍；
+ * 「默认学校」也不再标 —— 名称本身已经足够。
  */
 @Composable
 private fun SchoolCard() {
@@ -832,18 +838,7 @@ private fun SchoolCard() {
 
     SettingCard(title = "学校") {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(currentName, style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = if (current == app.nbult.lite.school.SchoolPreference.DEFAULT_ID) {
-                        "默认学校"
-                    } else {
-                        "切换后立即生效，无需重启"
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(currentName, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Text(
                 text = "切换",
                 style = MaterialTheme.typography.labelLarge,

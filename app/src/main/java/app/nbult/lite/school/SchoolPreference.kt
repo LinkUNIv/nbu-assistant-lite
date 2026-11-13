@@ -16,6 +16,7 @@ internal object SchoolPreference {
     private const val KEY_ID = "schoolId"
     private const val KEY_UNLOCKED = "unlocked"
     private const val KEY_PERIOD_PRESET = "periodPreset"
+    private const val KEY_DEFAULT_PRESET = "defaultPreset"
 
     /** 上次自动应用过的作息标识；相同就不再覆盖，保留用户手调结果。 */
     fun appliedPeriodPreset(context: Context): String? =
@@ -23,6 +24,27 @@ internal object SchoolPreference {
 
     fun setAppliedPeriodPreset(context: Context, key: String) {
         prefs(context).edit().putString(KEY_PERIOD_PRESET, key).commit()
+    }
+
+    /**
+     * 清掉「已应用」记录。恢复出厂后数据库回到内置作息，这条记录必须一起作废 ——
+     * 否则湖南用户会以为湘潭作息已经写过，永远停在宁大时间上。
+     */
+    fun clearAppliedPeriodPreset(context: Context) {
+        prefs(context).edit().remove(KEY_PERIOD_PRESET).commit()
+    }
+
+    /**
+     * 默认学校（宁大）上次手选的作息模板 id：`main` 主校区 / `meishan` 梅山。
+     *
+     * 切到别的学校再切回来时靠它恢复 —— 没有它就不知道该还原哪一套，
+     * 一律还原主校区会把梅山用户的选择冲掉。
+     */
+    fun lastDefaultPresetId(context: Context): String? =
+        prefs(context).getString(KEY_DEFAULT_PRESET, null)
+
+    fun setLastDefaultPresetId(context: Context, id: String) {
+        prefs(context).edit().putString(KEY_DEFAULT_PRESET, id).commit()
     }
 
     const val DEFAULT_ID = "nbu"

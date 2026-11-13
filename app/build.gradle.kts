@@ -205,7 +205,7 @@ dependencies {
     // 需要按坐标归列。pdfbox-android 是唯一在 Android 上成熟的方案。
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
+    implementation("androidx.room:room-ktx:2.8.5")
     ksp("androidx.room:room-compiler:2.6.1")
 
     // 桌面小组件：Glance 用 Compose 语法写 RemoteViews。

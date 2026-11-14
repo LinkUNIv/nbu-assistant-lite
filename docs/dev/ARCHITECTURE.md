@@ -83,6 +83,8 @@
 | 校历（学年 / 假期 / 作息） | 资源包 | 否 | `data/repo/CalendarRepository.kt`、`school/SchoolContext.kt` |
 | 学校规则（周次语法 / PDF 参数 / 能力开关 / 域名） | 资源包 | 否 | `school/SchoolCatalog.kt` |
 | 学校清单 `schools/index.json` | **资源包（2026-11-14 起）** | 否 | 同上 |
+| 官方校历原图地址（`calendar.officialImages`） | 资源包 | 否 | `ui/calendar/OfficialCalendarCard.kt` |
+| 楼栋推迟上课（`rules.lateStart`） | 资源包 | 否 | `domain/LateStartPolicy.kt` |
 | 解析算法、界面、动效、注入脚本、CHANGELOG | APK | **是** | — |
 
 读取顺序固定：**先查已落地的包，没有再读 assets**（`ResourcePackStore.readText`）。

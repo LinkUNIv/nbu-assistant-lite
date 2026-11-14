@@ -174,7 +174,7 @@ Tab 转场位移与淡入淡出等时长。「精致动效」可叠加高斯模�
 
 ## 十二、校历
 
-底部第三个 Tab，数据来自内置 `assets/calendar/nbu_calendar.json`。
+底部第三个 Tab，数据来自资源包（`calendar/nbu_calendar.json`、`schools/<id>/calendar.json`），没有包时回落到 assets 里的宁大副本。
 
 | 内容 | 说明 |
 |---|---|

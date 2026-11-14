@@ -4,18 +4,27 @@
 
 ## 一句话模型
 
-**一所学校 = 一个目录 + 一份 rules.json**。凡是"不同学校不一样"的东西，都往规则里塞；代码只认规则，不认学校。
+**一所学校 = 资源包里的一个目录 + 一份 rules.json**。凡是「不同学校不一样」的东西，都往规则里塞；代码只认规则，不认学校。
+
+自 0.38.7 起**应用里只内置宁波大学**，其余学校全部由资源包定义：包里加一条就多一所学校，
+删一条就少一所；正在使用的那所被删掉时会自动回退宁大。
 
 ```
-app/src/main/assets/schools/
-├── index.json            # 学校清单：id / name / builtin / rules 路径
-├── nbu/                  # 宁波大学
-│   ├── rules.json        # 解析正则、导入参数、能力开关、域名、周次语法
-│   └── news.json         # 资讯源（nbu 的作息仍在 assets/calendar/ 下，历史原因）
-└── xtu/                  # 湘潭大学
-    ├── rules.json
-    ├── calendar.json     # 冬夏两套作息
-    └── news.json         # 新闻网 + 教务处
+pack-src/                     # 内容源：改这里，再用 tools/publish-pack.sh 发包
+├── schools/
+│   ├── index.json            # 学校清单：id / name / builtin / rules 路径
+│   └── xtu/                  # 湘潭大学（nbu 已内置，不必重复放）
+│       ├── rules.json        # 解析正则、导入参数、能力开关、域名、周次语法、推迟上课
+│       ├── calendar.json     # 冬夏两套作息 + 官方校历原图（两页 JPG）
+│       ├── news.json         # 资讯源：新闻网 + 教务处
+│       └── portal.json       # 校园入口
+├── calendar/nbu_calendar.json
+├── portal/entries.json
+└── news/sources.json
+
+app/src/main/assets/schools/  # APK 内置，仅此一份，作为「包还没到」时的兜底
+├── index.json                # 只有 nbu 一条
+└── nbu/rules.json
 ```
 
 ## rules.json 字段
@@ -32,6 +41,9 @@ app/src/main/assets/schools/
 | `capabilities` | attendance / login / widget | **全开**（保持旧行为） |
 | `domains` | 该校域名，用于网络白名单与资源包守卫 | 只能访问内置域名 |
 | `weekSyntax` | 周次写法（分隔符、区间、单周、奇偶标记） | 用内置默认写法 |
+| `portal` | 校园入口路径（`schools/<id>/portal.json`） | 用全局 `portal/entries.json` |
+| `officialCalendar` | 官方校历页地址（逐年 JPG 那种）；留空则不显示「官方原图」卡 | 不显示该卡 |
+| `lateStart` | 按楼栋推迟上课：`[{contains,minutes,label}]` | 不推迟 |
 
 **兼容原则**：新增字段一律可选，缺省值等于旧行为。这样老规则包在新 App 上不会崩。
 
@@ -88,14 +100,21 @@ PdfTextExtractor（pdfbox-android，取 x/y，y 取反成"越大越靠上"）
 
 ## 资源包与域名守卫
 
-`PackGuards` 校验包里的资讯/入口地址，允许集合 = **内置栏目域名 + 内置学校 rules.domains**。
+`PackGuards` 校验包里的入口与资讯地址，允许集合 = **内置域名 + 包内各校 `rules.json` 声明的 `edu.cn` 子域**。
 
-只读 APK 里的规则，不信任资源包自己声明的域名——否则坏包能借 rules.json 把请求引到任意站点。新学校要能靠包下发，得先把它内置进 APK（至少内置 rules.json）。
+- 校验分**两遍**：先验所有 `*/rules.json`（结构与 edu.cn 约束）并收集它们声明的域名，再验入口与资讯。
+  顺序反了，湘潭的入口会被当成「新域名」整包拒绝。
+- **内置学校（APK 里那条，目前是 nbu）不可删、不可改**：名称、规则路径、`builtin` 标记都不许被包改动。
+  非内置学校可以增、可以删、可以改。
+- 包把当前学校删掉后，`ResourcePackChecker` 会调 `SchoolContext.refresh()` 当场回退宁大，
+  不必等冷启动。
 
 ## 加第三所学校要做什么
 
-1. 建 `schools/<id>/`：rules.json（照 xtu 抄，改正则与限制）
-2. 有作息就加 calendar.json；有资讯就加 news.json
-3. `schools/index.json` 加一条
+1. 建 `pack-src/schools/<id>/`：rules.json（照 xtu 抄，改正则与限制）
+2. 有作息就加 calendar.json；有资讯加 news.json；有入口加 portal.json
+3. `pack-src/schools/index.json` 加一条，`builtin` 写 `false`
 4. 导入样本跑一遍，差异写进测试夹具
-5. 不需要改任何 Kotlin
+5. 发资源包（`tools/publish-pack.sh`）——**不用改 Kotlin，也不用发 APK**
+
+下架一所学校就是反着来：从清单里删掉那一行再发包，客户端下次检查时会移除它。

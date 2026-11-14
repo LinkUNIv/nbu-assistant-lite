@@ -1,7 +1,7 @@
 {
-  "version": 202611150124,
-  "updatedAt": "2026-11-15T01:24:29+08:00",
-  "notes": "湘潭逸夫楼/信息科技大楼的推迟提示缩短为「错峰+10min」，避免窄格子显示不全",
+  "version": 202611150141,
+  "updatedAt": "2026-11-15T01:41:20+08:00",
+  "notes": "湘潭资讯栏目去掉学校名前缀；推迟提示沿用「错峰+10min」",
   "minAppVersion": 3807,
   "files": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "schools/xtu/news.json",
-      "sha256": "746829f703b215870b5617b690535686535a63d73e05192b49b1c1cd65050188"
+      "sha256": "a21449de05b45ef0b37ab7a919d0cd1d591a83ae2f5766eee351a39dd64a2737"
     },
     {
       "path": "schools/xtu/portal.json",

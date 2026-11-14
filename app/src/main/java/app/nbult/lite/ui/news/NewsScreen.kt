@@ -139,10 +139,7 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
             loading = state.loading,
             itemCount = state.items.size,
             lastSyncAt = state.items.maxOfOrNull { it.fetchedAt } ?: 0L,
-            onRefresh = vm::refresh,
-            showViewSwitch = !cardView,
-            cardView = cardView,
-            onToggleView = { cardView = !cardView }
+            onRefresh = vm::refresh
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
@@ -171,7 +168,26 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
                         refreshing = state.loading,
                         onRefresh = vm::refresh
                     )
+                    // 固定条上的月份 = 当前可见的第一组所在月份。
+                    // 索引→分组要自己算：每个分组是 1 个标题 item + n 条资讯 item。
+                    val groupStart = remember(monthGroups) {
+                        val map = HashMap<Int, String>()
+                        var i = 0
+                        monthGroups.forEach { g ->
+                            map[i] = g.label
+                            i += 1 + g.items.size
+                        }
+                        map
+                    }
                     val listState = rememberLazyListState()
+                    val visibleMonth by remember {
+                        derivedStateOf {
+                            val idx = listState.firstVisibleItemIndex
+                            groupStart.keys.filter { it <= idx }.maxOrNull()
+                                ?.let { groupStart[it] }
+                                ?: monthGroups.firstOrNull()?.label.orEmpty()
+                        }
+                    }
                     // 顶部渐隐带：列表滚动后出现，回到顶部再消失，给吸顶边缘一条过渡
                     val scrolled by remember {
                         derivedStateOf { listState.canScrollBackward }
@@ -181,6 +197,23 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
                         animationSpec = tween(200),
                         label = "newsTopScrim"
                     )
+                    // 视图切换留在列表上方这一行（和月份同一行），固定不随滚动；
+                    // 月份文字跟着可见分组变，所以它看起来仍然「随内容走」
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 12.dp, top = 6.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = visibleMonth,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        ViewSwitchInline(cardView = false, onToggle = { cardView = true })
+                    }
                     Box(
                         Modifier
                             .fillMaxSize()
@@ -243,11 +276,7 @@ private fun NewsHeader(
     loading: Boolean,
     itemCount: Int,
     lastSyncAt: Long,
-    onRefresh: () -> Unit,
-    /** 列表模式下把「卡片 / 列表」放在这里——只此一处，不再跟着每个月分组出现。 */
-    showViewSwitch: Boolean = false,
-    cardView: Boolean = false,
-    onToggleView: () -> Unit = {}
+    onRefresh: () -> Unit
 ) {
     // 来源名来自配置（内置 + 资源包），所以要拿 context 读一次
     val context = LocalContext.current
@@ -282,10 +311,6 @@ private fun NewsHeader(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-        if (showViewSwitch) {
-            ViewSwitchInline(cardView = cardView, onToggle = onToggleView)
-            Spacer(Modifier.width(4.dp))
         }
         if (loading) {
             Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {

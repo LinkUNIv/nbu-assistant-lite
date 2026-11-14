@@ -778,6 +778,8 @@ fun WeekBody(
         BlockLayer(
             weekNumber = weekNumber,
             blocks = blocks,
+            // 推迟上课的课要在格子里显示实际起止，时间来源就是这张表
+            periodMap = remember(periods) { periods.associateBy { it.idx } },
             columnWidth = columnWidth,
             cellHeight = cellHeight,
             headerHeight = headerHeight,
@@ -796,6 +798,7 @@ fun WeekBody(
 private fun CourseBlock(
     weekNumber: Int,
     entry: TimetableEntry,
+    periodMap: Map<Int, app.nbult.lite.data.db.PeriodTime>,
     weekLabel: String,
     compact: Boolean,
     nameSize: TextUnit,
@@ -820,6 +823,13 @@ private fun CourseBlock(
     val lateRules = LocalAppContainer.current.schoolRules?.lateStart.orEmpty()
     val lateRule = remember(entry.slot.room, lateRules) {
         app.nbult.lite.domain.LateStartPolicy.of(entry.slot.room, lateRules)
+    }
+    // 推迟后的实际上课时刻。时间栏是全校共用的一条轴（按节次），不能按课程改，
+    // 所以把真实时间写进格子本身 —— 否则光有「错峰+10min」，看不出到底几点上
+    val lateStartText = remember(lateRule, entry.slot.startSection, periodMap) {
+        val base = periodMap[entry.slot.startSection]?.startTime?.take(5)
+        if (lateRule == null || base == null) null
+        else app.nbult.lite.domain.LateStartPolicy.shift(base, lateRule.minutes) + " 起"
     }
     val roomColor = MaterialTheme.colorScheme.onSurfaceVariant
     val metaSmall = (metaSize.value - 1).sp
@@ -891,6 +901,7 @@ private fun CourseBlock(
     // 地点 + 周次：时间已挪到左侧时间栏（每节显示起止），卡片里不再重复
     val metaText = remember(
         entry.room,
+        lateStartText,
         weekLabel,
         sections,
         compact,
@@ -907,7 +918,7 @@ private fun CourseBlock(
                 first = false
             }
             line(SpanStyle(color = roomColor, fontSize = metaSize), entry.room)
-            if (!compact && sections >= 3) {
+            if (!compact && sections >= 3 && lateStartText == null) {
                 line(
                     SpanStyle(color = roomColor.copy(alpha = 0.6f), fontSize = metaSmall),
                     weekLabel
@@ -1028,6 +1039,7 @@ private fun CourseBlock(
 private fun BlockLayer(
     weekNumber: Int,
     blocks: List<BlockVisual>,
+    periodMap: Map<Int, app.nbult.lite.data.db.PeriodTime>,
     columnWidth: Dp,
     cellHeight: Dp,
     headerHeight: Dp,
@@ -1047,6 +1059,7 @@ private fun BlockLayer(
                 CourseBlock(
                     weekNumber = weekNumber,
                     entry = block.entry,
+                    periodMap = periodMap,
                     weekLabel = block.weekLabel,
                     compact = compact,
                     nameSize = nameSize,

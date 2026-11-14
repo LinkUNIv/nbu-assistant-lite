@@ -44,6 +44,22 @@ object LateStartPolicy {
     fun minutesOf(room: String, rules: List<LateStartRule>): Int =
         of(room, rules)?.minutes ?: 0
 
+    /**
+     * 把 `HH:mm` 往后推 [minutes] 分钟，跨小时自动进位。
+     *
+     * 只用于**显示**（格子里的实际起止），作息表本身不动 ——
+     * 全校共用一张表，不能为两栋楼改整张。
+     */
+    fun shift(hhmm: String, minutes: Int): String {
+        val parts = hhmm.trim().split(":")
+        if (parts.size < 2) return hhmm
+        val h = parts[0].toIntOrNull() ?: return hhmm
+        val m = parts[1].take(2).toIntOrNull() ?: return hhmm
+        if (minutes <= 0) return hhmm
+        val total = ((h * 60 + m + minutes) % (24 * 60) + 24 * 60) % (24 * 60)
+        return String.format("%02d:%02d", total / 60, total % 60)
+    }
+
     internal fun normalize(text: String): String =
         text.replace('\u3000', ' ').replace(Regex("\\s+"), "").lowercase()
 }

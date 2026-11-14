@@ -55,4 +55,15 @@ class LateStartPolicyTest {
         val rules = listOf(LateStartRule(contains = listOf("yifu building"), minutes = 5))
         assertEquals(5, LateStartPolicy.minutesOf("Yifu\u3000Building-3F", rules))
     }
+
+    @Test
+    fun `时刻顺延跨小时与跨天都算对`() {
+        assertEquals("08:10", LateStartPolicy.shift("08:00", 10))
+        assertEquals("09:05", LateStartPolicy.shift("08:55", 10))
+        assertEquals("00:05", LateStartPolicy.shift("23:55", 10))
+        // 0 或负数视为不推迟，原样返回
+        assertEquals("08:00", LateStartPolicy.shift("08:00", 0))
+        // 解析不了就原样返回，不能抛
+        assertEquals("--", LateStartPolicy.shift("--", 10))
+    }
 }

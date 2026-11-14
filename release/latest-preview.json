@@ -1,12 +1,12 @@
 {
-  "versionCode": 3808,
-  "versionName": "0.38.8",
+  "versionCode": 3809,
+  "versionName": "0.38.9",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.8-Preview/nbu-assistant-lite-0.38.8-Preview.apk",
-  "sha256": "8ca5deab84514f4007f6b31b09b5de9b19e986199ae7c268ca5d1889b0e19d81",
-  "size": 26506873,
-  "notes": "**时间显示按照实际时间调优；文案调整**\n\n- 湘潭逸夫楼、信息科技大楼的课，格子正文第一行改为「08:10 起」这类实际时刻，\n  不再只有「错峰+10min」而看不出几点上。\n- 同一门的其他楼栋不受影响；时间栏仍按节次显示全校作息，不随课程变动。\n- 部分文案调整。",
-  "generatedAt": 1794679191441,
-  "tag": "v0.38.8-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.9-Preview/nbu-assistant-lite-0.38.9-Preview.apk",
+  "sha256": "e95fafa08870fec2aef1cbb14ad2772aa1682bec56886ab0e3fa13518486e398",
+  "size": 26506997,
+  "notes": "**推迟上课的时间在日程卡与侧栏也按实际显示**\n\n- 课表上方「今天 / 明天」日程列表的起止时间改按实际时刻（08:00-09:40 → 08:10-09:50）。\n- 侧栏「下一节」的时刻同样顺延，与提醒保持一致。",
+  "generatedAt": 1794681316632,
+  "tag": "v0.38.9-Preview"
 }

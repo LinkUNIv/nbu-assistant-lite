@@ -140,12 +140,16 @@ def main():
     for rel in paths:
         full = os.path.join(PROJ, rel.replace("/", os.sep))
         if not os.path.exists(full):
-            # 删除必须显式告诉 git：树里给 sha = null 才会真的移除。
-            # 之前这里是「跳过」，于是本地删掉的文件在远端一直留着 —— CI 打出来的
-            # APK 里还会带着已经删掉的 assets（0.38.7 的 xtu 目录就是这么漏的）。
-            tree.append({"path": rel, "mode": "100644", "type": "blob", "sha": None})
-            print(f"  删除 {rel}")
-            continue
+            # 删除不能走 git/trees 的 `sha: null`：这台机器上会被 422
+            # （GitRPC::BadObjectState）。改成先用 tools/delete-via-api.py 走 Contents API
+            # 删掉，再用 SKIP_DELETIONS=1 跑本脚本提交其余改动。
+            if os.environ.get("SKIP_DELETIONS") == "1":
+                print(f"  跳过（已删除）：{rel}")
+                continue
+            raise SystemExit(
+                f"  !! {rel} 已被删除：先跑 tools/delete-via-api.py {rel}，"
+                f"再以 SKIP_DELETIONS=1 重跑本脚本"
+            )
         if not os.path.isfile(full):
             continue
         with open(full, "rb") as f:

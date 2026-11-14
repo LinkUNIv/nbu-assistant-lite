@@ -1,6 +1,7 @@
 # 接手须知（宁大助手 Lite）
 
 **只需读本文件 + 粗读 `docs/dev/`，就能接着干。** 其他目录当黑盒，按需再翻。
+架构与分工（操作地图 / 运行时序 / 什么能热更）见 `docs/dev/ARCHITECTURE.md`。
 
 - 仓库：`nbu-assistant-lite/`（本文件所在目录），Android 原生 Kotlin + Compose
 - 包名：`app.nbult.lite`（debug `.debug` / preview `.preview`）
@@ -66,7 +67,10 @@ app/src/main/java/app/nbult/lite/
 8. **单测不要碰 `org.json`**（Android 桩会抛异常，本地过 CI 挂）；判定逻辑抽成纯数据入口。
 9. **新增规则字段一律可选**，缺省值等于旧行为。
 10. **数据不外发**：新域名要进白名单（学校域名走 `rules.domains`），明文流量全禁。
-11. **写共享表要记来源**：`period_time` 全校一张（无 schoolId），凡是自动写它，
+11. **内容改动只发资源包**：新增学校 / 新增入口 / 校历作息 / 栏目调整，一律走资源包，
+    APK 不动。前提是读取走 `ResourcePackStore`、发布脚本覆盖 `schools/`、守卫按后缀匹配
+    （三条缺一条就得发版）。契约见 `docs/dev/ARCHITECTURE.md` 第 5.1 节。
+12. **写共享表要记来源**：`period_time` 全校一张（无 schoolId），凡是自动写它，
     必须把「谁写的」记进 `SchoolPreference.appliedPeriodPreset`（`<schoolId>/<preset>`），
     否则切回来就还原不了 —— 0.38.2 的宁大作息回归就是这么来的。
 
@@ -135,7 +139,8 @@ export PATH="/c/atmp/jdk-17.0.12+7/bin:$PATH"
 
 优先顺序（细节见 `docs/dev/PENDING.md` 路线图）：
 
-1. **0.38.4 湘潭链路补采**：学期起止 `years`、教务处栏目去留、设置页作息按钮按学校分流
+1. **0.38.4 资源包分发通道**：守卫改后缀匹配 → 发布脚本覆盖 `schools/` → 入口按学校分流；
+   同版带上湘潭 `years`（校历 PDF 已取，数据在 PENDING 1.2）与作息按钮分流
 2. **0.38.5 更新链路**：ETag 条件请求 + WorkManager 每日检查
 3. **0.38.6 侧栏液态玻璃**（Haze 0.7.3 已验证可编译）+ 动效四档收敛
 4. 之后才轮到资源包第四批、课表截图 OCR、点名界面重做、新手引导

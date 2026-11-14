@@ -394,7 +394,15 @@ fun TodayCard(
     }
     // 折叠态的摘要是"下一节上什么"，别让停课块抢了位置
     val first = entries.firstOrNull { it.isActive } ?: entries.first()
-    val firstRange = timeRangeOf(periods, first.slot.startSection, first.slot.endSection)
+    // 推迟上课的楼栋：日程卡上的区间也要写实际时间，否则上面写「错峰+10min」、
+    // 这里还是 08:00-09:40，两边打架
+    val lateRules = LocalAppContainer.current.schoolRules?.lateStart.orEmpty()
+    fun effectiveRange(entry: TimetableEntry): String {
+        val base = timeRangeOf(periods, entry.slot.startSection, entry.slot.endSection)
+        val minutes = app.nbult.lite.domain.LateStartPolicy.minutesOf(entry.slot.room, lateRules)
+        return app.nbult.lite.domain.LateStartPolicy.range(base, minutes)
+    }
+    val firstRange = effectiveRange(first)
 
     Surface(
         modifier = Modifier
@@ -486,7 +494,7 @@ fun TodayCard(
                     Spacer(Modifier.height(6.dp))
                     entries.forEach { entry ->
                         val openEntry: () -> Unit = { onEntryClick(entry) }
-                        val range = timeRangeOf(periods, entry.slot.startSection, entry.slot.endSection)
+                        val range = effectiveRange(entry)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -916,6 +924,13 @@ private fun CourseBlock(
                 if (!first) append('\n')
                 withStyle(style) { append(text) }
                 first = false
+            }
+            // 推迟的课先写实际时刻：这是用户最想确认的一件事（顶标只说「错峰+10min」，看不出几点）
+            if (lateStartText != null) {
+                line(
+                    SpanStyle(color = blockColor, fontSize = metaSize, fontWeight = FontWeight.Medium),
+                    lateStartText
+                )
             }
             line(SpanStyle(color = roomColor, fontSize = metaSize), entry.room)
             if (!compact && sections >= 3 && lateStartText == null) {

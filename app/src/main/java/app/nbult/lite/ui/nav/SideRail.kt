@@ -323,13 +323,14 @@ fun rememberRailProgress(state: TimetableUiState): RailProgress {
 
     // 没课：显示下一节的开始时刻。今天有几节课扫一眼课表就知道，
     // 真正想知道的是"下一节什么时候"
-    val upcoming = remember(state.entries, state.overrides, state.periods, term, now) {
+    val upcoming = remember(state.entries, state.overrides, state.periods, term, now, lateRules) {
         ReminderPlanner.next(
             entries = state.entries,
             overrides = state.overrides,
             periods = state.periods,
             term = term,
-            now = now
+            now = now,
+            lateMinutes = { room -> app.nbult.lite.domain.LateStartPolicy.minutesOf(room, lateRules) }
         )
     }
     return if (upcoming != null) {

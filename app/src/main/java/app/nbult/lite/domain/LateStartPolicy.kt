@@ -60,6 +60,14 @@ object LateStartPolicy {
         return String.format("%02d:%02d", total / 60, total % 60)
     }
 
+    /** 把 `08:00-09:40` 这样的区间整体后移，用于日程卡这类只显示区间的地方。 */
+    fun range(base: String, minutes: Int): String {
+        if (minutes <= 0 || base.isBlank()) return base
+        val parts = base.split("-", limit = 2)
+        if (parts.size != 2) return base
+        return shift(parts[0], minutes) + "-" + shift(parts[1], minutes)
+    }
+
     internal fun normalize(text: String): String =
         text.replace('\u3000', ' ').replace(Regex("\\s+"), "").lowercase()
 }

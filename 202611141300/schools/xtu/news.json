@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "columns": [
+    {
+      "id": 2101,
+      "name": "湘潭大学·综合新闻",
+      "listUrl": "https://news.xtu.edu.cn/zhxw.htm",
+      "source": "湘潭大学新闻网",
+      "idOffset": 0
+    },
+    {
+      "id": 2102,
+      "name": "湘潭大学·教务处",
+      "listUrl": "https://jwc.xtu.edu.cn/",
+      "source": "湘潭大学教务处",
+      "idOffset": 0
+    }
+  ],
+  "rules": {
+    "linkSelector": "a[href*=\"info/\"], a[href*=\"wbnewsid=\"]",
+    "minTitleLength": 4,
+    "articleIdPatterns": [
+      "/info/\\d+/(\\d+)\\.htm",
+      "[?&]wbnewsid=(\\d+)"
+    ],
+    "datePattern": "(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})(?:\\s+(\\d{1,2}):(\\d{2}))?",
+    "publishedPattern": "发布(?:日期|时间)[：: ]*\\s*(\\d{4})[/\\-.](\\d{1,2})[/\\-.](\\d{1,2})(?:\\s*(\\d{1,2}):(\\d{2}))?",
+    "contentRoots": [
+      "#vsb_content",
+      "div.v_news_content",
+      "div.conlis div.cen",
+      "div.cen",
+      "div.conlis",
+      "article"
+    ],
+    "contentBlockSelector": "h2, h3, p, img, div.img-desc",
+    "bodyCandidateSelector": "div, article, section",
+    "minRootChars": 30,
+    "minBodyParagraphs": 2,
+    "minBlockChars": 2,
+    "noiseKeywords": [
+      "cenr",
+      "side",
+      "right",
+      "recommend",
+      "related",
+      "share",
+      "fx",
+      "footer",
+      "foot",
+      "nav",
+      "crumb",
+      "dqwz",
+      "banner",
+      "tjlist"
+    ],
+    "decorativeNames": [
+      "index_",
+      "ad_",
+      "foot_logo",
+      "logo",
+      "qq2017",
+      "qrcode",
+      "share"
+    ]
+  }
+}

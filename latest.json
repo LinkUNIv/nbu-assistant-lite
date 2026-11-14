@@ -1,8 +1,8 @@
 {
-  "version": 202611141300,
-  "updatedAt": "2026-11-14T23:07:56+08:00",
-  "notes": "首次全量内容包：宁大与湘潭的校历、校园入口、资讯栏目；湘潭补 2026-2027 学年校历与 7 条入口",
-  "minAppVersion": 3804,
+  "version": 202611150036,
+  "updatedAt": "2026-11-15T00:56:55+08:00",
+  "notes": "湘潭回归资源包：规则/校历/入口入包，补官方校历原图与推迟上课规则；学校清单改为可增删（仅 nbu 内置）",
+  "minAppVersion": 3807,
   "files": [
     {
       "path": "calendar/nbu_calendar.json",
@@ -18,11 +18,11 @@
     },
     {
       "path": "schools/index.json",
-      "sha256": "00902c22e148924879fcbbb38d3f89dd49f7d9f38ee798d95f5b94de8ecfcead"
+      "sha256": "c234a1f85c1c770db0b3119499ad6e9085d718d6364bce2681b5738b92544d7c"
     },
     {
       "path": "schools/xtu/calendar.json",
-      "sha256": "8e27b88eccfcfdb2b89edb86b0a03c9300fb3552c2419ec9c4f4fb92b1398205"
+      "sha256": "1e996d2bea2e3551ee6ff393d7e3a2cf5a80cad9cf75e27641feb233609781d4"
     },
     {
       "path": "schools/xtu/news.json",
@@ -31,6 +31,10 @@
     {
       "path": "schools/xtu/portal.json",
       "sha256": "57e4b7274dc60ab3384d08bb562e0fc584a435ecfcdd5ad01d3af4536587209e"
+    },
+    {
+      "path": "schools/xtu/rules.json",
+      "sha256": "f22b8427786333f3e3ccb2a13594e18655cc114a100991915f0f56046114f6c5"
     }
   ]
 }

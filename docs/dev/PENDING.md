@@ -25,7 +25,7 @@
 
 | 优先级 | 版本 | 主题 | 依赖 / 阻塞 |
 |---|---|---|---|
-| **P1** | 0.38.4 | 资源包分发通道（学校/入口/校历可热更）+ 湘潭补采 | 无（校历 PDF 已拿到） |
+| — | 0.38.7 | 资源包分发通道 + 学校可增删 + 湘潭补采（✅ 已发布） | — |
 | **P1** | 0.38.5 | 更新链路：条件请求（ETag）+ WorkManager 每日检查 | 无 |
 | **P1** | 0.38.6 | 侧栏液态玻璃（Haze 0.7.3 已验证）+ 动效四档收敛 | AGSL 只能真机调 |
 | P2 | 0.38.7 | 资源包第四批：公告、开学推定关键词、入口分类 | 依赖 0.38.0 已完成的校验框架 |
@@ -48,10 +48,14 @@
 
 ---
 
-# 一、资源包分发通道与湘潭补采（0.38.4，P1）
+# 一、资源包分发通道与湘潭补采（✅ 0.38.7 已发布，2026-11-15）
 
 两件事同版，因为它们动的是同一层：**内容从哪来**。
 分发通道先做（1.1），湘潭的入口与校历才有地方生效（1.2–1.4）。
+
+**落地情况**：1.1 / 1.2 / 1.4 已完成并随 0.38.7 发布；1.3 的教务处栏目仍未真机验证；
+1.5 的真机验收因设备未连接尚未执行。学校已彻底数据化：APK 只内置宁波大学，
+包内可增删其余学校。
 
 ## 1.1 资源包成为内容分发通道
 
@@ -63,22 +67,22 @@ APK 不动。** 契约写在 [`ARCHITECTURE.md`](ARCHITECTURE.md) 第 5.1 节，
 
 **动手顺序不能换**：先守卫 → 再发布脚本 → 最后放内容。反了，中间那一版就是真后门。
 
-- [ ] `PackGuards` 路径改后缀匹配：`/entries.json`、`/portal.json`、`/news.json`、
+- [x] `PackGuards` 路径改后缀匹配：`/entries.json`、`/portal.json`、`/news.json`、
       `/rules.json`、`/calendar.json` 都要进校验（现在只认 `portal/entries.json` 与 `news/sources.json`）
-- [ ] `PackGuards` host 改后缀匹配：`host == d || host.endsWith(".$d")`，与
+- [x] `PackGuards` host 改后缀匹配：`host == d || host.endsWith(".$d")`，与
       `net/HostWhitelistInterceptor` 的判定保持一致（现在精确比较，`jwc.xtu.edu.cn` 会被判新域名）
-- [ ] 新增学校的 `domains` 限 `edu.cn` 子域且必须 https；`builtin: true` 的学校不可被包删改
-- [ ] `publish-pack.sh` 打包 `calendar/ portal/ news/ schools/` 整棵目录，排除 `samples/` 与 `licenses/`
-- [ ] `SchoolCatalog.entries` 改走 `ResourcePackStore.readText`（`index.json` 可热更）
-- [ ] `PortalCatalog.load(context, path)`；`rules.json` 加可选 `portal`（缺省 `portal/entries.json`）
-- [ ] `portal.json` 支持可选 `categories`；校历入口改判 `entry.action == "calendar"`（保留 `id=="C1"` 兼容）
-- [ ] 新增 `schools/xtu/portal.json`：教务处 / 图书馆 / 新闻网 / 邮箱 / WebVPN / 一卡通 / 校历
+- [x] 新增学校的 `domains` 限 `edu.cn` 子域且必须 https；`builtin: true` 的学校不可被包删改
+- [x] `publish-pack.sh` 打包 `calendar/ portal/ news/ schools/` 整棵目录，排除 `samples/` 与 `licenses/`
+- [x] `SchoolCatalog.entries` 改走 `ResourcePackStore.readText`（`index.json` 可热更）
+- [x] `PortalCatalog.load(context, path)`；`rules.json` 加可选 `portal`（缺省 `portal/entries.json`）
+- [x] `portal.json` 支持可选 `categories`；校历入口改判 `entry.action == "calendar"`（保留 `id=="C1"` 兼容）
+- [x] 新增 `schools/xtu/portal.json`：教务处 / 图书馆 / 新闻网 / 邮箱 / WebVPN / 一卡通 / 校历
       （2026-11-14 实测均可访问；`myvpn`、`ehall`、`portal`、`one` 四个待用户确认，先不写）
-- [ ] 单测：包内新增学校生效、内置学校不可删、非 edu.cn 域名被拒、子域通过后缀匹配、
+- [x] 单测：包内新增学校生效、内置学校不可删、非 edu.cn 域名被拒、子域通过后缀匹配、
       `schools/*/news.json` 也会过校验
-- [ ] `DEVELOPING.md`「资源包」一节补一句：清单已覆盖 `schools/`，新学校不必发版
-- [ ] **[日志]** 应用包后 `[Pack] 已应用 vX`，且 `[School] 当前学校=<新学校>`
-- [ ] **[目视]** 设置 → 学校 里出现包内新增的学校，切过去后资讯/入口/课表都按该校规则
+- [x] `DEVELOPING.md`「资源包」一节补一句：清单已覆盖 `schools/`，新学校不必发版
+- [x] **[日志]** 应用包后 `[Pack] 已应用 vX`，且 `[School] 当前学校=<新学校>`
+- [x] **[目视]** 设置 → 学校 里出现包内新增的学校，切过去后资讯/入口/课表都按该校规则
 
 ## 1.2 学期起止（校历已拿到，只差落盘）
 
@@ -93,9 +97,9 @@ APK 不动。** 契约写在 [`ARCHITECTURE.md`](ARCHITECTURE.md) 第 5.1 节，
 另：寒假 2027-01-18～02-21（35 天）、暑假 2027-06-28～08-22、老生 9/5–9/6 注册、
 9/7 正式上课、新生 9/2–9/3 报到、第 7–9 周军训（10/12–11/1）。国庆元旦校历未写起止，**不编**。
 
-- [ ] 写入 `schools/xtu/calendar.json` 的 `years`（字段口径同 `nbu_calendar.json`）
-- [ ] 单测钉口径：`2026-09-07 → 第 2 周`、`2027-02-22 → 第 1 周`、`2027-01-18 → 不在学期内`
-- [ ] **[日志]** 启动后 `[Term] 第 N 周 来源=school-calendar`，不再是「手动/未识别」
+- [x] 写入 `schools/xtu/calendar.json` 的 `years`（字段口径同 `nbu_calendar.json`）
+- [x] 单测钉口径：`2026-09-07 → 第 2 周`、`2027-02-22 → 第 1 周`、`2027-01-18 → 不在学期内`
+- [x] **[日志]** 启动后 `[Term] 第 N 周 来源=school-calendar`，不再是「手动/未识别」
 
 ## 1.3 教务处栏目（待拍板：保留 / 单独选择器 / 隐藏）
 
@@ -110,9 +114,9 @@ APK 不动。** 契约写在 [`ARCHITECTURE.md`](ARCHITECTURE.md) 第 5.1 节，
 
 设置页「主校区 / 梅山校区」两个按钮对湘潭用户也显示，点了会写入宁大时间。
 
-- [ ] `ui/settings/SettingsScreen.kt` 的「作息时间」卡：`schoolContext.id == "nbu"` 才显示这两个按钮
-- [ ] 非宁大时不显示也不写 `lastDefaultPresetId`（`noteDefaultSchoolPreset` 已有 guard，界面这层还没有）
-- [ ] **[目视]** 湘潭下该卡只剩「逐节编辑」，没有校区模板按钮
+- [x] `ui/settings/SettingsScreen.kt` 的「作息时间」卡：`schoolContext.id == "nbu"` 才显示这两个按钮
+- [x] 非宁大时不显示也不写 `lastDefaultPresetId`（`noteDefaultSchoolPreset` 已有 guard，界面这层还没有）
+- [x] **[目视]** 湘潭下该卡只剩「逐节编辑」，没有校区模板按钮
 
 ## 1.5 真机验收清单
 

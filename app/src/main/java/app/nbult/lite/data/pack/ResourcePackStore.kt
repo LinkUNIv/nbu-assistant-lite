@@ -79,6 +79,24 @@ object ResourcePackStore {
     }
 
     /**
+     * 某路径当前生效的来源：`pack@<版本>` / `assets` / `missing`。
+     *
+     * 验收「内容确实来自资源包」时用它 —— 光看界面分不清用的是包还是内置，
+     * 而这一版正是要证明「APK 里没有内容也能跑起来」。
+     */
+    fun sourceOf(context: Context, path: String): String {
+        val current = state(context)
+        if (current.isRemote) {
+            val file = File(versionDir(context, current.version), path)
+            if (file.isFile && file.length() > 0L) return "pack@${current.version}"
+        }
+        val inAssets = runCatching {
+            context.assets.open(path).use { it.readBytes() }
+        }.isSuccess
+        return if (inAssets) "assets" else "missing"
+    }
+
+    /**
      * 把校验过的一组文件写成一个新版本并设为生效。
      *
      * 先整目录写完、再改 `state.json`：中途被杀最多留下一个没人引用的目录，

@@ -17,6 +17,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -276,6 +277,25 @@ fun DebugScreen(onBack: () -> Unit) {
                 packLog?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
                 }
+                // 每个数据文件的实际来源。验收「内容来自包而不是内置」靠这一栏，
+                // 界面本身看不出差别（0.38.4 起 APK 内只剩空壳）
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    modifier = Modifier.padding(vertical = 6.dp)
+                )
+                Text("文件来源", style = MaterialTheme.typography.labelSmall)
+                packSources(context).forEach { (path, source) ->
+                    Text(
+                        text = "$path → $source",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (source.startsWith("pack@")) {
+                            MaterialTheme.colorScheme.secondary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
             }
 
             DebugCard("环境") {
@@ -301,4 +321,24 @@ private fun DebugCard(title: String, content: @Composable () -> Unit) {
             content()
         }
     }
+}
+
+/** 列出所有会走资源包的数据文件及其当前来源。学校多一个，就多几行。 */
+private fun packSources(context: android.content.Context): List<Pair<String, String>> {
+    val paths = LinkedHashSet<String>()
+    paths += "schools/index.json"
+    paths += "portal/entries.json"
+    paths += "news/sources.json"
+    paths += "calendar/nbu_calendar.json"
+    runCatching {
+        app.nbult.lite.school.SchoolCatalog.entries(context).forEach { entry ->
+            paths += entry.rulesPath
+            app.nbult.lite.school.SchoolCatalog.rules(context, entry.id)?.let { rules ->
+                rules.calendarPath?.let { paths += it }
+                rules.newsPath?.let { paths += it }
+                rules.portalPath?.let { paths += it }
+            }
+        }
+    }
+    return paths.map { it to ResourcePackStore.sourceOf(context, it) }
 }

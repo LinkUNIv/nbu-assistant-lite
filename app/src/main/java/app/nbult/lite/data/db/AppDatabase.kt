@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NewsItem::class,
         SlotOverride::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -168,9 +168,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * 资讯表开始区分学校。
+         *
+         * 加列之后**旧行必须清空**：它们既没有正确的 schoolId（一律会变成 nbu），
+         * 主键也还是旧方案（栏目 id 未参与命名空间，跨校撞号）。资讯是可重抓的远端内容，
+         * 清空重抓比留着一批错数据安全。
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `news` ADD COLUMN `schoolId` TEXT NOT NULL DEFAULT 'nbu'")
+                db.execSQL("DELETE FROM `news`")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "nbu-lite.db")
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .fallbackToDestructiveMigration()
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

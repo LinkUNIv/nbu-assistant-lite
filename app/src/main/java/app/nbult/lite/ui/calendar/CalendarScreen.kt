@@ -106,6 +106,10 @@ private fun CalendarContent(
             .toSortedMap()
     }
 
+    // 只有学校规则里声明了 officialCalendar 才有「官方原图」可看。
+    // 必须在 LazyColumn 之前读：LazyListScope 的 lambda 不是可组合作用域。
+    val officialPage = app.nbult.lite.ui.LocalAppContainer.current.schoolRules?.officialCalendarPath
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)
@@ -151,8 +155,15 @@ private fun CalendarContent(
             }
         }
 
-        // 官方校历原图（应用内查看 + 浏览器兜底）
-        item { OfficialCalendarCard() }
+        // 官方校历原图（应用内查看 + 浏览器兜底）。
+        // 只有学校规则里声明了 officialCalendar 才显示 —— 湘潭的校历是 PDF，没有逐年 JPG，
+        // 以前这里固定抓宁大页面，于是切到湘潭还显示「宁波大学 2025-2026 校历」（0.38.5 修）。
+        if (calendar.officialImages.isNotEmpty()) {
+            // 资源包直接给了图（湘潭）：不依赖页面结构，换图只需发包
+            item { OfficialImagesCard(calendar.officialImages, officialPage) }
+        } else if (officialPage != null) {
+            item { OfficialCalendarCard(officialPage) }
+        }
 
         // 当前状态
         item {

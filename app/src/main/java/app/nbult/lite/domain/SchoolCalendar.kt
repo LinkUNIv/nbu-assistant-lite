@@ -60,11 +60,16 @@ data class PeriodTable(
     val note: String
 )
 
+/** 官方校历原图：官网给的整页 JPG。湘潭的校历是 PDF，这里放的是它的两页预览图。 */
+data class OfficialCalendarImage(val label: String, val url: String)
+
 data class SchoolCalendar(
     val years: List<CalendarYear>,
     val periods: List<PeriodTable>,
     val updatedAt: String,
-    val notice: String
+    val notice: String,
+    /** 有就直接画图，没有才去抓页面（见 `OfficialCalendarSource`）。 */
+    val officialImages: List<OfficialCalendarImage> = emptyList()
 ) {
     /** 选出覆盖该日期的学年；找不到则回退到最近一个学年。 */
     fun yearOf(day: Long): CalendarYear? {

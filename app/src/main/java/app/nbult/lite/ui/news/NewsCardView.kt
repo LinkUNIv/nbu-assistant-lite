@@ -273,7 +273,9 @@ private const val CARD_MAX_ROWS = 3
 internal fun NewsSectionHeader(
     monthLabel: String,
     cardView: Boolean,
-    onToggleView: () -> Unit
+    onToggleView: () -> Unit,
+    /** 列表模式由顶部固定栏承载切换控件，分组头就不再各画一份（否则每种月份都长一排）。 */
+    showSwitch: Boolean = true
 ) {
     Row(
         modifier = Modifier
@@ -288,12 +290,12 @@ internal fun NewsSectionHeader(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f)
         )
-        ViewSwitchInline(cardView = cardView, onToggle = onToggleView)
+        if (showSwitch) ViewSwitchInline(cardView = cardView, onToggle = onToggleView)
     }
 }
 
 @Composable
-private fun ViewSwitchInline(cardView: Boolean, onToggle: () -> Unit) {
+internal fun ViewSwitchInline(cardView: Boolean, onToggle: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)

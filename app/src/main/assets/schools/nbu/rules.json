@@ -89,5 +89,6 @@
     "single": "第?(\\d{1,2})\\s*周",
     "odd": "(?:[(（]\\s*单\\s*[)）]|单周)",
     "even": "(?:[(（]\\s*双\\s*[)）]|双周)"
-  }
+  },
+  "officialCalendar": "https://www.nbu.edu.cn/xl.htm"
 }

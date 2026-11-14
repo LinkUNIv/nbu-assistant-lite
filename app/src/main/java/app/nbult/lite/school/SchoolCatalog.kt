@@ -21,9 +21,15 @@ internal object SchoolCatalog {
         val rulesPath: String
     )
 
-    /** 清单读不出来就当只有本校：宁可少列学校，也不要让首页因此崩掉。 */
+    /**
+     * 清单读不出来就当只有本校：宁可少列学校，也不要让首页因此崩掉。
+     *
+     * 2026-11-14 起走 [ResourcePackStore]：清单可随资源包更新，**新增学校不必发版**。
+     * APK 里保留一份内置清单（nbu / xtu）作为包失败时的兜底。
+     */
     fun entries(context: Context): List<Entry> = runCatching {
-        val json = context.assets.open(INDEX).bufferedReader().use { it.readText() }
+        val json = app.nbult.lite.data.pack.ResourcePackStore.readText(context, INDEX)
+            ?: return@runCatching emptyList()
         val root = org.json.JSONObject(json)
         val array = root.optJSONArray("schools") ?: return@runCatching emptyList()
         (0 until array.length()).mapNotNull { i ->

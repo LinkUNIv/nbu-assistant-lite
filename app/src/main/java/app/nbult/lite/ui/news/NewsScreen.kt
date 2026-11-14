@@ -35,6 +35,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +47,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -108,6 +114,13 @@ private fun parseBlocks(json: String): List<Block> {
 @Composable
 fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    // 有没有栏目决定了空态说什么：没有栏目 = 内容包还没到，不是「今天没新闻」
+    val hasColumns = remember(context) {
+        runCatching {
+            app.nbult.lite.data.news.NewsSources.load(context).columns.isNotEmpty()
+        }.getOrDefault(true)
+    }
     val net by vm.networkStatus.collectAsStateWithLifecycle()
 
     // 吸顶月标题需要先分组再渲染，无法在滚动过程中临时判断
@@ -126,7 +139,10 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
             loading = state.loading,
             itemCount = state.items.size,
             lastSyncAt = state.items.maxOfOrNull { it.fetchedAt } ?: 0L,
-            onRefresh = vm::refresh
+            onRefresh = vm::refresh,
+            showViewSwitch = !cardView,
+            cardView = cardView,
+            onToggleView = { cardView = !cardView }
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
@@ -137,7 +153,7 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
                 if (state.items.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         if (state.loading) CircularProgressIndicator() else Text(
-                            text = "暂无资讯",
+                            text = if (hasColumns) "暂无资讯" else "内容包未就绪，稍后自动加载",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -155,18 +171,31 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
                         refreshing = state.loading,
                         onRefresh = vm::refresh
                     )
+                    val listState = rememberLazyListState()
+                    // 顶部渐隐带：列表滚动后出现，回到顶部再消失，给吸顶边缘一条过渡
+                    val scrolled by remember {
+                        derivedStateOf { listState.canScrollBackward }
+                    }
+                    val scrimAlpha by animateFloatAsState(
+                        targetValue = if (scrolled) 1f else 0f,
+                        animationSpec = tween(200),
+                        label = "newsTopScrim"
+                    )
                     Box(
                         Modifier
                             .fillMaxSize()
                             .pullRefresh(pullState)
                     ) {
-                        LazyColumn(Modifier.fillMaxSize()) {
+                        LazyColumn(Modifier.fillMaxSize(), state = listState) {
                             monthGroups.forEach { group ->
-                                stickyHeader(key = "month:${group.label}") {
+                                // 月份标题**不吸顶**：滚动时只有它被推上去，顶部那条来源/刷新一直固定。
+                                // 视图切换放在顶栏（只此一处），否则每个月分组头都长一排「卡片 / 列表」。
+                                item(key = "month:${group.label}") {
                                     NewsSectionHeader(
                                         monthLabel = group.label,
                                         cardView = false,
-                                        onToggleView = { cardView = true }
+                                        onToggleView = {},
+                                        showSwitch = false
                                     )
                                 }
                                 items(group.items, key = { it.id }) { item ->
@@ -177,6 +206,21 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
                                 }
                             }
                         }
+                        Box(
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .height(16.dp)
+                                .graphicsLayer { alpha = scrimAlpha }
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            MaterialTheme.colorScheme.surface,
+                                            MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                                        )
+                                    )
+                                )
+                        )
                         PullRefreshIndicator(
                             refreshing = state.loading,
                             state = pullState,
@@ -199,7 +243,11 @@ private fun NewsHeader(
     loading: Boolean,
     itemCount: Int,
     lastSyncAt: Long,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    /** 列表模式下把「卡片 / 列表」放在这里——只此一处，不再跟着每个月分组出现。 */
+    showViewSwitch: Boolean = false,
+    cardView: Boolean = false,
+    onToggleView: () -> Unit = {}
 ) {
     // 来源名来自配置（内置 + 资源包），所以要拿 context 读一次
     val context = LocalContext.current
@@ -234,6 +282,10 @@ private fun NewsHeader(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+        if (showViewSwitch) {
+            ViewSwitchInline(cardView = cardView, onToggle = onToggleView)
+            Spacer(Modifier.width(4.dp))
         }
         if (loading) {
             Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {

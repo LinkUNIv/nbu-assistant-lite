@@ -1,42 +1,6 @@
 {
   "schema": 1,
-  "columns": [
-    {
-      "id": 1003,
-      "name": "宁大要闻",
-      "listUrl": "https://news.nbu.edu.cn/ndyw.htm",
-      "source": "宁波大学新闻网",
-      "idOffset": 0
-    },
-    {
-      "id": 1004,
-      "name": "校园动态",
-      "listUrl": "https://news.nbu.edu.cn/xydt.htm",
-      "source": "宁波大学新闻网",
-      "idOffset": 0
-    },
-    {
-      "id": 1005,
-      "name": "媒体宁大",
-      "listUrl": "https://news.nbu.edu.cn/mtnd.htm",
-      "source": "宁波大学新闻网",
-      "idOffset": 0
-    },
-    {
-      "id": 1008,
-      "name": "风华人物",
-      "listUrl": "https://news.nbu.edu.cn/fhrw.htm",
-      "source": "宁波大学新闻网",
-      "idOffset": 0
-    },
-    {
-      "id": 2001,
-      "name": "教务处通告",
-      "listUrl": "https://jwc.nbu.edu.cn/tzgg1.htm",
-      "source": "宁波大学教务处",
-      "idOffset": 3000000000
-    }
-  ],
+  "columns": [],
   "rules": {
     "linkSelector": "a[href*=\"info/\"], a[href*=\"wbnewsid=\"]",
     "minTitleLength": 4,
@@ -84,5 +48,6 @@
       "qrcode",
       "share"
     ]
-  }
+  },
+  "updatedAt": "2026-11-14"
 }

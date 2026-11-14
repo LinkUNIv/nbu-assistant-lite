@@ -140,7 +140,11 @@ def main():
     for rel in paths:
         full = os.path.join(PROJ, rel.replace("/", os.sep))
         if not os.path.exists(full):
-            print(f"  跳过（已删除）：{rel}")
+            # 删除必须显式告诉 git：树里给 sha = null 才会真的移除。
+            # 之前这里是「跳过」，于是本地删掉的文件在远端一直留着 —— CI 打出来的
+            # APK 里还会带着已经删掉的 assets（0.38.7 的 xtu 目录就是这么漏的）。
+            tree.append({"path": rel, "mode": "100644", "type": "blob", "sha": None})
+            print(f"  删除 {rel}")
             continue
         if not os.path.isfile(full):
             continue

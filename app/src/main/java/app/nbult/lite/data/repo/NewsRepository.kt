@@ -17,12 +17,17 @@ class NewsRepository(
     database: AppDatabase,
     private val source: NewsSource,
     private val crawler: NewsCrawler,
-    private val monitor: NetworkMonitor
+    private val monitor: NetworkMonitor,
+    /**
+     * 当前学校。**必须是取值函数而不是构造时的常量** —— 这个仓储在容器里是单例，
+     * 切学校时不会重建，传死值会让过滤条件永远停在第一所学校（0.38.5 的跨校混排就是这么来的）。
+     */
+    private val schoolId: () -> String
 ) {
 
     private val dao = database.newsDao()
 
-    fun observe(): Flow<List<NewsItem>> = dao.observeAll()
+    fun observe(): Flow<List<NewsItem>> = dao.observeAll(schoolId())
 
     suspend fun refresh(): Result<Int> = runCatching {
         var total = 0
@@ -64,17 +69,19 @@ class NewsRepository(
     }
 
     suspend fun importLocal(items: List<NewsItem>) {
-        dao.upsert(items)
+        val current = schoolId()
+        dao.upsert(items.map { it.copy(schoolId = current) })
     }
 
     suspend fun markRead(id: Long) = dao.markRead(id, System.currentTimeMillis())
 
-    suspend fun clear() = dao.clear()
+    suspend fun clear() = dao.clear(schoolId())
 
-    suspend fun count(): Int = dao.count()
+    suspend fun count(): Int = dao.count(schoolId())
 
     private fun CrawledItem.toEntity() = NewsItem(
         id = id,
+        schoolId = schoolId(),
         columnId = columnId,
         columnName = columnName,
         title = title,

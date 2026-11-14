@@ -131,7 +131,10 @@ class AppContainer(context: Context) {
     }
 
     val newsRepository: NewsRepository by lazy {
-        NewsRepository(appContext, database, newsSource, newsCrawler, networkMonitor)
+        // 传取值函数而不是当前 id：这个实例跨学校复用，切校后要读到新学校
+        NewsRepository(appContext, database, newsSource, newsCrawler, networkMonitor) {
+            schoolContext.id
+        }
     }
 
     /** 下载与安装的唯一持有者：弹窗关掉、切页都不会中断进度。 */

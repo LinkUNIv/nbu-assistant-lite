@@ -128,7 +128,11 @@ fun AppRoot() {
             pdfParse = it.pdfParse
         )
     }
-    val newsVm = rememberViewModel { NewsViewModel(it.newsRepository, it.networkMonitor) }
+    // 必须随学校重建：资讯按 schoolId 过滤，VM 里的 observe() 只在 init 时求值一次，
+    // 不换实例的话切完学校还在订阅上一所学校的条目（0.38.5 的混排之一）
+    val newsVm = rememberViewModel(key = "news-$schoolTick") {
+        NewsViewModel(it.newsRepository, it.networkMonitor)
+    }
     val motionBlur by container.settings.motionBlur.collectAsStateWithLifecycle(
         initialValue = container.settings.lastKnownMotionBlur
     )
@@ -200,7 +204,8 @@ fun AppRoot() {
     // 通知点击 → 切到课表并跳到那一周（等学期加载完再 setWeek，否则会被静默忽略）
     // 启动时排一次；之后课表/停课/调课一变就重排（闹钟永远只指向"下一个提醒点"）
     val appContext = LocalContext.current
-    LaunchedEffect(Unit) {
+    // 切学校也要重排：推迟名单随学校规则变，而规则变了不写库，下面的数据流不会触发
+    LaunchedEffect(schoolTick) {
         ClassReminderScheduler.reschedule(appContext)
     }
     LaunchedEffect(Unit) {

@@ -169,17 +169,23 @@ object ResourcePackChecker {
             }
         }
 
-        // 入口链接单独设卡：这是唯一能把用户带去站外的文件
-        payload["portal/entries.json"]?.let { text ->
-            PackGuards.validatePortal(context, text)?.let { reason ->
-                return contentFail(context, manifest, reason)
+        // 逐文件过闸门：入口、资讯、学校清单、学校规则各有一套判定。
+        // 按**路径后缀**分派而不是认死字面路径 —— 只校验 portal/entries.json 与
+        // news/sources.json 的话，schools/<id>/news.json 会整个跳过校验。
+        //
+        // 两遍：先把规则文件验过并收集它们声明的域名，再验入口与资讯。
+        // 湘潭的 rules 自 0.38.7 起随包下发，不先收域名，它的入口会被当成"新域名"整包拒掉。
+        val packDomains = HashSet<String>()
+        for ((path, text) in payload) {
+            if (!path.endsWith("/rules.json")) continue
+            PackGuards.validateByPath(context, path, text)?.let { reason ->
+                return contentFail(context, manifest, "$path：$reason")
             }
+            packDomains += PackGuards.domainsOf(text)
         }
-
-        // 资讯配置与入口链接一样要过闸门：它能决定应用去请求哪些地址
-        payload["news/sources.json"]?.let { text ->
-            PackGuards.validateNewsSources(context, text)?.let { reason ->
-                return contentFail(context, manifest, reason)
+        for ((path, text) in payload) {
+            PackGuards.validateByPath(context, path, text, packDomains)?.let { reason ->
+                return contentFail(context, manifest, "$path：$reason")
             }
         }
 
@@ -189,7 +195,17 @@ object ResourcePackChecker {
         // 只有真正落地了才算「检查出结论」
         ResourcePackStore.markChecked(context, now)
         app.nbult.lite.data.news.NewsSources.invalidate()
-        AppLog.log("Pack", "已应用 v${manifest.version}")
+        // 包可能改了学校清单：立刻重载，删掉的学校当场消失（当前正在用就回退宁大），
+        // 而不是等下次冷启动。这里的向下转型是刻意的 —— 资源包检查由容器发起，
+        // 但它是 object，没有容器的引用。
+        runCatching {
+            (context.applicationContext as? app.nbult.lite.NbuLiteApp)?.container?.schoolContext?.refresh()
+        }
+        AppLog.log("Pack", "已应用 v${manifest.version}（${payload.size} 个文件）")
+        // 逐个文件记来源：验收时要能证明「看到的内容来自包，不是内置」
+        payload.keys.sorted().forEach { path ->
+            AppLog.log("Pack", "来源 $path=pack@${manifest.version}")
+        }
         return PackCheckResult.Applied(manifest.version)
     }
 

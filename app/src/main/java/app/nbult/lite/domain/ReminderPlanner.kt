@@ -54,7 +54,9 @@ object ReminderPlanner {
         overrides: List<SlotOverride>,
         periods: List<PeriodTime>,
         term: Term,
-        now: Long
+        now: Long,
+        /** 某些楼栋推迟上课时的分钟数；按地点判定，返回 0 表示按时。 */
+        lateMinutes: (room: String) -> Int = { 0 }
     ): UpcomingClass? {
         if (entries.isEmpty() || periods.isEmpty()) return null
         val startMinutes = HashMap<Int, Int>(periods.size)
@@ -83,7 +85,9 @@ object ReminderPlanner {
             var best: UpcomingClass? = null
             for (block in blocks) {
                 val start = startMinutes[block.slot.startSection] ?: continue
-                val startAt = dayStart + start * 60_000L
+                // 推迟上课：整节课平移，起止一起走。标签与提醒必须同一套口径
+                val late = lateMinutes(block.slot.room).coerceAtLeast(0) * 60_000L
+                val startAt = dayStart + start * 60_000L + late
                 if (startAt <= now) continue
                 if (best != null && startAt >= best.startAt) continue
                 val end = endMinutes[block.slot.endSection] ?: start
@@ -93,7 +97,7 @@ object ReminderPlanner {
                     startSection = block.slot.startSection,
                     endSection = block.slot.endSection,
                     startAt = startAt,
-                    endAt = dayStart + end * 60_000L,
+                    endAt = dayStart + end * 60_000L + late,
                     name = block.displayName,
                     room = block.slot.room,
                     teacher = block.teacher,
@@ -104,7 +108,8 @@ object ReminderPlanner {
             // 同一天同一时刻可能不止一节（调课撞车），只提醒最早的一节，其余并进文案
             val sameTime = blocks.count { b ->
                 val s = startMinutes[b.slot.startSection] ?: return@count false
-                dayStart + s * 60_000L == picked.startAt
+                val bLate = lateMinutes(b.slot.room).coerceAtLeast(0) * 60_000L
+                dayStart + s * 60_000L + bLate == picked.startAt
             }
             return picked.copy(sameTimeCount = (sameTime - 1).coerceAtLeast(0))
         }
@@ -122,7 +127,8 @@ object ReminderPlanner {
         overrides: List<SlotOverride>,
         periods: List<PeriodTime>,
         term: Term,
-        now: Long
+        now: Long,
+        lateMinutes: (room: String) -> Int = { 0 }
     ): UpcomingClass? {
         if (entries.isEmpty() || periods.isEmpty()) return null
         val startMinutes = HashMap<Int, Int>(periods.size)
@@ -143,8 +149,9 @@ object ReminderPlanner {
         for (block in blocks) {
             val start = startMinutes[block.slot.startSection] ?: continue
             val end = endMinutes[block.slot.endSection] ?: continue
-            val startAt = dayStart + start * 60_000L
-            val endAt = dayStart + end * 60_000L
+            val late = lateMinutes(block.slot.room).coerceAtLeast(0) * 60_000L
+            val startAt = dayStart + start * 60_000L + late
+            val endAt = dayStart + end * 60_000L + late
             if (now < startAt || now >= endAt) continue
             sameTime = blocks.count { other ->
                 val os = startMinutes[other.slot.startSection] ?: return@count false

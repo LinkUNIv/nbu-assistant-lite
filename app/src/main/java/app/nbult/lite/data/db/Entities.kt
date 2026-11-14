@@ -127,6 +127,14 @@ data class SlotOverride(
 @Entity(tableName = "news")
 data class NewsItem(
     @PrimaryKey val id: Long,
+    /**
+     * 条目属于哪所学校。
+     *
+     * 以前这张表**不分学校**，于是切到湘潭后宁大的条目仍在库里，界面按栏目一并列出，
+     * 两校新闻混在一起；又因为主键是文章 id 且两校的 idOffset 都是 0，
+     * 数字相同的文章还会互相 REPLACE（0.38.5 修）。
+     */
+    @ColumnInfo(defaultValue = "'nbu'") val schoolId: String = "nbu",
     val columnId: Int,
     val columnName: String,
     val title: String,

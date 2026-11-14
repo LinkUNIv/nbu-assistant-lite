@@ -1,5 +1,7 @@
 package app.nbult.lite.data.remote
 
+import app.nbult.lite.util.AppLog
+
 import app.nbult.lite.net.HttpClients
 import android.content.Context
 import app.nbult.lite.data.news.NewsRules
@@ -30,6 +32,7 @@ data class NewsColumn(
     val name: String,
     val listUrl: String,
     val source: String = "宁波大学新闻网",
+    /** @deprecated 主键已改用栏目 id 做命名空间（见 [NewsKeys]），这个字段只为兼容旧配置保留。 */
     val idOffset: Long = 0L
 )
 
@@ -93,7 +96,12 @@ class NewsCrawler(
             val abs = link.absUrl("href")
             if (abs.isBlank()) continue
             val raw = articleId(abs) ?: continue
-            val id = column.idOffset + raw
+            // 文章号只在**本栏目**内唯一，跨校会撞号；用栏目 id 当命名空间
+            if (!NewsKeys.fits(raw)) {
+                AppLog.log("News", "跳过异常文章号 ${column.name}: $raw")
+                continue
+            }
+            val id = NewsKeys.articleKey(column.id, raw)
             val title = link.text().trim()
             if (title.length < rules.minTitleLength) continue
 

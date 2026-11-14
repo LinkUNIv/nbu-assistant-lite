@@ -53,11 +53,23 @@ class CalendarRepository(
         val periods = root.optJSONArray("periods")?.let { array ->
             (0 until array.length()).map { i -> parsePeriodTable(array.getJSONObject(i)) }
         }.orEmpty()
+        val officialImages = root.optJSONArray("officialImages")?.let { array ->
+            (0 until array.length()).mapNotNull { i ->
+                val o = array.optJSONObject(i) ?: return@mapNotNull null
+                val url = o.optString("url").trim()
+                if (url.isEmpty()) return@mapNotNull null
+                app.nbult.lite.domain.OfficialCalendarImage(
+                    label = o.optString("label").ifBlank { "官方校历" },
+                    url = url
+                )
+            }
+        }.orEmpty()
         return SchoolCalendar(
             years = years,
             periods = periods,
             updatedAt = root.optString("updatedAt"),
-            notice = root.optString("notice")
+            notice = root.optString("notice"),
+            officialImages = officialImages
         )
     }
 

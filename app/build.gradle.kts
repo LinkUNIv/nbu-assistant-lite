@@ -56,8 +56,8 @@ android {
         // 版本号规则：主.次.修订；小改动只递增修订号
         // versionCode = 主*10000 + 次*100 + 修订，每版必须递增，保证可覆盖安装
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 3803
-        versionName = "0.38.3"
+        versionCode = 3807
+        versionName = "0.38.7"
         vectorDrawables.useSupportLibrary = true
         // 只保留手机实际会跑的架构。ML Kit 的 libmlkit_google_ocr_pipeline.so
         // 四个 ABI 合计 39MB，其中 x86/x86_64 在真机上永远加载不到，砍掉省 22MB。
@@ -125,6 +125,8 @@ android {
     sourceSets.getByName("test") {
         // 规则文件在 assets 里，单测直接按类路径读同一份文件 —— 避免测试里再抄一份
         resources.srcDir("src/main/assets")
+        // 湘潭自 0.387 起只存在于资源包：单测也要能读到同一份内容源，否则测的是过期的内置副本
+        resources.srcDir("../pack-src")
     }
     buildFeatures {
         compose = true

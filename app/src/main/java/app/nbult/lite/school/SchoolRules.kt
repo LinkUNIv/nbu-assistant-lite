@@ -25,12 +25,28 @@ internal data class SchoolRules(
     val calendarPath: String? = null,
     /** 资讯源：`schools/<id>/news.json`。为空表示没有资讯模块。 */
     val newsPath: String? = null,
+    /**
+     * 校园入口：`schools/<id>/portal.json`。为空表示用全局的 `portal/entries.json`。
+     *
+     * 湘潭的门户与宁大完全两套，路径写死会让湘潭用户点到宁大的站点上去。
+     */
+    val portalPath: String? = null,
+    /**
+     * 官方校历页地址（逐年 JPG 那种）。为空表示没有原图可看 ——
+     * 湘潭的校历是 PDF，写死宁大页面就会在湘潭下显示宁大的校历图。
+     */
+    val officialCalendarPath: String? = null,
     /** 导入器参数。不同学校的表格差异写在这里，而不是写进代码。 */
     val importer: SchoolImporter = SchoolImporter(),
     /** 该校具备哪些模块。湘潭没有签到系统，这里必须关掉，否则入口永远打不开。 */
     val capabilities: SchoolCapabilities = SchoolCapabilities(),
     /** 该校的域名。网络白名单要靠它放行，否则湘潭的资讯一条都取不到。 */
     val domains: List<String> = emptyList(),
+    /**
+     * 按楼栋推迟上课的规则。见 [app.nbult.lite.domain.LateStartPolicy]。
+     * 湘潭的逸夫楼与信息科技大楼比作息表晚 10 分钟。
+     */
+    val lateStart: List<app.nbult.lite.domain.LateStartRule> = emptyList(),
     /** 周次写法。学校换一种写法时改这里，不用改算法。 */
     val weekSyntax: app.nbult.lite.parser.WeekSyntax = app.nbult.lite.parser.WeekSyntax()
 ) {
@@ -94,6 +110,8 @@ internal data class SchoolRules(
                 maxSections = root.optJSONObject("limits")?.optInt("maxSections", 12) ?: 12,
                 calendarPath = root.optString("calendar").takeIf { it.isNotBlank() },
                 newsPath = root.optString("news").takeIf { it.isNotBlank() },
+                portalPath = root.optString("portal").takeIf { it.isNotBlank() },
+                officialCalendarPath = root.optString("officialCalendar").takeIf { it.isNotBlank() },
                 importer = root.optJSONObject("importer")?.toImporter() ?: SchoolImporter(),
                 capabilities = root.optJSONObject("capabilities")?.toCapabilities() ?: SchoolCapabilities(),
                 domains = root.optJSONArray("domains").toStringList(),
@@ -105,7 +123,8 @@ internal data class SchoolRules(
                         odd = w.optString("odd", app.nbult.lite.parser.WeekSyntax().odd),
                         even = w.optString("even", app.nbult.lite.parser.WeekSyntax().even)
                     )
-                } ?: app.nbult.lite.parser.WeekSyntax()
+                } ?: app.nbult.lite.parser.WeekSyntax(),
+                lateStart = parseLateStart(root.optJSONArray("lateStart"))
             )
             SchoolRulesResult.Ok(rules)
           } catch (e: Exception) {
@@ -114,6 +133,29 @@ internal data class SchoolRules(
         }
 
         private class PatternError(message: String) : Exception(message)
+
+        /**
+         * 解析 `lateStart`。写坏的条目直接丢掉而不是让整份规则失败 ——
+         * 少一条"推迟"提示不影响导课表，整份规则废掉会连课都导不进来。
+         */
+        private fun parseLateStart(array: org.json.JSONArray?): List<app.nbult.lite.domain.LateStartRule> {
+            if (array == null) return emptyList()
+            val out = ArrayList<app.nbult.lite.domain.LateStartRule>(array.length())
+            for (i in 0 until array.length()) {
+                val o = array.optJSONObject(i) ?: continue
+                val keys = o.optJSONArray("contains").toStringList().filter { it.isNotBlank() }
+                val minutes = o.optInt("minutes", 0)
+                if (keys.isEmpty() || minutes <= 0) continue
+                out.add(
+                    app.nbult.lite.domain.LateStartRule(
+                        contains = keys,
+                        minutes = minutes,
+                        label = o.optString("label").ifBlank { "推迟 $minutes 分钟上课" }
+                    )
+                )
+            }
+            return out
+        }
 
         private fun JSONObject.regex(key: String): Regex {
             val raw = optString(key)

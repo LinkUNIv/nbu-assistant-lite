@@ -69,13 +69,18 @@ fun PortalScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
-    var entries by remember { mutableStateOf<List<PortalEntry>>(emptyList()) }
+    val container = app.nbult.lite.ui.LocalAppContainer.current
+    val schoolTick by container.schoolTick.collectAsStateWithLifecycle()
+    var content by remember { mutableStateOf(PortalContent()) }
     var toast by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
-        val loaded = runCatching { PortalCatalog.load(context) }.getOrNull()
-        entries = loaded?.first.orEmpty()
+    // 跟着学校走：湘潭的入口与宁大完全两套，路径由规则里的 portal 字段决定
+    LaunchedEffect(schoolTick) {
+        val path = runCatching { container.schoolRules?.portalPath }.getOrNull()
+            ?: PortalCatalog.DEFAULT_PATH
+        content = runCatching { PortalCatalog.load(context, path) }.getOrNull() ?: PortalContent()
     }
+    val entries = content.entries
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -103,11 +108,23 @@ fun PortalScreen(
                     weekStartEpochDay = state.term?.startEpochDay?.let {
                         it + (state.week - 1) * 7L
                     },
+                    hasTerm = state.term != null,
                     onClick = onOpenCalendar
                 )
             }
 
-            PortalCatalog.categories.forEach { category ->
+            if (entries.isEmpty()) {
+                item("empty") {
+                    Text(
+                        text = "内容包未就绪，稍后自动加载",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp, top = 24.dp)
+                    )
+                }
+            }
+
+            content.categories.forEach { category ->
                 val group = entries.filter { it.category == category }
                 if (group.isEmpty()) return@forEach
                 item("header-$category") {
@@ -120,8 +137,9 @@ fun PortalScreen(
                 }
                 items(group, key = { it.id }) { entry ->
                     EntryRow(entry) {
-                        // 校历默认进应用内页面（那里还能一键转浏览器），其余一律交默认浏览器
-                        if (entry.id == "C1") {
+                        // 校历默认进应用内页面（那里还能一键转浏览器），其余一律交默认浏览器。
+                        // 用 action 字段判定，不再依赖 id 恰好叫 C1 —— 换一所学校 id 就变了。
+                        if (entry.action == "calendar" || entry.id == "C1") {
                             onOpenCalendar()
                         } else {
                             val opened = openInBrowser(context, entry.url)
@@ -185,6 +203,8 @@ private fun CalendarEntryCard(
     week: Int,
     totalWeeks: Int,
     weekStartEpochDay: Long?,
+    /** 没有学期（还没导入课表）时不报「第 1 周」——那是假信息，校历页会按校历算出真周次。 */
+    hasTerm: Boolean,
     onClick: () -> Unit
 ) {
     Surface(
@@ -207,12 +227,16 @@ private fun CalendarEntryCard(
                 )
                 Text(
                     text = buildString {
-                        append("第 $week 周 / 共 $totalWeeks 周")
-                        if (weekStartEpochDay != null) {
-                            append("　")
-                            append(CalendarDates.monthDayShort(weekStartEpochDay))
-                            append(" - ")
-                            append(CalendarDates.monthDayShort(weekStartEpochDay + 6))
+                        if (!hasTerm) {
+                            append("未设置学期　导入课表后自动对齐")
+                        } else {
+                            append("第 $week 周 / 共 $totalWeeks 周")
+                            if (weekStartEpochDay != null) {
+                                append("　")
+                                append(CalendarDates.monthDayShort(weekStartEpochDay))
+                                append(" - ")
+                                append(CalendarDates.monthDayShort(weekStartEpochDay + 6))
+                            }
                         }
                     },
                     style = MaterialTheme.typography.labelMedium,
@@ -302,7 +326,12 @@ private fun Tag(text: String, color: Color) {
     )
 }
 
-/** 入口配置：从 assets 读取，改入口不用改代码。 */
+/**
+ * 入口配置。
+ *
+ * 路径由学校规则决定：湘潭用 `schools/xtu/portal.json`，其余回落到 `portal/entries.json`。
+ * 内容全部走资源包，APK 里只剩空壳（0.38.4 起）。
+ */
 data class PortalEntry(
     val id: String,
     val title: String,
@@ -310,23 +339,30 @@ data class PortalEntry(
     val url: String,
     val category: String,
     val login: Boolean,
-    val insecure: Boolean
+    val insecure: Boolean,
+    /** 交给应用内处理的动作，目前只有 `calendar`；其余一律交系统浏览器。 */
+    val action: String = ""
+)
+
+data class PortalContent(
+    val entries: List<PortalEntry> = emptyList(),
+    val notice: String = "",
+    val categories: List<String> = PortalCatalog.DEFAULT_CATEGORIES
 )
 
 object PortalCatalog {
 
-    val categories = listOf("学习", "生活", "服务")
+    val DEFAULT_CATEGORIES = listOf("学习", "生活", "服务")
 
-    /** 返回 (入口列表, 页脚提示)。读不到时返回空列表，页面显示为空而不是崩溃。 */
-    fun load(context: Context): Pair<List<PortalEntry>, String> {
-        // 优先读下载的资源包。远程内容不可控，解析整体包在 runCatching 里 ——
-        // 页面留空也比抛异常强
-        val raw = ResourcePackStore.readText(context, "portal/entries.json")
-            ?: return emptyList<PortalEntry>() to ""
-        val root = runCatching { JSONObject(raw) }.getOrNull()
-            ?: return emptyList<PortalEntry>() to ""
+    const val DEFAULT_PATH = "portal/entries.json"
 
-        val array = root.optJSONArray("entries") ?: return emptyList<PortalEntry>() to ""
+    /** 读不到时返回空内容，页面显示空态而不是崩溃。 */
+    fun load(context: Context, path: String = DEFAULT_PATH): PortalContent {
+        // 远程内容不可控，解析整体包在 runCatching 里
+        val raw = ResourcePackStore.readText(context, path) ?: return PortalContent()
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return PortalContent()
+
+        val array = root.optJSONArray("entries") ?: return PortalContent()
         val list = ArrayList<PortalEntry>(array.length())
         for (i in 0 until array.length()) {
             val o = array.optJSONObject(i) ?: continue
@@ -338,11 +374,18 @@ object PortalCatalog {
                     url = o.optString("url"),
                     category = o.optString("category", "服务"),
                     login = o.optBoolean("login", false),
-                    insecure = o.optBoolean("insecure", false)
+                    insecure = o.optBoolean("insecure", false),
+                    action = o.optString("action")
                 )
             )
         }
-        return list to root.optString("notice")
+        // 分类可配置：湘潭的「教务 / 生活 / 资讯」和宁大不是一套
+        val configured = root.optJSONArray("categories")?.let { arr ->
+            (0 until arr.length()).mapNotNull { arr.optString(it).takeIf { s -> s.isNotBlank() } }
+        }.orEmpty()
+        val categories = (configured.ifEmpty { DEFAULT_CATEGORIES } +
+            list.map { it.category }).distinct()
+        return PortalContent(list, root.optString("notice"), categories)
     }
 }
 

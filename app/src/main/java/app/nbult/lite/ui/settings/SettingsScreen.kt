@@ -343,19 +343,28 @@ SettingCard(title = "作息时间") {
             TextButton(onClick = { onNavigateSection("schedule") }) {
                 Text("逐节编辑")
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = {
-                    timetableVm.applyPeriodPreset(PeriodPresets.HEADQUARTERS.periods)
-                    // 记下这次选择：切到别的学校再切回来时，按它还原
-                    container.noteDefaultSchoolPreset(PeriodPresets.HEADQUARTERS.id)
-                }) { Text("主校区") }
-                TextButton(onClick = {
-                    timetableVm.applyPeriodPreset(PeriodPresets.MEISHAN.periods)
-                    container.noteDefaultSchoolPreset(PeriodPresets.MEISHAN.id)
-                }) { Text("梅山校区") }
+            // 校区模板是宁大专属（本部与梅山错时打铃）。湘潭下留着这两个按钮，
+            // 点了会把宁大的作息写进库，整张课表偏移半小时（实测踩过）
+            val isNbu = container.schoolContext.id == "nbu"
+            if (isNbu) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = {
+                        timetableVm.applyPeriodPreset(PeriodPresets.HEADQUARTERS.periods)
+                        // 记下这次选择：切到别的学校再切回来时，按它还原
+                        container.noteDefaultSchoolPreset(PeriodPresets.HEADQUARTERS.id)
+                    }) { Text("主校区") }
+                    TextButton(onClick = {
+                        timetableVm.applyPeriodPreset(PeriodPresets.MEISHAN.periods)
+                        container.noteDefaultSchoolPreset(PeriodPresets.MEISHAN.id)
+                    }) { Text("梅山校区") }
+                }
             }
             Text(
-                text = "数据依据学校公布的校历上课时间表。本部 5/6/8 号楼有单双层错时打铃，如有需要可切换校区模板后逐节核对。",
+                text = if (isNbu) {
+                    "数据依据学校公布的校历上课时间表。本部 5/6/8 号楼有单双层错时打铃，如有需要可切换校区模板后逐节核对。"
+                } else {
+                    "数据依据学校公布的校历上课时间表，可逐节核对。"
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

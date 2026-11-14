@@ -1,24 +1,34 @@
 #!/usr/bin/env bash
 #
-# 发布一个资源包到 packs 分支。
+# 发布一个资源包。
 #
 # 用法：
-#   tools/publish-pack.sh            # 版本号取当前时间 yyyyMMddHHmm
-#   tools/publish-pack.sh 202611011200
+#   tools/publish-pack.sh                     # 远程：版本号取当前时间 yyyyMMddHHmm
+#   tools/publish-pack.sh 202611141300        # 远程：指定版本号
+#   tools/publish-pack.sh --local             # 本地：只生成目录，不推仓库（测试用）
 #
 # 做什么：
-#   1. 把 assets 里需要外置的文件复制到 packs/<版本>/ 下
-#   2. 计算每个文件的 sha256，写进 packs/latest.json
-#   3. 提交并推送到 packs 分支
+#   1. 从 `pack-src/` 取数据文件（**不是** assets —— 0.38.4 起 APK 里只剩空壳）
+#   2. 计算每个文件的 sha256，写进 `latest.json`
+#   3. 远程模式：提交并推送到 `packs` 分支；本地模式：落到 `dist/pack/<版本>/`
 #
-# 为什么是单独的分支：main 上有 CI，push 一次就构建一次 APK；
-# 资源包一天可能发几次，不该每次都触发 5 分钟的构建。
-# 客户端固定从两个地址取（见 ResourcePackChecker），都指向这个分支。
+# 为什么数据不在 assets：这一版要验证「内容全部由资源包驱动」。
+# 如果 APK 里也留一份，就分不清界面上看到的是包还是内置。
 #
-# 注意：版本号只能升不能降，客户端会拒绝比本地更旧的包。
+# 目录约定（客户端按此读取）：
+#   packs/latest.json            清单
+#   packs/<version>/<path>       文件，path 与逻辑路径一致
+#
+# 版本号规则：`yyyyMMddHHmm`，12 位数字，**只升不降**，同号重发会被客户端忽略。
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+MODE="remote"
+if [ "${1:-}" = "--local" ]; then
+  MODE="local"
+  shift
+fi
 
 VERSION="${1:-$(date +%Y%m%d%H%M)}"
 if ! [[ "$VERSION" =~ ^[0-9]{12}$ ]]; then
@@ -26,30 +36,25 @@ if ! [[ "$VERSION" =~ ^[0-9]{12}$ ]]; then
   exit 1
 fi
 
-REMOTE=$(git remote get-url origin)
-WORK=$(mktemp -d)
-trap 'rm -rf "$WORK"' EXIT
-
-echo "==> 取 packs 分支"
-if ! git clone --quiet --branch packs --depth 1 "$REMOTE" "$WORK/packs" 2>/dev/null; then
-  echo "    packs 分支还不存在，初始化一个空的"
-  mkdir -p "$WORK/packs"
-  git -C "$WORK/packs" init --quiet
-  git -C "$WORK/packs" checkout --quiet --orphan packs
-  git -C "$WORK/packs" remote add origin "$REMOTE"
+SRC="pack-src"
+if [ ! -d "$SRC" ]; then
+  echo "找不到内容源目录 $SRC" >&2
+  exit 1
 fi
 
-DEST="$WORK/packs/$VERSION"
-mkdir -p "$DEST/calendar" "$DEST/portal" "$DEST/news"
+echo "==> 内容源：$SRC"
+(cd "$SRC" && find . -type f | sed 's|^\./||' | sort | sed 's/^/    /')
 
-# 需要外置的文件清单。新增一类资源时在这里加一行，
-# 并让对应的读取处改走 ResourcePackStore.readText()
-cp app/src/main/assets/calendar/nbu_calendar.json "$DEST/calendar/"
-cp app/src/main/assets/portal/entries.json       "$DEST/portal/"
-cp app/src/main/assets/news/sources.json         "$DEST/news/"
+# 两种模式都先在 dist/pack/<版本>/ 里生成一份，好处是 push 失败时可以直接改用 API
+ROOT="$PWD/dist/pack/$VERSION"
+rm -rf "$ROOT"
+mkdir -p "$ROOT/$VERSION"
+(cd "$SRC" && tar -cf - .) | tar -xf - -C "$ROOT/$VERSION"
+DEST="$ROOT/$VERSION"
+echo "==> 生成目录：$ROOT"
 
 echo "==> 生成清单"
-python - "$WORK/packs" "$VERSION" <<'PY'
+python - "$ROOT" "$VERSION" <<'PY'
 import hashlib, io, json, os, sys, datetime
 
 root, version = sys.argv[1], sys.argv[2]
@@ -65,22 +70,41 @@ for dirpath, _, names in os.walk(os.path.join(root, version)):
 manifest = {
     "version": int(version),
     "updatedAt": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-    # notes 会显示在「调试面板 → 资源包」，写清楚这次改了什么
     "notes": os.environ.get("PACK_NOTES", f"资源包 {version}"),
-    # 低于这个 versionCode 的 App 整体跳过该包，不做部分应用
-    "minAppVersion": int(os.environ.get("PACK_MIN_APP", "3400")),
+    "minAppVersion": int(os.environ.get("PACK_MIN_APP", "3804")),
     "files": files,
 }
-with io.open(os.path.join(root, "latest.json"), "w", encoding="utf-8") as f:
+with io.open(os.path.join(root, "latest.json"), "w", encoding="utf-8", newline="\n") as f:
     json.dump(manifest, f, ensure_ascii=False, indent=2)
     f.write("\n")
 print(f"    latest.json  version={version}  {len(files)} 个文件")
 PY
 
-echo "==> 提交并推送"
-git -C "$WORK/packs" add -A
-git -C "$WORK/packs" commit --quiet -m "pack: 发布资源包 $VERSION"
-git -C "$WORK/packs" push --quiet origin packs
+if [ "$MODE" = "local" ]; then
+  echo
+  echo "本地包已生成，未推送仓库。装进调试版："
+  echo "  bash tools/push-pack-local.sh $VERSION"
+  exit 0
+fi
 
-echo "==> 完成：packs@$VERSION"
-echo "    客户端下次启动 10 秒后会自动取，或到「调试面板 → 资源包 → 立即检查资源包」"
+echo "==> 推送到 packs 分支"
+git -C "$ROOT" init --quiet 2>/dev/null || true
+
+# 这台机器上 git push 长期被 TLS 掐断（schannel: server closed abruptly），
+# 而 API 通道是通的 —— 先试 git，失败立刻改用 push-pack-via-api.py，不让发布卡在半路。
+REMOTE=$(git remote get-url origin)
+if git -C "$ROOT" ls-remote "$REMOTE" refs/heads/packs >/dev/null 2>&1; then
+  set +e
+  git -C "$ROOT" add -A
+  git -C "$ROOT" commit --quiet -m "pack: 发布资源包 $VERSION" 2>/dev/null
+  git -C "$ROOT" push --quiet origin packs 2>/dev/null
+  PUSHED=$?
+  set -e
+  if [ "$PUSHED" = "0" ]; then
+    echo "==> 完成（git）：packs@$VERSION"
+    exit 0
+  fi
+  echo "    git push 失败（$PUSHED），改用 API 直推"
+fi
+
+python tools/push-pack-via-api.py "$VERSION"

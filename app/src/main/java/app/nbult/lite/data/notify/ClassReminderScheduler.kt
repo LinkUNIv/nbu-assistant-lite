@@ -111,8 +111,13 @@ object ClassReminderScheduler {
         // 上课中的常驻通知：与"下一节课"是两件事，但走同一条重排流程，
         // 这样"App 中途启动""下课闹钟被系统掐掉"都能自己恢复/自愈。
         val liveEnabled = container.settings.classLive.first()
+        // 推迟上课的楼栋（湘潭逸夫楼 / 信息科技大楼）：提醒与常驻通知都按顺延后的时刻
+        val lateRules = container.schoolContext.rules?.lateStart.orEmpty()
+        val lateMinutes: (String) -> Int = { room ->
+            app.nbult.lite.domain.LateStartPolicy.minutesOf(room, lateRules)
+        }
         val ongoing = ReminderPlanner.currentClass(
-            snapshot.entries, snapshot.overrides, snapshot.periods, term, now
+            snapshot.entries, snapshot.overrides, snapshot.periods, term, now, lateMinutes
         )
         if (liveEnabled && ongoing != null) {
             ReminderNotifier.showOngoing(appContext, ongoing)
@@ -141,7 +146,8 @@ object ClassReminderScheduler {
             overrides = snapshot.overrides,
             periods = snapshot.periods,
             term = term,
-            now = now
+            now = now,
+            lateMinutes = lateMinutes
         ) ?: run {
             AppLog.log("Reminder", "往后 21 天没有课，暂不排提醒")
             return

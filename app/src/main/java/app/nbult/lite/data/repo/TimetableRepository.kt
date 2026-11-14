@@ -206,6 +206,9 @@ class TimetableRepository(
     suspend fun updateCourse(course: Course) = dao.updateCourse(course)
 
     suspend fun applyPeriodPreset(periods: List<Pair<String, String>>) {
+        // 先清掉超出新节数的旧行：湘潭 11 节、宁大 12 节，只 upsert 不清尾巴的话
+        // 库里会留下 20:30-22:00 这种「上一所学校」的末节（0.38.4 真机发现）
+        dao.deletePeriodsAbove(periods.size)
         dao.upsertPeriods(
             periods.mapIndexed { index, pair ->
                 PeriodTime(idx = index + 1, startTime = pair.first, endTime = pair.second)

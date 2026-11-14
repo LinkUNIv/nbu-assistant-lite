@@ -97,5 +97,17 @@
     "odd": "(?:[(（]\\s*单\\s*[)）]|单周)",
     "even": "(?:[(（]\\s*双\\s*[)）]|双周)"
   },
-  "calendar": "schools/xtu/calendar.json"
+  "calendar": "schools/xtu/calendar.json",
+  "portal": "schools/xtu/portal.json",
+  "lateStart": [
+    {
+      "contains": [
+        "逸夫楼",
+        "信息科技大楼"
+      ],
+      "minutes": 10,
+      "label": "推迟 10 分钟上课"
+    }
+  ],
+  "officialCalendar": "https://www.xtu.edu.cn/xysh/ggfw/xl.htm"
 }

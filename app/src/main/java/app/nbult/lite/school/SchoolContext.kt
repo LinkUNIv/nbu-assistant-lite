@@ -54,8 +54,26 @@ internal class SchoolContext(private val context: Context) {
         return true
     }
 
+    /**
+     * 资源包落地后调用：重新读清单与规则。
+     *
+     * 包的清单可能把当前这所学校删掉，光等下次启动才回退，用户会看到「学校还在、内容却空了」。
+     */
+    fun refresh() {
+        reload()
+        _tick.value += 1
+    }
+
     private fun reload() {
         rules = SchoolCatalog.rules(context, id)
+        // 学校现在完全由资源包定义：包把当前这所删掉之后，这里会读不到规则。
+        // 不回退的话白名单不注册、资讯源不重配、解析规则为空 —— 整个应用半瘫。
+        if (rules == null && id != SchoolPreference.DEFAULT_ID) {
+            AppLog.log("School", "当前学校 $id 已不在资源包内，回退 ${SchoolPreference.DEFAULT_ID}")
+            SchoolPreference.setSchoolId(context, SchoolPreference.DEFAULT_ID)
+            id = SchoolPreference.DEFAULT_ID
+            rules = SchoolCatalog.rules(context, id)
+        }
         rules?.let { r ->
             // 顺序有讲究：白名单先放行，后面资讯才发得出去
             HostWhitelist.registerSchoolDomains(r.domains)

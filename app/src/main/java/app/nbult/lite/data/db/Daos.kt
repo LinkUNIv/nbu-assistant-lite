@@ -78,6 +78,10 @@ interface TimetableDao {
     @Query("SELECT * FROM period_time ORDER BY idx")
     fun observePeriods(): Flow<List<PeriodTime>>
 
+    /** 删除节次大于 [maxIdx] 的行。换学校/换季写作息时用来清掉旧模板多出来的尾巴。 */
+    @Query("DELETE FROM period_time WHERE idx > :maxIdx")
+    suspend fun deletePeriodsAbove(maxIdx: Int)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertPeriods(periods: List<PeriodTime>)
 
@@ -108,8 +112,9 @@ interface TimetableDao {
 @Dao
 interface NewsDao {
 
-    @Query("SELECT * FROM news ORDER BY publishedAt DESC, id DESC LIMIT 200")
-    fun observeAll(): Flow<List<NewsItem>>
+    /** 只读当前学校的条目。跨校混排就是从这里漏出去的。 */
+    @Query("SELECT * FROM news WHERE schoolId = :schoolId ORDER BY publishedAt DESC, id DESC LIMIT 200")
+    fun observeAll(schoolId: String): Flow<List<NewsItem>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(items: List<NewsItem>)
@@ -126,9 +131,10 @@ interface NewsDao {
     @Query("SELECT MAX(id) FROM news")
     suspend fun maxId(): Long?
 
-    @Query("SELECT COUNT(*) FROM news")
-    suspend fun count(): Int
+    @Query("SELECT COUNT(*) FROM news WHERE schoolId = :schoolId")
+    suspend fun count(schoolId: String): Int
 
-    @Query("DELETE FROM news")
-    suspend fun clear()
+    /** 只清当前学校：切到别的学校再切回来，那边的已读与正文缓存还在。 */
+    @Query("DELETE FROM news WHERE schoolId = :schoolId")
+    suspend fun clear(schoolId: String)
 }

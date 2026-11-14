@@ -816,6 +816,11 @@ private fun CourseBlock(
     } else 0.13f
     val accent = courseColor(entry.course.colorSeed)
     val sections = entry.slot.endSection - entry.slot.startSection + 1
+    // 这栋楼是否推迟上课：规则来自当前学校（湘潭的逸夫楼 / 信息科技大楼 +10 分钟）
+    val lateRules = LocalAppContainer.current.schoolRules?.lateStart.orEmpty()
+    val lateRule = remember(entry.slot.room, lateRules) {
+        app.nbult.lite.domain.LateStartPolicy.of(entry.slot.room, lateRules)
+    }
     val roomColor = MaterialTheme.colorScheme.onSurfaceVariant
     val metaSmall = (metaSize.value - 1).sp
 
@@ -936,8 +941,27 @@ private fun CourseBlock(
             val reservedRoom = if (metaText.isNotEmpty()) {
                 minOf(maxHeight / 2, roomLineHeight * if (sections >= 2) 2 else 1)
             } else 0.dp
-            val titleMaxHeight = (maxHeight - reservedRoom - 1.dp).coerceAtLeast(0.dp)
+            // 有顶标时把标题可用高度再让出 11dp，避免课名被顶标挤到溢出
+            val badgeSpace = if (lateRule != null && !compact) 11.dp else 0.dp
+            val shortBadge = maxHeight < 52.dp
+            val titleMaxHeight = (maxHeight - reservedRoom - 1.dp - badgeSpace).coerceAtLeast(0.dp)
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                // 顶标：把正文整体压下去，而不是盖在课程名上。
+                // 小组件（compact）不显示 —— 那里连课名都常被截断，再加一行等于全挤掉。
+                if (lateRule != null && !compact) {
+                    Text(
+                        text = if (shortBadge) "+${lateRule.minutes} 分" else lateRule.label,
+                        fontSize = 8.sp,
+                        lineHeight = 9.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = blockColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .background(blockColor.copy(alpha = 0.16f), RoundedCornerShape(3.dp))
+                            .padding(horizontal = 3.dp, vertical = 1.dp)
+                    )
+                }
                 Row(modifier = Modifier.heightIn(max = titleMaxHeight), verticalAlignment = Alignment.Top) {
                     Text(
                         text = titleText,

@@ -23,8 +23,13 @@ import app.nbult.lite.util.UserAgent
  */
 object OfficialCalendarSource {
 
+    /**
+     * 默认校历页 = 宁波大学。**不再被界面直接使用**：页面地址现在由学校规则里的
+     * `officialCalendar` 给（湘潭没有逐年 JPG，字段留空就不显示这张卡）。
+     * 留这个常量只是给单测与老调用方一个明确锚点。
+     */
     const val PAGE_URL = "https://www.nbu.edu.cn/xl.htm"
-    private const val CACHE_FILE = "official-calendar.json"
+    private const val CACHE_PREFIX = "official-calendar"
     private const val TTL_MILLIS = 7L * 24 * 60 * 60 * 1000
 
     data class Entry(val year: String, val imageUrl: String)
@@ -35,16 +40,20 @@ object OfficialCalendarSource {
         .build()
 
     /** 先给缓存（有就立刻显示），过期再后台刷新由调用方决定；这里返回最新可用结果。 */
-    suspend fun load(context: Context, forceRefresh: Boolean = false): Result<List<Entry>> =
+    suspend fun load(
+        context: Context,
+        pageUrl: String = PAGE_URL,
+        forceRefresh: Boolean = false
+    ): Result<List<Entry>> =
         withContext(Dispatchers.IO) {
-            val cached = readCache(context)
+            val cached = readCache(context, pageUrl)
             val fresh = cached != null &&
                 System.currentTimeMillis() - cached.first < TTL_MILLIS &&
                 cached.second.isNotEmpty()
             if (fresh && !forceRefresh) return@withContext Result.success(cached!!.second)
 
-            runCatching { fetch() }
-                .onSuccess { writeCache(context, it) }
+            runCatching { fetch(pageUrl) }
+                .onSuccess { writeCache(context, pageUrl, it) }
                 .recoverCatching {
                     // 网络失败时退回旧缓存，仍然可用（界面上会标注抓取时间）
                     cached?.second?.takeIf { list -> list.isNotEmpty() }
@@ -52,16 +61,16 @@ object OfficialCalendarSource {
                 }
         }
 
-    private fun fetch(): List<Entry> {
+    private fun fetch(pageUrl: String): List<Entry> {
         val request = Request.Builder()
-            .url(PAGE_URL)
+            .url(pageUrl)
             .header("User-Agent", UserAgent.browserLike)
             .build()
         val html = client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("校历页返回 ${response.code}")
             response.body?.string().orEmpty()
         }
-        val doc = Jsoup.parse(html, PAGE_URL)
+        val doc = Jsoup.parse(html, pageUrl)
         val entries = doc.select("a[href]").mapNotNull { a ->
             val href = a.absUrl("href").ifBlank { a.attr("href") }
             val text = a.text().trim()
@@ -75,10 +84,17 @@ object OfficialCalendarSource {
         return entries.sortedByDescending { it.year.take(4).toIntOrNull() ?: 0 }
     }
 
-    private fun cacheFile(context: Context) = File(context.filesDir, CACHE_FILE)
+    /** 缓存按页面分文件：换学校时不会拿另一所学校的原图顶上。 */
+    private fun cacheFile(context: Context, pageUrl: String): File {
+        val key = pageUrl.trim().lowercase()
+            .removePrefix("https://").removePrefix("http://")
+            .replace(Regex("[^a-z0-9.]+"), "-")
+            .trim('-')
+        return File(context.filesDir, "$CACHE_PREFIX-$key.json")
+    }
 
-    private fun readCache(context: Context): Pair<Long, List<Entry>>? = runCatching {
-        val file = cacheFile(context)
+    private fun readCache(context: Context, pageUrl: String): Pair<Long, List<Entry>>? = runCatching {
+        val file = cacheFile(context, pageUrl)
         if (!file.isFile) return@runCatching null
         val root = JSONObject(file.readText())
         val at = root.optLong("fetchedAt")
@@ -91,12 +107,12 @@ object OfficialCalendarSource {
         at to list
     }.getOrNull()
 
-    private fun writeCache(context: Context, entries: List<Entry>) = runCatching {
+    private fun writeCache(context: Context, pageUrl: String, entries: List<Entry>) = runCatching {
         val array = JSONArray()
         entries.forEach { e ->
             array.put(JSONObject().put("year", e.year).put("imageUrl", e.imageUrl))
         }
-        cacheFile(context).writeText(
+        cacheFile(context, pageUrl).writeText(
             JSONObject()
                 .put("fetchedAt", System.currentTimeMillis())
                 .put("entries", array)

@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -65,7 +66,7 @@ import coil.compose.AsyncImage
  * - 抓不到时明确提示未发布/失败，不拿本地 JSON 冒充官方。
  */
 @Composable
-fun OfficialCalendarCard() {
+fun OfficialCalendarCard(pageUrl: String) {
     val context = LocalContext.current
     var entries by remember { mutableStateOf<List<OfficialCalendarSource.Entry>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -73,9 +74,9 @@ fun OfficialCalendarCard() {
     var viewing by remember { mutableStateOf<OfficialCalendarSource.Entry?>(null) }
     var refreshTick by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(refreshTick) {
+    LaunchedEffect(pageUrl, refreshTick) {
         loading = true
-        OfficialCalendarSource.load(context, forceRefresh = refreshTick > 0)
+        OfficialCalendarSource.load(context, pageUrl, forceRefresh = refreshTick > 0)
             .onSuccess {
                 entries = it
                 error = null
@@ -104,7 +105,7 @@ fun OfficialCalendarCard() {
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = { openUrl(context, OfficialCalendarSource.PAGE_URL) }) {
+                TextButton(onClick = { openUrl(context, pageUrl) }) {
                     Text("浏览器打开")
                 }
             }
@@ -252,6 +253,92 @@ private fun CalendarImageViewer(
                     .padding(bottom = 24.dp)
             )
         }
+    }
+}
+
+/**
+ * 官方校历原图（资源包配置版）。
+ *
+ * 湘潭的校历是官网内嵌的 PDF，没有「逐年 JPG」那种可解析结构，但官网给了两页预览图。
+ * 于是改成**直接把图片地址写进资源包**：换图只需发资源包，不必动页面解析。
+ */
+@Composable
+fun OfficialImagesCard(
+    images: List<app.nbult.lite.domain.OfficialCalendarImage>,
+    pageUrl: String? = null
+) {
+    if (images.isEmpty()) return
+    val context = LocalContext.current
+    var viewing by remember { mutableStateOf<app.nbult.lite.domain.OfficialCalendarImage?>(null) }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    ) {
+        Column(Modifier.padding(vertical = 10.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "官方校历原图",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.weight(1f))
+                if (pageUrl != null) {
+                    TextButton(onClick = { openUrl(context, pageUrl) }) { Text("浏览器打开") }
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                images.forEach { image ->
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { viewing = image }
+                    ) {
+                        AsyncImage(
+                            model = image.url,
+                            contentDescription = image.label,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                        )
+                        Text(
+                            text = image.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    viewing?.let { image ->
+        CalendarImageViewer(
+            entry = OfficialCalendarSource.Entry(image.label, image.url),
+            onDismiss = { viewing = null },
+            onOpenBrowser = {
+                openUrl(context, pageUrl ?: image.url)
+                viewing = null
+            }
+        )
     }
 }
 

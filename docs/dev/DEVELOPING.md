@@ -147,21 +147,28 @@ tools/archive-release.sh debug -f      # → dist/archive/v<版本>-Debug/（-f 
 校历、入口配置、资讯抓取规则不只存在于 APK 里：`filesDir/pack/<版本>/` 可以放一份下载来的覆盖版，
 读取时优先用它，没有就退回 `assets/`。这样改数据不必发版。
 
-目前纳入资源包的三份文件：
+自 0.38.7 起，**应用里只剩宁波大学**（`assets/schools/index.json` 一条 + `nbu/rules.json`），
+其余学校及其全部内容都由资源包提供。内容源在仓库的 `pack-src/`，**不是 `assets/`** ——
+`assets/` 里放的是空壳（见 0.38.4 起的约定：APK 不内置内容）。
 
 | 文件 | 内容 | 读取处 |
 |---|---|---|
-| `calendar/nbu_calendar.json` | 学年、学期起止、作息模板 | `CalendarRepository` |
-| `portal/entries.json` | 入口链接与分类 | `PortalCatalog` |
-| `news/sources.json` | 资讯栏目与抓取规则 | `NewsSources` |
+| `schools/index.json` | 学校清单，可增可删 | `SchoolCatalog.entries` |
+| `schools/<id>/rules.json` | 该校的解析规则（正则、PDF 参数、能力开关、域名、推迟上课） | `SchoolCatalog.rules` |
+| `schools/<id>/calendar.json` | 该校学年、假期、作息、官方校历原图 | `CalendarRepository` |
+| `schools/<id>/news.json` | 该校资讯栏目与抓取规则 | `NewsSources` |
+| `schools/<id>/portal.json` | 该校入口链接与分类 | `PortalCatalog` |
+| `calendar/nbu_calendar.json` | 宁大校历（沿用旧路径，保持不变） | `CalendarRepository` |
+| `portal/entries.json` / `news/sources.json` | 宁大的入口与资讯（沿用旧路径） | `PortalCatalog` / `NewsSources` |
 
 | 项 | 位置 |
 |---|---|
 | 发布源 | 仓库的 `packs` 分支（**不是 main**，否则每次发资源都会触发一次 APK 构建） |
-| 客户端地址 | 写死在 `ResourcePackChecker.BASES`：GitHub raw → jsDelivr |
+| 客户端地址 | 写死在 `ResourcePackChecker`：清单走 Contents API，文件走 raw → jsDelivr |
 | 清单 | `packs/latest.json`；文件在 `packs/<version>/<path>` |
 | 落地 | `filesDir/pack/<version>/`，`state.json` 记录当前生效版本 |
-| 发布 | `tools/publish-pack.sh [版本号]` |
+| 发布（远程） | `tools/publish-pack.sh [版本号]`；`git push` 失败会自动改走 `tools/push-pack-via-api.py` |
+| 发布（本地） | `tools/publish-pack.sh --local [版本号]` + `tools/push-pack-local.sh` 推进调试版 |
 
 清单格式：
 
@@ -181,13 +188,54 @@ tools/archive-release.sh debug -f      # → dist/archive/v<版本>-Debug/（-f 
 - **`minAppVersion` 是硬门槛**。包里用了旧版读不懂的结构就抬高它，旧版整体跳过，不做部分应用
 - **读取一律走 `ResourcePackStore.readText()`**。直接 `context.assets.open()` 会绕开资源包，
   远程更新对该文件就无效了
-- **入口链接与资讯配置单独设卡**（`PackGuards`）。都不允许引入内置清单里没有的域名，
-  非 https 一律拒绝。入口能带用户去站外，资讯配置能让应用去请求任意地址 —— 这两处必须卡
+- **入口链接与资讯配置单独设卡**（`PackGuards`）。只允许内置域名 + **包内各校 rules 声明的
+  `edu.cn` 子域**，非 https 一律拒绝（学校自己那台 http 站点除外）。入口能带用户去站外，
+  资讯配置能让应用去请求任意地址 —— 这两处必须卡
+- **校验是两遍**：先验 `*/rules.json` 并把它们的域名收进白名单，再验入口与资讯。
+  顺序反了，湘潭的入口会被当成「新域名」整包拒绝
+- **内置学校不可删改**：`schools/index.json` 可以增学校、可以删非内置学校，
+  但 APK 里那条（当前是 nbu）的名称、规则路径、`builtin` 标记都不许被包改动 ——
+  否则一个坏包就能把「宁波大学」指到别的规则文件上
+- **学校被删要当场生效**：包应用成功后 `ResourcePackChecker` 会调 `SchoolContext.refresh()`，
+  当前学校若已不在包内会回退 nbu。只靠冷启动兜底会让用户看到「学校还在、内容空了」
 - **抓取规则只放「往哪找」，不放「怎么算」**。`news/sources.json` 里只有选择器、正则与阈值，
   挑正文根节点、去重、日期格式化这些判断留在 `NewsCrawler`。远程包能改的是参数，不是逻辑
 
 失败处理：校验不过、解析不过、写入失败 → 记 `failedVersion`，同版本不再重试，退回内置资源。
 网络不通不记版本，下次启动还能再试。
+
+---
+
+## 发版顺序
+
+```bash
+# 1) 资源包先上（minAppVersion 与新版 versionCode 对齐）
+PACK_MIN_APP=3807 PACK_NOTES="这版改了什么" tools/publish-pack.sh 202611150036
+
+# 2) 提交 main
+tools/push-via-api.py "release: 0.38.7 内容改由资源包驱动"
+
+# 3) 打标签触发 CI
+tools/mktag.py <完整 SHA> v0.38.7-Preview "一句话说明"
+```
+
+先发资源包的理由：新版第一次启动就能取到内容，不会出现「装上先看到空态」。
+旧版用户不会误用新包——`minAppVersion` 会让它整体跳过。
+
+**删除文件不能走 API 的树接口。** `git/trees` 传 `sha: null` 会被 GitHub 回
+`422 GitRPC::BadObjectState`，两种写法都不吃。正确做法是两步：
+
+```bash
+tools/delete-via-api.py <路径> [更多路径…]        # Contents API 逐文件 DELETE
+SKIP_DELETIONS=1 tools/push-via-api.py "…"        # 再提交其余改动
+```
+
+`push-via-api.py` 遇到本地已删除的文件会直接报错并给出上面那条命令，不会静默跳过 ——
+静默跳过的后果是远端一直留着旧文件，CI 打出的包里还是带着已经删掉的东西（0.38.7 的
+`assets/schools/xtu` 就是这么险的）。
+
+推完核对三件事：远端逐个文件的 sha256（`raw.githubusercontent` 会偶发 TLS 断流，重试即可）、
+`main` 的 HEAD 是你刚提交的那个、Release 资产齐全（APK / sha256 / manifest / mapping）。
 
 ---
 

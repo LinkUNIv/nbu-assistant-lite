@@ -5,14 +5,14 @@
       "id": 2101,
       "name": "综合新闻",
       "listUrl": "https://news.xtu.edu.cn/zhxw.htm",
-      "source": "湘潭大学新闻网",
+      "source": "新闻网",
       "idOffset": 0
     },
     {
       "id": 2102,
       "name": "教务处",
       "listUrl": "https://jwc.xtu.edu.cn/",
-      "source": "湘潭大学教务处",
+      "source": "教务处",
       "idOffset": 0
     }
   ],

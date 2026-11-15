@@ -111,7 +111,8 @@ internal object PdfLayoutParser {
             weekMask = mask,
             raw = cellText,
             confidence = 0.9f,
-            issues = emptyList()
+            issues = emptyList(),
+            category = m.groups["category"]?.value?.trim().orEmpty()
         )
     }
 }

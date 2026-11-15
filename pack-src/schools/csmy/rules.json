@@ -57,18 +57,29 @@
   "news": "schools/csmy/news.json",
   "importer": {
     "formats": [
+      "pdf",
       "xlsx",
       "docx",
       "txt",
       "html"
-    ]
+    ],
+    "pdf": {
+      "columnAnchor": "星期",
+      "rowGapPt": 13.0,
+      "headerPerPage": true,
+      "cellRegex": "^(?<name>.*?)\\((?<s1>\\d+)-(?<s2>\\d+)节\\)(?<weeks>[^/]+)(?:.*?场地[:：](?<room>[^/]*))?(?:.*?教师[:：](?<teacher>[^/]*))?(?:.*?课程性质简称[:：](?<category>[^/]*))?",
+      "noiseDrop": [
+        "时间段",
+        "节次"
+      ]
+    }
   },
   "capabilities": {
     "attendance": false,
     "login": false,
     "widget": true
   },
-  "notes": "课表 PDF 解析待补（暂无足够样本），当前可手动录入或导入 Office/HTML。校历待补，周次需手动设置。",
+  "notes": "课表 PDF 按一条 cellRegex 解析（节次/周次/场地/课程性质），教师姓名因字体子集缺映射可能为空；校历待补，周次需手动设置。",
   "domains": [
     "csmzxy.edu.cn"
   ],

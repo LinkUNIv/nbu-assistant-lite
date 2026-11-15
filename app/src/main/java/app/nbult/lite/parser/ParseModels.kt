@@ -12,7 +12,9 @@ data class ParsedSlot(
     val weekMask: Int,
     val raw: String,
     val confidence: Float,
-    val issues: List<String>
+    val issues: List<String>,
+    /** 课程性质原文（公必 / 公限 / 专必…）。抽不到就是空串，不影响导入。 */
+    val category: String = ""
 )
 
 data class ParseResult(

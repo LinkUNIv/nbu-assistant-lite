@@ -119,7 +119,9 @@ class TimetableRepository(
                     termId = termId,
                     name = name,
                     teacher = first.teacher,
-                    colorSeed = name.hashCode() and 0x7fffffff
+                    colorSeed = name.hashCode() and 0x7fffffff,
+                    // 课程性质：能抽到就存下来，「公选课」开关据此自动打勾
+                    category = slots.firstOrNull { it.category.isNotBlank() }?.category.orEmpty()
                 )
             )
             val rows = slots.map { slot ->

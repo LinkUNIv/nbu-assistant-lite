@@ -20,7 +20,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,6 +39,7 @@ import app.nbult.lite.domain.DateUtil
 import app.nbult.lite.domain.TimetableEntry
 import app.nbult.lite.domain.WeekMask
 import app.nbult.lite.ui.common.SectionStepper
+import app.nbult.lite.ui.common.SmoothSwitch
 import app.nbult.lite.ui.common.WheelPicker
 
 /** 弹窗内的三种意图。 */
@@ -223,7 +223,16 @@ fun CourseEditorSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Switch(checked = publicCourseOn, onCheckedChange = onTogglePublicCourse)
+                // 与其他开关统一用 SmoothSwitch；同时先本地生效再写库，
+                // 否则要等数据库回流才有反馈，点下去"没反应"
+                var checked by remember(publicCourseOn) { mutableStateOf(publicCourseOn) }
+                SmoothSwitch(
+                    checked = checked,
+                    onCheckedChange = {
+                        checked = it
+                        onTogglePublicCourse(it)
+                    }
+                )
             }
         }
 

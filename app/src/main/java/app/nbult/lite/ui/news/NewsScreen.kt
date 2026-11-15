@@ -150,7 +150,7 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (Long, Rect) -> Unit) {
                 if (state.items.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         if (state.loading) CircularProgressIndicator() else Text(
-                            text = if (hasColumns) "暂无资讯" else "内容包未就绪，稍后自动加载",
+                            text = if (hasColumns) "暂无资讯" else "该校暂未提供资讯",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

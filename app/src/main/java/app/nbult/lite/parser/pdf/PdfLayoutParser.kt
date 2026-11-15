@@ -112,7 +112,8 @@ internal object PdfLayoutParser {
             raw = cellText,
             confidence = 0.9f,
             issues = emptyList(),
-            category = m.groups["category"]?.value?.trim().orEmpty()
+            // 只有声明了该组的模板才有性质（湘潭的模板没有），取不到就留空
+            category = runCatching { m.groups["category"]?.value }.getOrNull()?.trim().orEmpty()
         )
     }
 }

@@ -129,7 +129,8 @@ object NewsSources {
     fun parse(text: String): NewsSourceConfig? = runCatching {
         val root = JSONObject(text)
         val array = root.optJSONArray("columns") ?: return null
-        if (array.length() == 0) return null
+        // 0 栏目是合法状态（某校没有资讯模块）。之前这里判不合格，
+        // 导致后勤类学校整包被拒 —— 现在空数组表示"该校不提供资讯"。
 
         val columns = ArrayList<NewsColumn>(array.length())
         val seenIds = HashSet<Int>()

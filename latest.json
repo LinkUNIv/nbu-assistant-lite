@@ -1,7 +1,7 @@
 {
-  "version": 202611151424,
-  "updatedAt": "2026-11-15T14:24:57+08:00",
-  "notes": "修复：民政资讯栏目结构不合格导致整包被拒",
+  "version": 202611151432,
+  "updatedAt": "2026-11-15T14:32:21+08:00",
+  "notes": "民政课表 PDF 导入参数上线（按 cellRegex 解析节次/周次/场地/性质）",
   "minAppVersion": 3810,
   "files": [
     {
@@ -34,7 +34,7 @@
     },
     {
       "path": "schools/csmy/rules.json",
-      "sha256": "1f3f31654b69e8ae570feb2d0b8af28856ecd5b123b066602ae2fa5ccf7a1e07"
+      "sha256": "7441c8335895202e339181dc1f91a98e3129301f8fa156689b98cfecd3d2b43d"
     },
     {
       "path": "schools/xtu/calendar.json",

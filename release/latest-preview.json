@@ -1,12 +1,12 @@
 {
-  "versionCode": 3810,
-  "versionName": "0.38.10",
+  "versionCode": 3811,
+  "versionName": "0.38.11",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.10-Preview/nbu-assistant-lite-0.38.10-Preview.apk",
-  "sha256": "340b0a81ca7164ef0d1eeee603ab0af38d81a1eba20ad7f7747a68d481f2144c",
-  "size": 26507317,
-  "notes": "**文案调整；公选课可按独立作息显示与提醒**\n\n- 资讯页的来源与版权说明、登录页的账号提示，都不再固定写「宁波大学」，按当前学校显示。\n- 导入课表面板去掉重复说明，按钮统一为「① 导入文件」；支持格式移到下方小字，并按学校区分。\n- 设置页的作息模板改为按校历数据渲染：学校有几套就出几个按钮（宁大仍是主校区 / 梅山）。\n- 课程卡片新增「公选课」开关（仅学校配置了公选课作息时出现）。打开后该课按公选课的独立作息\n  计算时刻，格子顶标、正文时刻、日程卡、提醒与侧栏「下一节」全部同步。\n- 判定可由课程性质自动完成（公必 / 公限 / 公选），也可手动开关；手动选择重新导入不会被冲掉。",
-  "generatedAt": 1794723623788,
-  "tag": "v0.38.10-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.11-Preview/nbu-assistant-lite-0.38.11-Preview.apk",
+  "sha256": "deb28c631f88689ce1f4131e8090948ad486408a22f5b05927b14afe42e5711b",
+  "size": 26507413,
+  "notes": "**公选课开关与其他开关观感统一；空资讯栏目不再判为不合格**\n\n- 课程卡片的「公选课」开关改用与设置页一致的动效开关。\n- 民政课表 PDF 导入后，课程性质（公必 / 公限 / 公选）会自动打开该开关。\n- 允许学校的资讯栏目为空。",
+  "generatedAt": 1794726219065,
+  "tag": "v0.38.11-Preview"
 }

@@ -1,12 +1,12 @@
 {
-  "versionCode": 3809,
-  "versionName": "0.38.9",
+  "versionCode": 3810,
+  "versionName": "0.38.10",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.9-Preview/nbu-assistant-lite-0.38.9-Preview.apk",
-  "sha256": "e95fafa08870fec2aef1cbb14ad2772aa1682bec56886ab0e3fa13518486e398",
-  "size": 26506997,
-  "notes": "**推迟上课的时间在日程卡与侧栏也按实际显示**\n\n- 课表上方「今天 / 明天」日程列表的起止时间改按实际时刻（08:00-09:40 → 08:10-09:50）。\n- 侧栏「下一节」的时刻同样顺延，与提醒保持一致。",
-  "generatedAt": 1794681316632,
-  "tag": "v0.38.9-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.10-Preview/nbu-assistant-lite-0.38.10-Preview.apk",
+  "sha256": "340b0a81ca7164ef0d1eeee603ab0af38d81a1eba20ad7f7747a68d481f2144c",
+  "size": 26507317,
+  "notes": "**文案调整；公选课可按独立作息显示与提醒**\n\n- 资讯页的来源与版权说明、登录页的账号提示，都不再固定写「宁波大学」，按当前学校显示。\n- 导入课表面板去掉重复说明，按钮统一为「① 导入文件」；支持格式移到下方小字，并按学校区分。\n- 设置页的作息模板改为按校历数据渲染：学校有几套就出几个按钮（宁大仍是主校区 / 梅山）。\n- 课程卡片新增「公选课」开关（仅学校配置了公选课作息时出现）。打开后该课按公选课的独立作息\n  计算时刻，格子顶标、正文时刻、日程卡、提醒与侧栏「下一节」全部同步。\n- 判定可由课程性质自动完成（公必 / 公限 / 公选），也可手动开关；手动选择重新导入不会被冲掉。",
+  "generatedAt": 1794723623788,
+  "tag": "v0.38.10-Preview"
 }

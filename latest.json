@@ -1,8 +1,8 @@
 {
-  "version": 202611150147,
-  "updatedAt": "2026-11-15T01:47:54+08:00",
-  "notes": "湘潭资讯去掉重复的学校名：栏目改为「综合新闻/教务处」，来源改为「新闻网/教务处」",
-  "minAppVersion": 3807,
+  "version": 202611151408,
+  "updatedAt": "2026-11-15T14:08:26+08:00",
+  "notes": "新增长沙民政职业技术学院（三套学院/公选课作息）；资讯与校历待补，课表暂用手动录入或 Office 导入",
+  "minAppVersion": 3810,
   "files": [
     {
       "path": "calendar/nbu_calendar.json",
@@ -18,7 +18,23 @@
     },
     {
       "path": "schools/index.json",
-      "sha256": "c234a1f85c1c770db0b3119499ad6e9085d718d6364bce2681b5738b92544d7c"
+      "sha256": "eb4f5cbaf7cbb0d2f21b1c869c1ac96f884029b9863b5f2fff6a618c64e2c710"
+    },
+    {
+      "path": "schools/csmy/calendar.json",
+      "sha256": "7643610799a558cb417b934ca6b83823f995131879031cf46ceac686c8731faf"
+    },
+    {
+      "path": "schools/csmy/news.json",
+      "sha256": "d27849b63e6776f1f48099dccd2b38080ee318eed79906b74daa1c9e05abf889"
+    },
+    {
+      "path": "schools/csmy/portal.json",
+      "sha256": "770386fc01a53ad223c6f532db310a02c8cf9f83cf0b9b7ab11fe5001771069d"
+    },
+    {
+      "path": "schools/csmy/rules.json",
+      "sha256": "1f3f31654b69e8ae570feb2d0b8af28856ecd5b123b066602ae2fa5ccf7a1e07"
     },
     {
       "path": "schools/xtu/calendar.json",

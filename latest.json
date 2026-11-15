@@ -1,8 +1,8 @@
 {
-  "version": 202611151432,
-  "updatedAt": "2026-11-15T14:32:21+08:00",
-  "notes": "民政课表 PDF 导入参数上线（按 cellRegex 解析节次/周次/场地/性质）",
-  "minAppVersion": 3810,
+  "version": 202611151450,
+  "updatedAt": "2026-11-15T14:50:45+08:00",
+  "notes": "民政资讯置空（该校暂未接入），配合 0.38.11 的空栏目支持",
+  "minAppVersion": 3811,
   "files": [
     {
       "path": "calendar/nbu_calendar.json",
@@ -26,7 +26,7 @@
     },
     {
       "path": "schools/csmy/news.json",
-      "sha256": "d8715e8a6ab0064e3cf01619fd8d33badab45ce4208be26b1a3f16fd4dcff77a"
+      "sha256": "c0a9dd086ed84bb55fc9b1e861b3f32b375609b103a4b3c9c14df413496fe205"
     },
     {
       "path": "schools/csmy/portal.json",

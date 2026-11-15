@@ -1,14 +1,13 @@
 {
   "schema": 1,
   "version": "2026.11.15",
-  "notice": "资讯源待采集，暂为空。",
-  "columns": [],
-  "rules": {
-    "listItemPattern": "",
-    "titlePattern": "",
-    "timePattern": "",
-    "contentRoot": "",
-    "imagePattern": "",
-    "dropPatterns": []
-  }
+  "notice": "栏目待调优：先用官网首页，抓不到条目时列表为空，不影响课表与作息。",
+  "columns": [
+    {
+      "id": 3101,
+      "name": "学校要闻",
+      "listUrl": "https://www.csmzxy.edu.cn/",
+      "source": "长沙民政职业技术学院"
+    }
+  ]
 }

@@ -1,7 +1,7 @@
 {
-  "version": 202611151408,
-  "updatedAt": "2026-11-15T14:08:26+08:00",
-  "notes": "新增长沙民政职业技术学院（三套学院/公选课作息）；资讯与校历待补，课表暂用手动录入或 Office 导入",
+  "version": 202611151424,
+  "updatedAt": "2026-11-15T14:24:57+08:00",
+  "notes": "修复：民政资讯栏目结构不合格导致整包被拒",
   "minAppVersion": 3810,
   "files": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "schools/csmy/news.json",
-      "sha256": "d27849b63e6776f1f48099dccd2b38080ee318eed79906b74daa1c9e05abf889"
+      "sha256": "d8715e8a6ab0064e3cf01619fd8d33badab45ce4208be26b1a3f16fd4dcff77a"
     },
     {
       "path": "schools/csmy/portal.json",

@@ -50,6 +50,7 @@ import app.nbult.lite.domain.DateUtil
 import app.nbult.lite.domain.WeekMask
 import app.nbult.lite.domain.AppClock
 import app.nbult.lite.domain.ScheduleService
+import app.nbult.lite.ui.LocalAppContainer
 import app.nbult.lite.ui.common.AppBottomSheet
 import app.nbult.lite.ui.common.BandMetrics
 import app.nbult.lite.ui.common.acrylicPanel
@@ -514,6 +515,7 @@ fun TimetableScreen(vm: TimetableViewModel) {
     // 课程设置：payload 就是当前选中的那一节。
     // 选中被置空（点关闭、停课/恢复/删除、保存调课成功）时，组件自己播完下滑再移除 ——
     // 所有关闭路径自动都有动画，不需要给每个按钮单独包回调。
+    val pubRule = LocalAppContainer.current.schoolRules?.publicCourse
     AppBottomSheet(
         payload = state.selected,
         onDismissRequest = { vm.select(null) }
@@ -524,6 +526,14 @@ fun TimetableScreen(vm: TimetableViewModel) {
             totalWeeks = state.term?.totalWeeks?.coerceAtLeast(1) ?: 20,
             periods = state.periods,
             hasOverride = entry.overrideId != 0L,
+            publicCourseEnabled = pubRule?.enabled == true,
+            publicCourseOn = pubRule?.let { r ->
+                entry.course.publicCourseOverride ?: r.categoryLooksPublic(entry.course.category)
+            } == true,
+            categoryHint = entry.course.category,
+            onTogglePublicCourse = { on ->
+                vm.setPublicCourseOverride(entry.course.id, on)
+            },
             moveError = state.moveError,
             onClearMoveError = vm::clearMoveError,
             onDismiss = { vm.select(null) },

@@ -24,7 +24,14 @@ data class Course(
     val name: String,
     val teacher: String = "",
     val colorSeed: Int = 0,
-    @ColumnInfo(defaultValue = "'nbu'") val schoolId: String = "nbu"
+    @ColumnInfo(defaultValue = "'nbu'") val schoolId: String = "nbu",
+    /** 课程性质原文（公必 / 公限 / 专业课…），导入时抽不到就留空。 */
+    @ColumnInfo(defaultValue = "''") val category: String = "",
+    /**
+     * 是否按公选课作息：null = 跟随课程性质自动判定，true/false = 用户手动定。
+     * 单独存一列而不是改 [category]，这样重新导入不会把用户的选择冲掉。
+     */
+    val publicCourseOverride: Boolean? = null
 )
 
 @Entity(

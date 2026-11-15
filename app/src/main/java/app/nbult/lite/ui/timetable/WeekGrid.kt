@@ -396,11 +396,21 @@ fun TodayCard(
     val first = entries.firstOrNull { it.isActive } ?: entries.first()
     // 推迟上课的楼栋：日程卡上的区间也要写实际时间，否则上面写「错峰+10min」、
     // 这里还是 08:00-09:40，两边打架
-    val lateRules = LocalAppContainer.current.schoolRules?.lateStart.orEmpty()
+    val todayContainer = LocalAppContainer.current
+    val lateRules = todayContainer.schoolRules?.lateStart.orEmpty()
+    val pubRule = todayContainer.schoolRules?.publicCourse ?: app.nbult.lite.domain.PublicCourseRule()
+    val pubTable = app.nbult.lite.domain.publicCoursePeriods(
+        todayContainer.calendarRepository.lastKnown, pubRule
+    )
+    val periodMap = remember(periods) { periods.associateBy { it.idx } }
     fun effectiveRange(entry: TimetableEntry): String {
-        val base = timeRangeOf(periods, entry.slot.startSection, entry.slot.endSection)
-        val minutes = app.nbult.lite.domain.LateStartPolicy.minutesOf(entry.slot.room, lateRules)
-        return app.nbult.lite.domain.LateStartPolicy.range(base, minutes)
+        val times = app.nbult.lite.domain.effectiveTimes(
+            entry, periodMap, pubRule, pubTable,
+            app.nbult.lite.domain.LateStartPolicy.minutesOf(entry.slot.room, lateRules)
+        ) ?: return timeRangeOf(periods, entry.slot.startSection, entry.slot.endSection)
+        // 公选课带一个短标记，免得和学院课的时间差看起来像 bug
+        val tag = if (pubRule.appliesTo(entry.course)) "${pubRule.badge} " else ""
+        return tag + times.first + "-" + times.second
     }
     val firstRange = effectiveRange(first)
 
@@ -828,16 +838,31 @@ private fun CourseBlock(
     val accent = courseColor(entry.course.colorSeed)
     val sections = entry.slot.endSection - entry.slot.startSection + 1
     // 这栋楼是否推迟上课：规则来自当前学校（湘潭的逸夫楼 / 信息科技大楼 +10 分钟）
-    val lateRules = LocalAppContainer.current.schoolRules?.lateStart.orEmpty()
+    val cellContainer = LocalAppContainer.current
+    val lateRules = cellContainer.schoolRules?.lateStart.orEmpty()
+    val pubRule = cellContainer.schoolRules?.publicCourse ?: app.nbult.lite.domain.PublicCourseRule()
+    val pubTable = app.nbult.lite.domain.publicCoursePeriods(
+        cellContainer.calendarRepository.lastKnown, pubRule
+    )
+    val isPublicCourse = pubRule.appliesTo(entry.course)
     val lateRule = remember(entry.slot.room, lateRules) {
         app.nbult.lite.domain.LateStartPolicy.of(entry.slot.room, lateRules)
     }
     // 推迟后的实际上课时刻。时间栏是全校共用的一条轴（按节次），不能按课程改，
     // 所以把真实时间写进格子本身 —— 否则光有「错峰+10min」，看不出到底几点上
-    val lateStartText = remember(lateRule, entry.slot.startSection, periodMap) {
-        val base = periodMap[entry.slot.startSection]?.startTime?.take(5)
-        if (lateRule == null || base == null) null
-        else app.nbult.lite.domain.LateStartPolicy.shift(base, lateRule.minutes) + " 起"
+    val lateStartText = remember(
+        lateRule, isPublicCourse, entry.slot.startSection, periodMap, pubTable
+    ) {
+        if (lateRule == null && !isPublicCourse) return@remember null
+        app.nbult.lite.domain.effectiveTimes(
+            entry, periodMap, pubRule, pubTable, lateRule?.minutes ?: 0
+        )?.first?.let { "$it 起" }
+    }
+    // 顶标：公选课优先（它换了整张作息表），否则显示楼栋推迟
+    val topLabel = when {
+        isPublicCourse -> pubRule.badge
+        lateRule != null -> lateRule.label
+        else -> null
     }
     val roomColor = MaterialTheme.colorScheme.onSurfaceVariant
     val metaSmall = (metaSize.value - 1).sp
@@ -968,15 +993,15 @@ private fun CourseBlock(
                 minOf(maxHeight / 2, roomLineHeight * if (sections >= 2) 2 else 1)
             } else 0.dp
             // 有顶标时把标题可用高度再让出 11dp，避免课名被顶标挤到溢出
-            val badgeSpace = if (lateRule != null && !compact) 11.dp else 0.dp
+            val badgeSpace = if (topLabel != null && !compact) 11.dp else 0.dp
             val shortBadge = maxHeight < 52.dp
             val titleMaxHeight = (maxHeight - reservedRoom - 1.dp - badgeSpace).coerceAtLeast(0.dp)
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 // 顶标：把正文整体压下去，而不是盖在课程名上。
                 // 小组件（compact）不显示 —— 那里连课名都常被截断，再加一行等于全挤掉。
-                if (lateRule != null && !compact) {
+                if (topLabel != null && !compact) {
                     Text(
-                        text = if (shortBadge) "+${lateRule.minutes} 分" else lateRule.label,
+                        text = if (shortBadge && lateRule != null) "+${lateRule.minutes} 分" else topLabel,
                         fontSize = 8.sp,
                         lineHeight = 9.sp,
                         fontWeight = FontWeight.Medium,

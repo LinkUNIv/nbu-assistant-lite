@@ -34,6 +34,9 @@ class CalendarRepository(
     @Volatile
     private var cached: SchoolCalendar? = null
 
+    /** 已解析过的校历（可能为 null）。渲染层不能 suspend，用它取作息表。 */
+    val lastKnown: SchoolCalendar? get() = cached
+
     suspend fun load(): SchoolCalendar = withContext(Dispatchers.IO) {
         cached?.let { return@withContext it }
         // 先看有没有下载的资源包，没有再读内置。内置那份永远能跑，这是底线

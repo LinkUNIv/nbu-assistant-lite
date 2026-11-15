@@ -442,11 +442,11 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 
 ## 12.1 学校名参数化（真错，优先做）
 
-- [ ] `ui/news/NewsScreen.kt:299` 的 `removePrefix("宁波大学")` 改成当前学校名 ——
+- [x] `ui/news/NewsScreen.kt:299` 的 `removePrefix("宁波大学")` 改成当前学校名 ——
       湘潭之所以没露馅，是因为配置里已经手动去掉了前缀，代码本身仍只认「宁波大学」
-- [ ] `ui/news/NewsScreen.kt:537` 版权句写死「宁波大学」：湘潭的资讯页也说宁大
-- [ ] `browser/AuthenticationScreen.kt:124`「使用宁波大学账号登录」改成 `rules.name`
-- [ ] `browser/AuthenticationScreen.kt:185`「宁波大学 · uis.nbu.edu.cn」同上，域名取 `domains`
+- [x] `ui/news/NewsScreen.kt:537` 版权句写死「宁波大学」：湘潭的资讯页也说宁大
+- [x] `browser/AuthenticationScreen.kt:124`「使用宁波大学账号登录」改成 `rules.name`
+- [x] `browser/AuthenticationScreen.kt:185`「宁波大学 · uis.nbu.edu.cn」同上，域名取 `domains`
 - [ ] 单测：把「学校名 → 文案」抽成纯函数，钉住湘潭输出
 
 ## 12.2 术语统一（定表后批量替换）
@@ -463,9 +463,10 @@ API 31+ 真模糊、以下退化）。Haze 2.x 与 Cloudy 0.7.1 依赖 kotlin-st
 
 ## 12.3 导入入口文案
 
-- [ ] `ui/timetable/ImportContent.kt:284` 按钮「导入课表」→「**导入文件**」
-      （这个按钮打开的是文件选择器，叫「导入课表」等于承诺了流程结果）
-- [ ] `ui/common/StateViews.kt:92` 空态动作「导入课表」→「导入文件」
+- [x] `ui/timetable/ImportContent.kt` 按钮 →「① 导入文件」，格式说明移到按钮下方小字
+      （湘潭「Excel、Word 或 PDF」，宁大「Excel 或 Word」）；面板顶部的「两种方式……」一句已删
+- [x] 删掉 `StateViews.kt` 里从未被引用的 `EmptyTimetablePanel`（真实空态在导入面板内，
+      改它不生效 —— 教训：改文案前先 grep 引用）
 - [ ] 面板标题 `ImportContent.kt:98` 保持「导入课表」（它确实是这一步的目的）
 
 ## 12.4 空态与错误模板（63 条）

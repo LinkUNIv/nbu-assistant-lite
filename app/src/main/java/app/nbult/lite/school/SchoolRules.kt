@@ -43,6 +43,11 @@ internal data class SchoolRules(
     /** 该校的域名。网络白名单要靠它放行，否则湘潭的资讯一条都取不到。 */
     val domains: List<String> = emptyList(),
     /**
+     * 公选课独立作息。`preset` 为空表示这所学校没有这回事 —— 卡片里不出现开关，
+     * 也不参与任何计算（等价于旧行为）。见 [PublicCourseRule]。
+     */
+    val publicCourse: app.nbult.lite.domain.PublicCourseRule = app.nbult.lite.domain.PublicCourseRule(),
+    /**
      * 按楼栋推迟上课的规则。见 [app.nbult.lite.domain.LateStartPolicy]。
      * 湘潭的逸夫楼与信息科技大楼比作息表晚 10 分钟。
      */
@@ -124,7 +129,14 @@ internal data class SchoolRules(
                         even = w.optString("even", app.nbult.lite.parser.WeekSyntax().even)
                     )
                 } ?: app.nbult.lite.parser.WeekSyntax(),
-                lateStart = parseLateStart(root.optJSONArray("lateStart"))
+                lateStart = parseLateStart(root.optJSONArray("lateStart")),
+                publicCourse = root.optJSONObject("publicCourse")?.let { o ->
+                    app.nbult.lite.domain.PublicCourseRule(
+                        preset = o.optString("preset").trim(),
+                        badge = o.optString("badge").ifBlank { "公选课" },
+                        matchKeywords = o.optJSONArray("matchKeywords").toStringList()
+                    )
+                } ?: app.nbult.lite.domain.PublicCourseRule()
             )
             SchoolRulesResult.Ok(rules)
           } catch (e: Exception) {

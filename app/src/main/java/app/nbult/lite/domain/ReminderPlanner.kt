@@ -55,8 +55,11 @@ object ReminderPlanner {
         periods: List<PeriodTime>,
         term: Term,
         now: Long,
-        /** 某些楼栋推迟上课时的分钟数；按地点判定，返回 0 表示按时。 */
-        lateMinutes: (room: String) -> Int = { 0 }
+        /**
+         * 这门课的实际起止（当天第几分钟）。公选课会换整张作息表，楼栋推迟在此基础上再叠加，
+         * 两种情形都由调用方算好；返回 null 表示按常规作息。
+         */
+        timeOverride: (TimetableEntry) -> Pair<Int, Int>? = { null }
     ): UpcomingClass? {
         if (entries.isEmpty() || periods.isEmpty()) return null
         val startMinutes = HashMap<Int, Int>(periods.size)
@@ -85,9 +88,9 @@ object ReminderPlanner {
             var best: UpcomingClass? = null
             for (block in blocks) {
                 val start = startMinutes[block.slot.startSection] ?: continue
-                // 推迟上课：整节课平移，起止一起走。标签与提醒必须同一套口径
-                val late = lateMinutes(block.slot.room).coerceAtLeast(0) * 60_000L
-                val startAt = dayStart + start * 60_000L + late
+
+                val overridden = timeOverride(block)
+                val startAt = dayStart + (overridden?.first ?: start) * 60_000L
                 if (startAt <= now) continue
                 if (best != null && startAt >= best.startAt) continue
                 val end = endMinutes[block.slot.endSection] ?: start
@@ -97,7 +100,7 @@ object ReminderPlanner {
                     startSection = block.slot.startSection,
                     endSection = block.slot.endSection,
                     startAt = startAt,
-                    endAt = dayStart + end * 60_000L + late,
+                    endAt = dayStart + (overridden?.second ?: end) * 60_000L,
                     name = block.displayName,
                     room = block.slot.room,
                     teacher = block.teacher,
@@ -108,8 +111,8 @@ object ReminderPlanner {
             // 同一天同一时刻可能不止一节（调课撞车），只提醒最早的一节，其余并进文案
             val sameTime = blocks.count { b ->
                 val s = startMinutes[b.slot.startSection] ?: return@count false
-                val bLate = lateMinutes(b.slot.room).coerceAtLeast(0) * 60_000L
-                dayStart + s * 60_000L + bLate == picked.startAt
+                val bStart = timeOverride(b)?.first ?: s
+                dayStart + bStart * 60_000L == picked.startAt
             }
             return picked.copy(sameTimeCount = (sameTime - 1).coerceAtLeast(0))
         }
@@ -128,7 +131,7 @@ object ReminderPlanner {
         periods: List<PeriodTime>,
         term: Term,
         now: Long,
-        lateMinutes: (room: String) -> Int = { 0 }
+        timeOverride: (TimetableEntry) -> Pair<Int, Int>? = { null }
     ): UpcomingClass? {
         if (entries.isEmpty() || periods.isEmpty()) return null
         val startMinutes = HashMap<Int, Int>(periods.size)
@@ -149,9 +152,9 @@ object ReminderPlanner {
         for (block in blocks) {
             val start = startMinutes[block.slot.startSection] ?: continue
             val end = endMinutes[block.slot.endSection] ?: continue
-            val late = lateMinutes(block.slot.room).coerceAtLeast(0) * 60_000L
-            val startAt = dayStart + start * 60_000L + late
-            val endAt = dayStart + end * 60_000L + late
+            val overridden = timeOverride(block)
+            val startAt = dayStart + (overridden?.first ?: start) * 60_000L
+            val endAt = dayStart + (overridden?.second ?: end) * 60_000L
             if (now < startAt || now >= endAt) continue
             sameTime = blocks.count { other ->
                 val os = startMinutes[other.slot.startSection] ?: return@count false

@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NewsItem::class,
         SlotOverride::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -175,6 +175,18 @@ abstract class AppDatabase : RoomDatabase() {
          * 主键也还是旧方案（栏目 id 未参与命名空间，跨校撞号）。资讯是可重抓的远端内容，
          * 清空重抓比留着一批错数据安全。
          */
+        /**
+         * 课程性质与「公选课」开关。
+         *
+         * 两列都可空/默认空串：老数据升级后一律"未判定"，不会凭空变成公选课。
+         */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `course` ADD COLUMN `category` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `course` ADD COLUMN `publicCourseOverride` INTEGER")
+            }
+        }
+
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `news` ADD COLUMN `schoolId` TEXT NOT NULL DEFAULT 'nbu'")
@@ -184,7 +196,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "nbu-lite.db")
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigration()
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

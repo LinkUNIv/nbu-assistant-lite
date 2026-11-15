@@ -155,6 +155,9 @@ class TimetableRepository(
 
     suspend fun updateTerm(term: Term) = dao.updateTerm(term)
 
+    suspend fun setPublicCourseOverride(courseId: Long, value: Boolean?) =
+        dao.setPublicCourseOverride(courseId, value)
+
     suspend fun currentTerm(): Term? = dao.currentTerm()
 
     /** 一条课表记录都没有。空课表时不必加载校历，也不必显示点名入口。 */

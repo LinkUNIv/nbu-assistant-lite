@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "version": "2026.11.15",
+  "notice": "资讯源待采集，暂为空。",
+  "columns": [],
+  "rules": {
+    "listItemPattern": "",
+    "titlePattern": "",
+    "timePattern": "",
+    "contentRoot": "",
+    "imagePattern": "",
+    "dropPatterns": []
+  }
+}

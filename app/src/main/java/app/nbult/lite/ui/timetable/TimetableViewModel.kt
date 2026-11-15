@@ -812,6 +812,11 @@ class TimetableViewModel(
         return hit.map { (slotId, name) -> MoveConflict(slotId = slotId, courseName = name) }
     }
 
+    /** 公选课开关：显式写入覆盖值，重新导入课表不会把它冲掉。 */
+    fun setPublicCourseOverride(courseId: Long, value: Boolean?) {
+        viewModelScope.launch { repository.setPublicCourseOverride(courseId, value) }
+    }
+
     fun applyPeriodPreset(periods: List<Pair<String, String>>) {
         viewModelScope.launch {
             repository.applyPeriodPreset(periods)

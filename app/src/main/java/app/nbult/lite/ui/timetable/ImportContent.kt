@@ -98,17 +98,8 @@ fun ImportContent(
         Text("导入课表", style = MaterialTheme.typography.titleMedium)
         // 「信息门户 / WebVPN」是宁波大学才有的路径。湘潭没有登录体系，
         // 摆一个点进去打不开的按钮，比不摆更糟
-        val hasPortal = app.nbult.lite.ui.LocalAppContainer.current
-            .schoolRules?.capabilities?.login != false
-        Text(
-            text = if (hasPortal) {
-                "两种方式：导入教务导出的 Word / Excel 文件，或手动逐门输入。"
-            } else {
-                "两种方式：导入教务导出的 PDF / Word / Excel 文件，或手动逐门输入。"
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        val rules = app.nbult.lite.ui.LocalAppContainer.current.schoolRules
+        val hasPortal = rules?.capabilities?.login != false
 
         // 大多数人是「卡在没有文件」这一步：把去教务导出做成一步能点到的动作，
         // 而不是让他自己去翻「入口」页找链接。仍然只跳转，不读页面、不碰登录态。
@@ -130,8 +121,9 @@ fun ImportContent(
             Text("打开信息门户（登录后进教务）")
         }
         Text(
-            text = "路径：信息门户登录 → 办事大厅 / 教务系统 → 我的课表 → 导出为 Excel 或 Word，" +
-                "再回到这里点「① 导入」。",
+            text = "路径：信息门户登录 → 办事大厅 / 教务系统 → 我的课表 → 导出为 Excel、Word" +
+                (if (rules?.importer?.pdf != null) " 或 PDF" else "") +
+                "，再回到这里点「① 导入」。",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -161,10 +153,22 @@ fun ImportContent(
             )
         }
 
+        // 按钮只说「导入文件」：具体格式放在下方小字里。
+        // 之前按钮写着「Word / Excel」，湘潭只能导 PDF 时反而误导
         OutlinedButton(
             onClick = { filePicker.launch(IMPORT_MIME_TYPES) },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("① 导入 Word / Excel 文件") }
+        ) { Text("① 导入文件") }
+        Text(
+            text = if (rules?.importer?.pdf != null) {
+                "支持 Excel、Word 或 PDF。"
+            } else {
+                "支持 Excel 或 Word。"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp)
+        )
 
         OutlinedButton(
             onClick = onManualAdd,

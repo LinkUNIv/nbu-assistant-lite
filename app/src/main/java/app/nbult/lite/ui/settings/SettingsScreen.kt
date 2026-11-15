@@ -343,22 +343,22 @@ SettingCard(title = "作息时间") {
             TextButton(onClick = { onNavigateSection("schedule") }) {
                 Text("逐节编辑")
             }
-            // 校区模板是宁大专属（本部与梅山错时打铃）。湘潭下留着这两个按钮，
-            // 点了会把宁大的作息写进库，整张课表偏移半小时（实测踩过）
-            val isNbu = container.schoolContext.id == "nbu"
-            if (isNbu) {
+            // 作息模板从校历数据里读：有几套就出几个按钮。
+            // 原来是写死的「主校区 / 梅山校区」两个按钮，第三所学校就得上代码；
+            // 现在宁大仍是这两套，民政是 A/B，湘潭是冬/夏，都不改 Kotlin。
+            val tables = container.calendarRepository.lastKnown?.periods.orEmpty()
+            if (tables.size > 1) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = {
-                        timetableVm.applyPeriodPreset(PeriodPresets.HEADQUARTERS.periods)
-                        // 记下这次选择：切到别的学校再切回来时，按它还原
-                        container.noteDefaultSchoolPreset(PeriodPresets.HEADQUARTERS.id)
-                    }) { Text("主校区") }
-                    TextButton(onClick = {
-                        timetableVm.applyPeriodPreset(PeriodPresets.MEISHAN.periods)
-                        container.noteDefaultSchoolPreset(PeriodPresets.MEISHAN.id)
-                    }) { Text("梅山校区") }
+                    tables.forEach { table ->
+                        TextButton(onClick = {
+                            timetableVm.applyPeriodPreset(table.items.sortedBy { it.idx }.map { it.start to it.end })
+                            // 记下这次选择：切到别的学校再切回来时，按它还原
+                            container.noteDefaultSchoolPreset(table.id)
+                        }) { Text(table.name) }
+                    }
                 }
             }
+            val isNbu = container.schoolContext.id == "nbu"
             Text(
                 text = if (isNbu) {
                     "数据依据学校公布的校历上课时间表。本部 5/6/8 号楼有单双层错时打铃，如有需要可切换校区模板后逐节核对。"

@@ -68,6 +68,8 @@ internal fun AuthenticationScreen(
         val focus = LocalFocusManager.current
         val login = mode == "login"
         val device = mode == "trust"
+        // 学校名与认证域名都从规则取：这段文案原来写死「宁波大学 · uis.nbu.edu.cn」
+        val schoolName = app.nbult.lite.ui.LocalAppContainer.current.schoolRules?.name ?: "学校"
         fun submit() {
             if (secret.isBlank() || (login && account.isBlank())) {
                 invalid = true
@@ -121,7 +123,7 @@ internal fun AuthenticationScreen(
             }
             Text(
                 when (mode) {
-                    "login" -> "使用宁波大学账号登录，继续查看点名课表。"
+                    "login" -> "使用${schoolName}账号登录，继续查看点名课表。"
                     "code" -> "输入学校发送的验证码，完成身份确认。"
                     else -> "选择此设备的登录方式，确认后继续。"
                 },
@@ -182,7 +184,11 @@ internal fun AuthenticationScreen(
                 }
             }
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("宁波大学 · uis.nbu.edu.cn", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+                Text(
+                    text = "$schoolName · ${app.nbult.lite.ui.LocalAppContainer.current.schoolRules?.domains?.firstOrNull() ?: "统一身份认证"}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.onSurfaceVariant
+                )
                 TextButton(onClick = onOriginal) { Text("使用学校原网页 / 查看提示") }
             }
         }

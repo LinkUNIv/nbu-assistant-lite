@@ -66,6 +66,10 @@ interface TimetableDao {
     @Update
     suspend fun updateCourse(course: Course)
 
+    /** 公选课开关：null = 跟随课程性质。 */
+    @Query("UPDATE course SET publicCourseOverride = :value WHERE id = :courseId")
+    suspend fun setPublicCourseOverride(courseId: Long, value: Boolean?)
+
     @Delete
     suspend fun deleteCourse(course: Course)
 

@@ -83,13 +83,5 @@ fun SourceErrorPanel(onRetry: () -> Unit) {
     )
 }
 
-@Composable
-fun EmptyTimetablePanel(onImport: () -> Unit) {
-    StatePanel(
-        icon = Icons.Outlined.EventBusy,
-        title = "还没有课表",
-        description = "从网上办事大厅「我的课表」复制整张表格后粘贴导入",
-        actionText = "导入课表",
-        onAction = onImport
-    )
-}
+// 原来的 EmptyTimetablePanel 从未被引用（真实空态在 ui/timetable/ImportContent.kt），
+// 2026-11-15 清理死代码时一并删掉，避免文案改在这里却不生效。

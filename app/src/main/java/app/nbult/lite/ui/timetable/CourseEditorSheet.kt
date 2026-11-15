@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -59,6 +60,13 @@ fun CourseEditorSheet(
     onSave: (String, String, Int, Int, Int, Int, String) -> Unit,
     onSuspend: () -> Unit,
     onMove: (Int, Int, Int, String, Int) -> Unit,
+    /** 该校是否配置了公选课作息；false 时整行不出现。 */
+    publicCourseEnabled: Boolean = false,
+    /** 当前是否按公选课作息（含自动判定结果）。 */
+    publicCourseOn: Boolean = false,
+    /** 课程性质原文，仅用于说明"为什么自动打开"。 */
+    categoryHint: String = "",
+    onTogglePublicCourse: (Boolean) -> Unit = {},
     onConvertToSuspend: () -> Unit,
     /** 跳到这门课"原来应该在的位置"（源周的原时段块），在那里编辑整门课。 */
     onGoOrigin: () -> Unit = {},
@@ -194,6 +202,29 @@ fun CourseEditorSheet(
                 onClick = { mode = EditMode.MOVE },
                 label = { Text("调整时间") }
             )
+        }
+
+        if (publicCourseEnabled) {
+            // 公选课独立作息：打开后这门课按学校的公选课作息表算时刻，
+            // 与学院课的差距会写在格子顶标与正文里
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("公选课", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = if (categoryHint.isNotBlank()) {
+                            "按公选课作息单独计算（课程性质：$categoryHint）"
+                        } else {
+                            "按公选课作息单独计算"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = publicCourseOn, onCheckedChange = onTogglePublicCourse)
+            }
         }
 
         when (mode) {

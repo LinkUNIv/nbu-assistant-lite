@@ -298,8 +298,18 @@ fun rememberRailProgress(state: TimetableUiState): RailProgress {
     val term = state.term ?: return RailProgress.None
     if (state.periods.isEmpty()) return RailProgress.None
 
-    // 推迟上课的地点要一起算，否则「正在上课」会在真正开始时就结束
-    val lateRules = app.nbult.lite.ui.LocalAppContainer.current.schoolRules?.lateStart.orEmpty()
+    // 实际起止要一起算（公选课换表 + 楼栋推迟），否则「正在上课」「下一节」都会差几分钟
+    val railContainer = app.nbult.lite.ui.LocalAppContainer.current
+    val lateRules = railContainer.schoolRules?.lateStart.orEmpty()
+    val pubRule = railContainer.schoolRules?.publicCourse ?: app.nbult.lite.domain.PublicCourseRule()
+    val pubTable = app.nbult.lite.domain.publicCoursePeriods(railContainer.calendarRepository.lastKnown, pubRule)
+    val periodMap = remember(state.periods) { state.periods.associateBy { it.idx } }
+    val timeOverride: (app.nbult.lite.domain.TimetableEntry) -> Pair<Int, Int>? = { entry ->
+        app.nbult.lite.domain.effectiveMinutes(
+            entry, periodMap, pubRule, pubTable,
+            app.nbult.lite.domain.LateStartPolicy.minutesOf(entry.slot.room, lateRules)
+        )
+    }
     val current = remember(state.entries, state.overrides, state.periods, term, now, lateRules) {
         ReminderPlanner.currentClass(
             entries = state.entries,
@@ -307,7 +317,7 @@ fun rememberRailProgress(state: TimetableUiState): RailProgress {
             periods = state.periods,
             term = term,
             now = now,
-            lateMinutes = { room -> app.nbult.lite.domain.LateStartPolicy.minutesOf(room, lateRules) }
+            timeOverride = timeOverride
         )
     }
 
@@ -330,7 +340,7 @@ fun rememberRailProgress(state: TimetableUiState): RailProgress {
             periods = state.periods,
             term = term,
             now = now,
-            lateMinutes = { room -> app.nbult.lite.domain.LateStartPolicy.minutesOf(room, lateRules) }
+            timeOverride = timeOverride
         )
     }
     return if (upcoming != null) {

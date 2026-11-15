@@ -295,9 +295,12 @@ private fun NewsHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
+            // 栏目名里的学校前缀按「当前学校」裁掉，不能写死「宁波大学」——
+            // 湘潭靠配置里手动去前缀才没露馅，代码本身仍是硬编码
+            val schoolName = app.nbult.lite.ui.LocalAppContainer.current.schoolRules?.name.orEmpty()
             Text(
                 text = "内容来源：" + NewsColumns.sources(context).joinToString(" · ") {
-                    it.removePrefix("宁波大学")
+                    it.removePrefix(schoolName).trim()
                 },
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Medium
@@ -534,7 +537,9 @@ fun NewsDetailScreen(vm: NewsViewModel, id: Long, onBack: () -> Unit) {
             }
             item {
                 Text(
-                    text = "内容版权归宁波大学及原作者所有，本应用仅作阅读索引，请以原站发布为准。",
+                    text = "内容版权归" +
+                        (app.nbult.lite.ui.LocalAppContainer.current.schoolRules?.name ?: "原作者") +
+                        "及原作者所有，本应用仅作阅读索引，请以原站发布为准。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

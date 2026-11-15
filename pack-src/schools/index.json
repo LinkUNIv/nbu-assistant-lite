@@ -13,6 +13,12 @@
       "name": "湘潭大学",
       "builtin": false,
       "rules": "schools/xtu/rules.json"
+    },
+    {
+      "id": "csmy",
+      "name": "长沙民政职业技术学院",
+      "builtin": false,
+      "rules": "schools/csmy/rules.json"
     }
   ]
 }

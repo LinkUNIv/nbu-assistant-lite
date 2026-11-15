@@ -6,7 +6,7 @@
 
 将课表、资讯、校历与常用校园入口整合为一个 Android 应用。课表支持离线使用、不需要登录任何校内系统；点名与账号功能需要使用学校统一身份认证，登录仅在本机浏览器内完成，凭据不经过本应用服务器且默认不保存。
 
-当前支持宁波大学与湘潭大学：学校清单、校历、作息、校园入口与资讯栏目都由资源包下发，
+当前支持宁波大学、湘潭大学与长沙民政职业技术学院：学校清单、校历、作息、校园入口与资讯栏目都由资源包下发，
 新增或下架一所学校不必更新应用。
 
 > 本项目属于非官方第三方工具，与宁波大学、湘潭大学均不存在隶属、合作或授权关系。名称中的「宁大」仅用于说明最初适用的学校。
@@ -15,13 +15,13 @@
 
 ## 下载与安装
 
-当前预览版本：**0.38.9 Preview**（2026-11-15）
+当前预览版本：**0.38.10 Preview**（2026-11-15）
 
-[下载 Preview](https://github.com/LinkUNIv/nbu-assistant-lite/releases/tag/v0.38.9-Preview) · [完整更新说明](docs/releases/v0.38.9-Preview.md)
+[下载 Preview](https://github.com/LinkUNIv/nbu-assistant-lite/releases/tag/v0.38.10-Preview) · [完整更新说明](docs/releases/v0.38.10-Preview.md)
 
 | 文件 | 大小 | 运行要求 |
 |---|---|---|
-| `nbu-assistant-lite-0.38.9-Preview.apk` | 约 24 MiB（含离线 OCR 与 PDF 原生库，已裁剪架构） | Android 7.0（API 24）及以上 |
+| `nbu-assistant-lite-0.38.10-Preview.apk` | 约 24 MiB（含离线 OCR 与 PDF 原生库，已裁剪架构） | Android 7.0（API 24）及以上 |
 
 - 下载完成后使用文件管理器打开安装
 - 同包名、同签名的升级可覆盖安装并保留数据；卸载后重新安装会清空本地数据

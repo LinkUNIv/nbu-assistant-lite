@@ -385,8 +385,17 @@ internal class NativeAuthentication(private val web: WebView, private val contai
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         }
         panel = view
+        // 容器与学校信息在这里取一次：ComposeView 不在 MainActivity 的 composition 里，
+        // 页面内不能读 LocalAppContainer（那是 0.38.10 崩溃的原因）
+        val hostRules = runCatching {
+            (web.context.applicationContext as app.nbult.lite.NbuLiteApp).container.schoolContext.rules
+        }.getOrNull()
+        val hostName = hostRules?.name ?: "学校"
+        val hostDomain = hostRules?.domains?.firstOrNull() ?: "统一身份认证"
         view.setContent {
             AuthenticationScreen(
+                schoolName = hostName,
+                authHost = hostDomain,
                 mode = next,
                 autoLogin = allowAutoLogin,
                 onSubmit = { account, secret ->

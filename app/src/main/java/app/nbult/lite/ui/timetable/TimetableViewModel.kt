@@ -141,6 +141,9 @@ class TimetableViewModel(
     private val pdfParse: ((ByteArray) -> ParseResult)? = null
 ) : ViewModel() {
 
+    /** 已复核过开学时间的学期 id，避免每次数据变化都重跑识别。 */
+    private var bootstrappedTermId: Long? = null
+
     private val _state = MutableStateFlow(TimetableUiState())
     val state: StateFlow<TimetableUiState> = _state.asStateFlow()
 
@@ -164,6 +167,15 @@ class TimetableViewModel(
                 Triple(snapshot, showInactive, showFull)
             }
                 .collect { (snapshot, showInactive, showFull) ->
+                // 学期一就位就复核一次开学时间：切学校后学期是新记录，
+                // 初始化那次 bootstrap 早于它创建，取到 null 就静默返回了，
+                // 于是校历识别要等重启才生效。这里按 term.id 去重，不会反复写库。
+                snapshot.term?.let { term ->
+                    if (term.id != bootstrappedTermId) {
+                        bootstrappedTermId = term.id
+                        bootstrapTermStart()
+                    }
+                }
                 val week = snapshot.term?.let { WeekLayout.displayWeek(ScheduleService.currentWeek(it), DateUtil.dayOfWeekIso(AppClock.todayEpochDay()), _state.value.sundayFirst) } ?: 1
                 val totalWeeks = (snapshot.term?.totalWeeks ?: 20).coerceAtLeast(1)
                 val weeks = repository.expandedWeeks(snapshot)

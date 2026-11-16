@@ -42,7 +42,16 @@ internal fun AuthenticationScreen(
     onSubmit: (String, String) -> Unit,
     onRequestCode: () -> Unit,
     onTrust: (Boolean) -> Unit,
-    onOriginal: () -> Unit
+    onOriginal: () -> Unit,
+    /**
+     * 学校名与认证域名。
+     *
+     * 这一页渲染在 WebView 的 ComposeView 里，不在 MainActivity 的 composition 下，
+     * 读 LocalAppContainer 会抛 "AppContainer not provided"（0.38.10 的崩溃）。
+     * 由宿主传进来，页面本身不依赖容器。
+     */
+    schoolName: String = "学校",
+    authHost: String = "统一身份认证"
 ) {
     val context = LocalContext.current
     AttendanceTheme { dark, backdropId ->
@@ -68,8 +77,7 @@ internal fun AuthenticationScreen(
         val focus = LocalFocusManager.current
         val login = mode == "login"
         val device = mode == "trust"
-        // 学校名与认证域名都从规则取：这段文案原来写死「宁波大学 · uis.nbu.edu.cn」
-        val schoolName = app.nbult.lite.ui.LocalAppContainer.current.schoolRules?.name ?: "学校"
+
         fun submit() {
             if (secret.isBlank() || (login && account.isBlank())) {
                 invalid = true
@@ -185,7 +193,7 @@ internal fun AuthenticationScreen(
             }
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "$schoolName · ${app.nbult.lite.ui.LocalAppContainer.current.schoolRules?.domains?.firstOrNull() ?: "统一身份认证"}",
+                    text = "$schoolName · $authHost",
                     style = MaterialTheme.typography.labelMedium,
                     color = colors.onSurfaceVariant
                 )

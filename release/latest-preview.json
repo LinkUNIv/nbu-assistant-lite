@@ -1,12 +1,12 @@
 {
-  "versionCode": 3813,
-  "versionName": "0.38.13",
+  "versionCode": 3815,
+  "versionName": "0.38.15",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.13-Preview/nbu-assistant-lite-0.38.13-Preview.apk",
-  "sha256": "e08a9759c9649359770f32b881b45e1380700dc2eebaf4a24ab9eb4129dec431",
-  "size": 26507737,
-  "notes": "**修复点名浏览器打开时闪退**\n\n- 上一版把登录页的学校名改成从容器读取，而这一页渲染在 WebView 的独立 ComposeView 里，\n  取不到容器直接抛异常。现在改为由宿主传入学校名与认证域名，页面不再依赖容器。\n- 0.38.12 的「切换学校后校历识别立即生效」一并包含在本版。",
-  "generatedAt": 1794802147308,
-  "tag": "v0.38.13-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.15-Preview/nbu-assistant-lite-0.38.15-Preview.apk",
+  "sha256": "4953a54f9adfdaf3cb64df7b5245a672a24f15a8242418958214d210886b656b",
+  "size": 26507801,
+  "notes": "**优化课表解析器；修复部分页面问题**\n\n- 优化取词器功能，课表提取更准确。\n- 相机自动验证页整页可滚动。",
+  "generatedAt": 1794816721168,
+  "tag": "v0.38.15-Preview"
 }

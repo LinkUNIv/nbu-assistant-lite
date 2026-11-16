@@ -54,8 +54,39 @@ internal object PdfLayoutParser {
             // 先归列，再在每列内按 y 聚类
             body.groupBy { columnOf(it.x, left, step) }.forEach { (column, columnItems) ->
                 if (column !in 0 until WEEKDAY_COUNT) return@forEach
-                clusterRows(columnItems, params.rowGapPt).forEach { cellText ->
-                    toSlot(cellText, column + 1, params)?.let { cells.add(it) }
+                // 课程名可能被行距阈值切到上一块（民政样本里名字两行相隔 13.5pt，
+                // 而格子边界是 25.5pt，单靠阈值两边都不好过）。改成以「(n-m节)」行为锚点：
+                // 前面那些不含节次的块是**这门课名字的前半截**，并进来再解析。
+                if (!params.namePrefixMerge) {
+                    clusterRows(columnItems, params.rowGapPt).forEach { block ->
+                        toSlot(block.text, column + 1, params)?.let { cells.add(it) }
+                    }
+                    return@forEach
+                }
+                val blocks = clusterRows(columnItems, params.rowGapPt)
+                // 只有"紧挨着"的前一块才算名字前半截；相隔一整个格子（约 25pt）的
+                // 那是上一门课的尾巴，绝不能并进来
+                val nearGap = params.rowGapPt * 1.6f
+                var i = 0
+                while (i < blocks.size) {
+                    if (!hasSectionMarker(blocks[i].text)) { i++; continue }
+                    // 从锚点往回看：只有"挨着"的无节次块才是名字前半截
+                    val parts = ArrayDeque<String>()
+                    var refY = blocks[i].y
+                    var j = i - 1
+                    while (j >= 0 && !hasSectionMarker(blocks[j].text) &&
+                        abs(blocks[j].y - refY) <= nearGap
+                    ) {
+                        parts.addFirst(blocks[j].text)
+                        refY = blocks[j].y
+                        j--
+                    }
+                    val text = buildString {
+                        parts.forEach { append(it) }
+                        append(blocks[i].text)
+                    }
+                    toSlot(text, column + 1, params)?.let { cells.add(it) }
+                    i++
                 }
             }
         }
@@ -64,31 +95,42 @@ internal object PdfLayoutParser {
         return ParseResult(ParseSource.PDF_TABLE, cells, warnings)
     }
 
+    private val SECTION_MARKER = Regex("\\(\\s*\\d+\\s*(?:[-—~]\\s*\\d+\\s*)?节\\s*\\)")
+
+    /** 这一块里有没有「(1-2节)」这种节次标记 —— 有它才是格子的起点。 */
+    private fun hasSectionMarker(text: String): Boolean =
+        SECTION_MARKER.containsMatchIn(text)
+
     private fun columnOf(x: Float, left: Float, step: Float): Int = floor((x - left) / step).toInt()
 
     /**
      * 同一列内按 y 从大到小排序，相邻片段 y 差超过阈值就断开。
      * 拼接时**不加分隔符**：中文换行处会切断词语（`信息科技大楼北-` + `401`）。
      */
-    private fun clusterRows(items: List<TextFragment>, gap: Float): List<String> {
+    private fun clusterRows(items: List<TextFragment>, gap: Float): List<RowBlock> {
         if (items.isEmpty()) return emptyList()
         val sorted = items.sortedWith(compareByDescending<TextFragment> { it.y }.thenBy { it.x })
-        val cells = mutableListOf<String>()
+        val cells = mutableListOf<RowBlock>()
         val buffer = StringBuilder()
         var lastY: Float? = null
+        var topY = 0f
 
         sorted.forEach { f ->
             val y = lastY
             if (y != null && abs(y - f.y) > gap) {
-                if (buffer.isNotEmpty()) cells.add(buffer.toString())
+                if (buffer.isNotEmpty()) cells.add(RowBlock(topY, buffer.toString()))
                 buffer.setLength(0)
             }
+            if (buffer.isEmpty()) topY = f.y
             buffer.append(f.text.trim())
             lastY = f.y
         }
-        if (buffer.isNotEmpty()) cells.add(buffer.toString())
+        if (buffer.isNotEmpty()) cells.add(RowBlock(topY, buffer.toString()))
         return cells
     }
+
+    /** 一「块」：同一格子内被 y 聚类到一起的若干行。 */
+    private data class RowBlock(val y: Float, val text: String)
 
     private fun toSlot(cellText: String, dayOfWeek: Int, params: PdfTableParams): ParsedSlot? {
         val regex = params.cellRegex?.let { runCatching { Regex(it, RegexOption.DOT_MATCHES_ALL) }.getOrNull() }

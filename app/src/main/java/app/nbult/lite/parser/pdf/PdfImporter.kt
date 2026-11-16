@@ -40,6 +40,7 @@ internal class PdfImporter(
                 headerPerPage = pdf.headerPerPage,
                 cellRegex = pdf.cellRegex,
                 noiseDrop = pdf.noiseDrop,
+                namePrefixMerge = pdf.namePrefixMerge,
                 weekSyntax = rules?.weekSyntax ?: app.nbult.lite.parser.WeekSyntax()
             )
         )

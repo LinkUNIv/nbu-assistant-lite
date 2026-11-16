@@ -114,4 +114,35 @@ class PdfLayoutParserTest {
         assertTrue("单周应只包含奇数周", mask and WeekMask.bit(3) != 0)
         assertTrue("不应包含第 4 周", mask and WeekMask.bit(4) == 0)
     }
+
+    /**
+     * 民政样本：课程名两行相隔 13.5pt，而格子边界是 25.5pt。
+     * 阈值取 13 时名字第二行会被切成独立块，旧实现会把前半截丢掉，
+     * 落到课表里就是「指导①★」。现在按「(n-m节)」锚点把紧邻的前块并回名字。
+     */
+    @Test
+    fun `名字被行距切成两块时并回完整课程名`() {
+        val fragments = header() + listOf(
+            // 名字第一行（比第二行高 13.5pt，恰好越过阈值）
+            TextFragment(0, x(1), 505.5f, "大学生职业发展与就业"),
+            TextFragment(0, x(1), 492.0f, "指导①★"),
+            TextFragment(0, x(1), 480.0f, "(1-2节)6-13周/校区:本部/场地:6-706/教师:张三/考核方式:考试/学分:1.0")
+        )
+        val result = PdfLayoutParser.parse(fragments, params.copy(rowGapPt = 13f, namePrefixMerge = true))
+        assertEquals(1, result.slots.size)
+        assertEquals("大学生职业发展与就业指导①★", result.slots.first().name)
+    }
+
+    /** 上一门课的尾巴（相隔一整个格子）不能被并进下一门的名字。 */
+    @Test
+    fun `隔着格子的上一门尾巴不并入名字`() {
+        val fragments = header() + listOf(
+            TextFragment(0, x(1), 520f, "标记:"),                 // 上一格残留
+            TextFragment(0, x(1), 494f, "大学英语①★"),            // 25.5pt 之后
+            TextFragment(0, x(1), 482f, "(3-4节)6-19周/校区:本部/场地:12-312/教师:李四/考核方式:考试/学分:3.0")
+        )
+        val result = PdfLayoutParser.parse(fragments, params.copy(rowGapPt = 13f, namePrefixMerge = true))
+        assertEquals(1, result.slots.size)
+        assertEquals("大学英语①★", result.slots.first().name)
+    }
 }

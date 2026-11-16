@@ -14,6 +14,8 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -59,12 +61,23 @@ internal fun SignCameraDialog(success: Boolean, resultVersion: Int, message: Str
     }
     Dialog(onDismissRequest = { stopped.set(true); onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+            // 文字区可能很长（学校提示 + 识别状态），整页必须能滚。
+            // 滚动容器里 weight 不生效，取景框改成占可视高度的一半。
+            val previewHeight = maxHeight * 0.5f
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .safeDrawingPadding()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Text(if (testMode) "相机 OCR 测试" else "相机自动验证", style = MaterialTheme.typography.headlineSmall)
                 Text(if (testMode) "只显示识别到的四位数字，不提交签到；手动退出前持续识别。" else "仅在本机识别，不保存或上传图片。识别到有效四位数字即提交；成功后停止。", style = MaterialTheme.typography.bodySmall)
                 if (granted) {
                     val preview = remember { PreviewView(context).apply { implementationMode = PreviewView.ImplementationMode.COMPATIBLE; scaleType = PreviewView.ScaleType.FIT_CENTER } }
-                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                    Box(Modifier.fillMaxWidth().height(previewHeight)) {
                         AndroidView(factory = { preview }, modifier = Modifier.fillMaxSize())
                         Box(Modifier.align(Alignment.Center).fillMaxSize().padding(6.dp).border(BorderStroke(2.dp, MaterialTheme.colorScheme.primary)))
                     }
@@ -170,8 +183,16 @@ internal fun SignCameraDialog(success: Boolean, resultVersion: Int, message: Str
                     TextButton(onClick = { launcher.launch(Manifest.permission.CAMERA) }) { Text("授予相机权限") }
                 }
                 Text(status)
-                if (message.isNotBlank()) Text(message, style = if (testMode) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.bodySmall)
+                if (message.isNotBlank()) {
+                    // 页面回传的是 JSON 里的一段字符串，`\n` 还是字面量。
+                    // 原样显示会变成一整串，这里还原换行再排版。
+                    Text(
+                        text = message.replace("\\n", "\n").trim(),
+                        style = if (testMode) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.bodySmall
+                    )
+                }
                 Button(onClick = { stopped.set(true); onDismiss() }, modifier = Modifier.fillMaxWidth()) { Text(if (testMode) "退出 OCR 测试" else "停止识别 / 返回手动输入") }
+            }
             }
         }
     }

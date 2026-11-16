@@ -268,7 +268,9 @@ internal data class PdfImportParams(
     /** 单元格文本的模板正则（命名分组 name/s1/s2/weeks/teacher/room）。 */
     val cellRegex: String? = null,
     /** 噪声行：整段等于这些词的片段直接丢掉（学时统计等）。 */
-    val noiseDrop: List<String> = emptyList()
+    val noiseDrop: List<String> = emptyList(),
+    /** 课程名跨行时并回（民政需要，湘潭不需要）。 */
+    val namePrefixMerge: Boolean = false
 )
 
 /** 模块开关。关掉的模块在界面上不出现，路由也拦住。 */

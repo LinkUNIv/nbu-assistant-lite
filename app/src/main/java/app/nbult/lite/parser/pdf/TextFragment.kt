@@ -23,5 +23,13 @@ internal data class PdfTableParams(
     /** 噪声行：整段等于这些词就丢掉（学时统计之类）。 */
     val noiseDrop: List<String> = emptyList(),
     /** 周次写法，来自学校规则。换一种写法只改 JSON。 */
-    val weekSyntax: app.nbult.lite.parser.WeekSyntax = app.nbult.lite.parser.WeekSyntax()
+    val weekSyntax: app.nbult.lite.parser.WeekSyntax = app.nbult.lite.parser.WeekSyntax(),
+    /**
+     * 课程名跨块时是否并回。
+     *
+     * 有些学校的 PDF 把课程名排成两行、行距 13.5pt，而格子之间 25.5pt —— 单靠 [rowGapPt]
+     * 两边都不好过。打开后以「(n-m节)」行为锚点，把**紧邻的无节次块**并回名字。
+     * 默认关：湘潭那类一格一段的 PDF 不需要，开了反而有风险。
+     */
+    val namePrefixMerge: Boolean = false
 )

@@ -1,12 +1,12 @@
 {
-  "versionCode": 3815,
-  "versionName": "0.38.15",
+  "versionCode": 3816,
+  "versionName": "0.38.16",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.15-Preview/nbu-assistant-lite-0.38.15-Preview.apk",
-  "sha256": "4953a54f9adfdaf3cb64df7b5245a672a24f15a8242418958214d210886b656b",
-  "size": 26507801,
-  "notes": "**优化课表解析器；修复部分页面问题**\n\n- 优化取词器功能，课表提取更准确。\n- 相机自动验证页整页可滚动。",
-  "generatedAt": 1794816721168,
-  "tag": "v0.38.15-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.16-Preview/nbu-assistant-lite-0.38.16-Preview.apk",
+  "sha256": "9b13af0ce17b2ac4d97c1f960229115eff4665b914f4840c5579d38ad1ea841f",
+  "size": 26507869,
+  "notes": "**修复跨周滑动时课表重叠**\n\n- 从五天课的一周滑到六天课的一周时，存在异常重叠的问题已修复。",
+  "generatedAt": 1794820833482,
+  "tag": "v0.38.16-Preview"
 }

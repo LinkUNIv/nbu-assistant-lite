@@ -1,8 +1,8 @@
 {
-  "version": 202611161534,
-  "updatedAt": "2026-11-16T15:34:16+08:00",
-  "notes": "民政 PDF 行距阈值 13→14，修复课程名被切断（13.5pt 的行被判成两格）",
-  "minAppVersion": 3811,
+  "version": 202611161552,
+  "updatedAt": "2026-11-16T15:52:46+08:00",
+  "notes": "民政课程名分两行导致被截断：开启 namePrefixMerge 并按节次行锚点并入，需 0.38.15",
+  "minAppVersion": 3815,
   "files": [
     {
       "path": "calendar/nbu_calendar.json",
@@ -34,7 +34,7 @@
     },
     {
       "path": "schools/csmy/rules.json",
-      "sha256": "ccf861dca84eb8b7f3b4fb4f9f0f81cd37b65d57f1a2c321ade53d45ee31e8e5"
+      "sha256": "80b007c01d780b785cfd9f205656315e9cc24fd1838dc6987a98937d11261102"
     },
     {
       "path": "schools/xtu/calendar.json",

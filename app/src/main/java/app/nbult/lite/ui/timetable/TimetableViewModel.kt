@@ -94,14 +94,21 @@ data class TimetableUiState(
      * 手滑、箭头、「本周」三条路径次序一致 —— 变化永远发生在翻页结束之后。
      * （0.30.4 之前箭头和「本周」是直接改 week，动画与翻页并行，5↔6 列时会卡一下。）
      */
-    val visibleDays: List<Int>
-        get() {
-            // 还没加载完时先按满 7 列画，避免开屏先从 5 列跳到 6 列
-            val order = if (sundayFirst) listOf(7, 1, 2, 3, 4, 5, 6) else (1..7).toList()
-            if (showFullTimetable || weeks.isEmpty()) return order
-            val used = currentWeekEntries.mapTo(HashSet()) { it.slot.dayOfWeek }
-            return order.filter { it <= 5 || it in used }
-        }
+    val visibleDays: List<Int> get() = daysFor(currentWeekEntries)
+
+    /**
+     * 某一周要显示哪几天。
+     *
+     * **必须按"那一周自己的课"算**：分页会把相邻周一起渲染，若统一用当前周的列数，
+     * 下一页多出来的周六就会被画在本周 5 列的宽度里，压到周五上（0.38.16 修的 bug）。
+     */
+    fun daysFor(weekEntries: List<TimetableEntry>): List<Int> {
+        // 还没加载完时先按满 7 列画，避免开屏先从 5 列跳到 6 列
+        val order = if (sundayFirst) listOf(7, 1, 2, 3, 4, 5, 6) else (1..7).toList()
+        if (showFullTimetable || weeks.isEmpty()) return order
+        val used = weekEntries.mapTo(HashSet()) { it.slot.dayOfWeek }
+        return order.filter { it <= 5 || it in used }
+    }
 }
 
 /** 调课冲突：目标周的那一段已被哪门课占了。 */

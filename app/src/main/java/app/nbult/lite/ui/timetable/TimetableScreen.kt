@@ -262,6 +262,9 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                     .fillMaxWidth()
                             ) {
                                 val timeWidth = WeekGridMetrics.timeWidth
+                                // 分页 lambda 里是 PagerScope，拿不到外层的 maxWidth，
+                                // 先在这里取出来
+                                val gridWidth = maxWidth
                                 val headerHeight = WeekGridMetrics.headerHeight
                                 val sections = state.totalSections.coerceAtLeast(1)
                                 // 行高**不做**插值。cellHeight 是每一格的布局约束，逐帧变化会让
@@ -434,21 +437,26 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                             snapPositionalThreshold = 0.32f
                                         )
                                     ) { page ->
+                                        // 这一页自己有几列就按几列画：跨到"有周末课的那一周"时，
+                                        // 若还用当前周的列宽，多出来的周六会压到周五上
+                                        val pageEntries = entriesByWeek.getOrElse(page) { emptyList() }
+                                        val pageDays = state.daysFor(pageEntries)
+                                        val pageWidth = ((gridWidth - timeWidth) /
+                                            pageDays.size.coerceAtLeast(1)).coerceAtLeast(1.dp)
                                         WeekBody(
                                             weekNumber = page + 1,
                                             sundayFirst = state.sundayFirst,
-                                            weekEntries = entriesByWeek.getOrElse(page) {
-                                                emptyList()
-                                            },
+                                            weekEntries = pageEntries,
                                             periods = state.periods,
                                             totalSections = sections,
-                                            columnWidth = columnWidth,
+                                            // 已落位那页仍用插值宽度（收放更柔和），相邻页必须精确
+                                            columnWidth = if (page == pagerState.settledPage) columnWidth else pageWidth,
                                             cellHeight = cellHeight,
                                             weekStartEpochDay = termStart?.let {
                                                 it + page * 7L
                                             },
                                             today = today,
-                                            visibleDays = state.visibleDays,
+                                            visibleDays = pageDays,
                                             onEntryClick = { vm.select(it) }
                                         )
                                     }

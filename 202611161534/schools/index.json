@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "version": "2026.11.15",
+  "schools": [
+    {
+      "id": "nbu",
+      "name": "宁波大学",
+      "builtin": true,
+      "rules": "schools/nbu/rules.json"
+    },
+    {
+      "id": "xtu",
+      "name": "湘潭大学",
+      "builtin": false,
+      "rules": "schools/xtu/rules.json"
+    },
+    {
+      "id": "csmy",
+      "name": "长沙民政职业技术学院",
+      "builtin": false,
+      "rules": "schools/csmy/rules.json"
+    }
+  ]
+}

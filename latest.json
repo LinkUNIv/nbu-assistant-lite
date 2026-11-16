@@ -1,7 +1,7 @@
 {
-  "version": 202611151450,
-  "updatedAt": "2026-11-15T14:50:45+08:00",
-  "notes": "民政资讯置空（该校暂未接入），配合 0.38.11 的空栏目支持",
+  "version": 202611161534,
+  "updatedAt": "2026-11-16T15:34:16+08:00",
+  "notes": "民政 PDF 行距阈值 13→14，修复课程名被切断（13.5pt 的行被判成两格）",
   "minAppVersion": 3811,
   "files": [
     {
@@ -34,7 +34,7 @@
     },
     {
       "path": "schools/csmy/rules.json",
-      "sha256": "7441c8335895202e339181dc1f91a98e3129301f8fa156689b98cfecd3d2b43d"
+      "sha256": "ccf861dca84eb8b7f3b4fb4f9f0f81cd37b65d57f1a2c321ade53d45ee31e8e5"
     },
     {
       "path": "schools/xtu/calendar.json",

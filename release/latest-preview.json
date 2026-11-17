@@ -1,12 +1,12 @@
 {
-  "versionCode": 3817,
-  "versionName": "0.38.17",
+  "versionCode": 3818,
+  "versionName": "0.38.18",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.17-Preview/nbu-assistant-lite-0.38.17-Preview.apk",
-  "sha256": "428cb5e11cdb39f5b46618624d41413bbc09dec42caffec6cd751f30dae05b19",
-  "size": 26508289,
-  "notes": "**六天、七天周的课表更好读；检查更新更耐断网**\n\n- 去掉切换周次时的列宽收放动画：翻页本就落位后才换列数，这段动画只让相邻页短暂宽窄不一致。\n- 六列布局不再被判为「紧凑」：课名字号从 10sp 回到 11sp，也不再因为窄而隐藏顶标。\n- 列窄时顶标改极短写法而不是消失：错峰显示「+10」，公选课显示「选」。\n- 节次栏按列数收窄：六列 36dp、七列 32dp，把宽度让给课程列。\n- 七天周只留课名、实际上课时间与地点，老师姓名让位（一格里放不下四行）。\n- 检查更新：两个镜像同时失败时自动再试一轮，不再一次失败就放弃。\n- 失败提示改成能行动的说法：「网络中断，没取到版本信息。换个网络或稍后再试。」",
-  "generatedAt": 1794884852906,
-  "tag": "v0.38.17-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.18-Preview/nbu-assistant-lite-0.38.18-Preview.apk",
+  "sha256": "43f0b3c787d0febbf98dfe7ba18deb5204bbf203fd28b341e65ea29942cca7d0",
+  "size": 26508357,
+  "notes": "**更新器整体调优；优化周次切换细节**\n\n- 更新器检查和下载体验优化。\n- 部分文案调整。\n- 优化五天周切换到六天、七天周时的使用体验。",
+  "generatedAt": 1794916957601,
+  "tag": "v0.38.18-Preview"
 }

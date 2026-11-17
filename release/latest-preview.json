@@ -1,12 +1,12 @@
 {
-  "versionCode": 3818,
-  "versionName": "0.38.18",
+  "versionCode": 3819,
+  "versionName": "0.38.19",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.18-Preview/nbu-assistant-lite-0.38.18-Preview.apk",
-  "sha256": "43f0b3c787d0febbf98dfe7ba18deb5204bbf203fd28b341e65ea29942cca7d0",
-  "size": 26508357,
-  "notes": "**更新器整体调优；优化周次切换细节**\n\n- 更新器检查和下载体验优化。\n- 部分文案调整。\n- 优化五天周切换到六天、七天周时的使用体验。",
-  "generatedAt": 1794916957601,
-  "tag": "v0.38.18-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.19-Preview/nbu-assistant-lite-0.38.19-Preview.apk",
+  "sha256": "d0381a5d6a3bbc4749e63c6d0fa90f8b4869210f9acb7e1ee5e711557491e97a",
+  "size": 26508585,
+  "notes": "**修复检查更新看不到新版本**\n\n- raw 源连不上时会回落到 jsDelivr，而它对分支内容是长缓存（十几小时）——\n  于是它报「已是最新」，用户就永远看不到刚发布的版本。\n- 现在回落后的清单若说「已是最新」，会再用 API 交叉核对一次；核对到新版本就正常提示。\n- 日志里标注清单来源（raw / jsDelivr），下次排查一眼能看出走了哪条路。",
+  "generatedAt": 1794918655799,
+  "tag": "v0.38.19-Preview"
 }

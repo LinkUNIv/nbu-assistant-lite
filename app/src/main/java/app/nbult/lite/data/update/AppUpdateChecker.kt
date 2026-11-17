@@ -74,6 +74,10 @@ object AppUpdateChecker {
     /** 断连重试次数。三次足够覆盖偶发 reset，再多用户等不起。 */
     private const val MAX_ATTEMPTS = 3
 
+    /** 镜像重试：一轮全部失败后等一会儿再试一轮。 */
+    private const val MIRROR_ROUNDS = 2
+    private const val MIRROR_RETRY_DELAY_MS = 400L
+
     private val client: OkHttpClient by lazy {
         HttpClients.newBuilder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -119,10 +123,32 @@ object AppUpdateChecker {
                 AppLog.log("Update", "API 链路失败，改用过期静态清单（v${static.optInt("versionCode")}）")
                 return@withContext evaluateManifest(static)
             }
-            legacy
+            // 两轮镜像 + API 都失败，才把原因告诉用户，并说清下一步
+            if (legacy is UpdateState.Failed) friendlyFailure(legacy.message) else legacy
         }.getOrElse {
             AppLog.log("Update", "检查更新失败: ${it.message}")
             UpdateState.Failed(it.message ?: "网络错误")
+        }
+    }
+
+    /**
+     * 失败时给用户一句能行动的话。
+     *
+     * 底层原因（`Connection reset`、HTTP 4xx）对用户没有意义，但"是不是网络问题、
+     * 要不要重试"是他判断下一步的依据，两句都要有。
+     */
+    private fun friendlyFailure(raw: String?): UpdateState.Failed {
+        val reason = raw.orEmpty()
+        val networkish = reason.contains("reset", true) ||
+            reason.contains("timeout", true) ||
+            reason.contains("time out", true) ||
+            reason.contains("Unable to resolve host", true) ||
+            reason.contains("网络", true) ||
+            reason.contains("无法获取", true)
+        return if (networkish) {
+            UpdateState.Failed("网络中断，没取到版本信息。换个网络或稍后再试。")
+        } else {
+            UpdateState.Failed(reason.ifBlank { "检查更新失败，请稍后再试。" })
         }
     }
 
@@ -241,10 +267,18 @@ object AppUpdateChecker {
     private fun readStaticManifest(): JSONObject? {
         val channel = UpdateChannel.current.lowercase()
         val path = "release/latest-$channel.json"
-        for (base in STATIC_BASES) {
-            val text = getText("$base/$path", staticClient) ?: continue
-            runCatching { return JSONObject(text) }
-                .onFailure { AppLog.log("Update", "静态清单不是合法 JSON：$base") }
+        // 实测两个镜像会在同一瞬间一起 Connection reset（校园网常见），一次失败就放弃
+        // 等于"检查更新永远失败"。等 400ms 再来一轮，成本可忽略、命中率明显不同。
+        repeat(MIRROR_ROUNDS) { round ->
+            for (base in STATIC_BASES) {
+                val text = getText("$base/$path", staticClient) ?: continue
+                runCatching { return JSONObject(text) }
+                    .onFailure { AppLog.log("Update", "静态清单不是合法 JSON：$base") }
+            }
+            if (round < MIRROR_ROUNDS - 1) {
+                AppLog.log("Update", "镜像全部失败，${MIRROR_RETRY_DELAY_MS}ms 后重试")
+                runCatching { Thread.sleep(MIRROR_RETRY_DELAY_MS) }
+            }
         }
         return null
     }

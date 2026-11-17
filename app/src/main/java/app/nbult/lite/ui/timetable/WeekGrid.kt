@@ -131,6 +131,18 @@ object WeekGridMetrics {
     /** 时间栏要放下「节次 / 开始 / 结束」三行，比原来更宽。 */
     val timeWidth: Dp = 40.dp
 
+    /**
+     * 列数多时把时间栏让出来：六列 36dp、七列 32dp。
+     *
+     * 七列时每列只剩 45~51dp，时间栏多占 8dp 就是每列少 1dp —— 课名会直接少一个字的宽度。
+     * 收窄后少显示"结束时刻"一行：课时长度固定，起始时刻已经够用。
+     */
+    fun timeWidthFor(dayCount: Int): Dp = when {
+        dayCount >= 7 -> 32.dp
+        dayCount >= 6 -> 36.dp
+        else -> timeWidth
+    }
+
     fun contentHeight(sections: Int): Dp = headerHeight + cellHeight * sections
 }
 
@@ -576,10 +588,11 @@ fun WeekRail(
     periods: List<PeriodTime>,
     totalSections: Int,
     cellHeight: Dp,
-    metaSize: TextUnit
+    metaSize: TextUnit,
+    /** 时间栏宽度：列多时收窄，必须与调用方算列宽用的是同一个值。 */
+    timeWidth: Dp = WeekGridMetrics.timeWidth
 ) {
     val headerHeight = WeekGridMetrics.headerHeight
-    val timeWidth = WeekGridMetrics.timeWidth
     val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
     val periodMap = remember(periods) { periods.associateBy { it.idx } }
 
@@ -728,7 +741,9 @@ fun WeekBody(
         weekStartEpochDay?.let { start -> (1..7).map { day -> start + if (sundayFirst && day == 7) -1L else day - 1L } }
     }
 
-    val compact = columnWidth < 54.dp
+    val compact = columnWidth < 50.dp
+    // 七天周：一格里放不下四行，老师让位 —— 课名、实际时刻、地点才是找课要看的
+    val dense = visibleDays.size >= 7
     val nameSize = if (compact) 10.sp else 11.sp
     val metaSize = if (compact) 9.sp else 10.sp
 
@@ -803,6 +818,7 @@ fun WeekBody(
             headerHeight = headerHeight,
             totalSections = totalSections,
             compact = compact,
+            dense = dense,
             nameSize = nameSize,
             metaSize = metaSize,
             visibleDays = visibleDays,
@@ -819,6 +835,8 @@ private fun CourseBlock(
     periodMap: Map<Int, app.nbult.lite.data.db.PeriodTime>,
     weekLabel: String,
     compact: Boolean,
+    /** 七天周：不显示老师，把行高让给课名与地点。 */
+    dense: Boolean,
     nameSize: TextUnit,
     metaSize: TextUnit,
     nameLimit: Int = 0
@@ -920,7 +938,7 @@ private fun CourseBlock(
                     fontWeight = FontWeight.Medium
                 )
             ) { append(shownName) }
-            if (sections >= 2 && entry.teacher.isNotBlank()) {
+            if (sections >= 2 && entry.teacher.isNotBlank() && !dense) {
                 withStyle(
                     SpanStyle(color = blockColor.copy(alpha = 0.85f), fontSize = metaSize)
                 ) {
@@ -993,15 +1011,24 @@ private fun CourseBlock(
                 minOf(maxHeight / 2, roomLineHeight * if (sections >= 2) 2 else 1)
             } else 0.dp
             // 有顶标时把标题可用高度再让出 11dp，避免课名被顶标挤到溢出
-            val badgeSpace = if (topLabel != null && !compact) 11.dp else 0.dp
+            val badgeSpace = when {
+                topLabel == null -> 0.dp
+                compact -> 9.dp
+                else -> 11.dp
+            }
             val shortBadge = maxHeight < 52.dp
             val titleMaxHeight = (maxHeight - reservedRoom - 1.dp - badgeSpace).coerceAtLeast(0.dp)
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 // 顶标：把正文整体压下去，而不是盖在课程名上。
-                // 小组件（compact）不显示 —— 那里连课名都常被截断，再加一行等于全挤掉。
-                if (topLabel != null && !compact) {
+                // 列窄时改成极短写法（+10 / 选），但**不隐藏** —— 六天、七天周里
+                // 「错峰」「公选课」恰恰是最需要一眼看出来的信息
+                if (topLabel != null) {
                     Text(
-                        text = if (shortBadge && lateRule != null) "+${lateRule.minutes} 分" else topLabel,
+                        text = when {
+                            lateRule != null && (shortBadge || compact) -> "+${lateRule.minutes}"
+                            isPublicCourse && compact -> pubRule.badge.take(1)
+                            else -> topLabel
+                        },
                         fontSize = 8.sp,
                         lineHeight = 9.sp,
                         fontWeight = FontWeight.Medium,
@@ -1085,6 +1112,7 @@ private fun BlockLayer(
     headerHeight: Dp,
     totalSections: Int,
     compact: Boolean,
+    dense: Boolean,
     nameSize: TextUnit,
     metaSize: TextUnit,
     visibleDays: List<Int>,
@@ -1097,6 +1125,7 @@ private fun BlockLayer(
         content = {
             blocks.forEach { block ->
                 CourseBlock(
+                    dense = dense,
                     weekNumber = weekNumber,
                     entry = block.entry,
                     periodMap = periodMap,

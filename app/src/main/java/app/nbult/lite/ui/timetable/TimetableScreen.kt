@@ -25,7 +25,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -261,7 +260,9 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                     .weight(1f)
                                     .fillMaxWidth()
                             ) {
-                                val timeWidth = WeekGridMetrics.timeWidth
+                                // 时间栏按**当前周**的列数收窄；每页的列宽仍用这个值算，
+                                // 与真实布局宽度一致，不会因为各页列数不同而错位
+                                val timeWidth = WeekGridMetrics.timeWidthFor(state.visibleDays.size)
                                 // 分页 lambda 里是 PagerScope，拿不到外层的 maxWidth，
                                 // 先在这里取出来
                                 val gridWidth = maxWidth
@@ -280,14 +281,9 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                 val columnCount = state.visibleDays.size.coerceAtLeast(1)
                                 val targetColumnWidth = ((maxWidth - timeWidth) / columnCount)
                                     .coerceAtLeast(1.dp)
-                                // 跨"有周末课的那一周"切周时列数会变（5↔6），
-                                // 直接改列宽就是一帧重排的跳变；插值 180ms 把它变成收放。
-                                // 字体档位按**目标**宽度判断，否则动画中途字号会来回跳一次
-                                val columnWidth by animateDpAsState(
-                                    targetValue = targetColumnWidth,
-                                    animationSpec = tween(180, easing = FastOutSlowInEasing),
-                                    label = "timetableColumnWidth"
-                                )
+                                // 列宽直接用目标值。0.30.x 曾用 180ms 插值把 5↔6 列的突变
+                                // 变成"收放"，但翻页本就在落位后才换列数，这段动画反而让
+                                // 相邻页短暂宽窄不一致，用户反馈多余 —— 已去掉
                                 val railMetaSize = if (targetColumnWidth < 54.dp) 9.sp else 10.sp
 
                                 // 滑动期间统计每帧耗时（高刷模式在 Activity 里声明）
@@ -421,7 +417,8 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                         periods = state.periods,
                                         totalSections = sections,
                                         cellHeight = cellHeight,
-                                        metaSize = railMetaSize
+                                        metaSize = railMetaSize,
+                                        timeWidth = timeWidth
                                     )
                                     HorizontalPager(
                                         state = pagerState,
@@ -449,8 +446,7 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                             weekEntries = pageEntries,
                                             periods = state.periods,
                                             totalSections = sections,
-                                            // 已落位那页仍用插值宽度（收放更柔和），相邻页必须精确
-                                            columnWidth = if (page == pagerState.settledPage) columnWidth else pageWidth,
+                                            columnWidth = pageWidth,
                                             cellHeight = cellHeight,
                                             weekStartEpochDay = termStart?.let {
                                                 it + page * 7L

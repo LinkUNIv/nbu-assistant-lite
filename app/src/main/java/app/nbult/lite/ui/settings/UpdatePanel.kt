@@ -119,6 +119,10 @@ internal fun VersionEntry(badge: Boolean) {
     val latestCode by settings.updateLatestCode.collectAsStateWithLifecycle(0L)
     // 进度来自应用容器，不来自这个 Composable：切页、返回都不会打断下载
     val install by installer.state.collectAsStateWithLifecycle()
+    // 下载中打开弹窗时没有 UpdateInfo，用上次落盘的说明补齐（不重新请求）
+    val pendingNotes by settings.pendingAppNotes.collectAsStateWithLifecycle("")
+    // 刚被「此版本已过期」替换过，弹窗里要提示一句
+    var staleHint by remember { mutableStateOf(false) }
 
     var state by remember { mutableStateOf<VersionUi>(VersionUi.Idle) }
     // 查文件系统算一次就够，别每次重组都 stat 一遍
@@ -166,8 +170,14 @@ internal fun VersionEntry(badge: Boolean) {
                     }
                     // 已交给系统但用户取消了：再点一下重新唤起安装器
                     install is InstallState.HandedOff -> installer.installNow()
-                    // 正在下载：连点不该再开一份
-                    install is InstallState.Downloading -> Unit
+                    // 正在下载：点开弹窗看说明与进度，但不能重复开一份下载
+                    install is InstallState.Downloading -> dialogInfo = dialogInfo ?: UpdateInfo(
+                        versionCode = latestCode.toInt(),
+                        versionName = (install as InstallState.Downloading).versionName,
+                        apkUrl = "",
+                        sha256 = "",
+                        notes = pendingNotes
+                    )
                     // 上一次失败：先清结果，再重新查一次
                     install is InstallState.Failed -> {
                         installer.reset()
@@ -208,7 +218,10 @@ internal fun VersionEntry(badge: Boolean) {
             install = install,
             onDownload = { installer.start(info) },
             onInstall = { installer.installNow() },
-            onCancel = { dialogInfo = null }
+            onCancel = { dialogInfo = null; staleHint = false },
+            // 复查发现更新版本：直接换内容并保留提示，用户再点一次下载
+            onSuperseded = { newer -> staleHint = true; dialogInfo = newer },
+            staleHint = staleHint
         )
     }
 }
@@ -249,15 +262,27 @@ internal fun PackEntry() {
     val state = remember(revisions) { ResourcePackStore.state(context) }
     var log by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    // 阶段：请求清单 → 逐文件下载（有文件数可比）→ 应用
+    var phase by remember { mutableStateOf<app.nbult.lite.data.pack.PackPhase?>(null) }
 
     // 进到这一栏就算「看过了」，红点熄灭
     LaunchedEffect(revisions) { settings.setPackAck(state.version) }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // 「当前」只能指**已经装上的**那份。原来这行写的是远端版本，语义是错的：
+        // 用户看不出自己在用内置还是包。拆成「已应用 / 远端 / 上次检查」三行。
         Text(
-            text = if (state.isRemote) "当前：远端 v${formatPackVersion(state.version)}" else "当前：内置",
+            text = if (state.isRemote) "已应用 v${formatPackVersion(state.version)}" else "已应用 内置",
             style = MaterialTheme.typography.bodyMedium
         )
+        val pending by settings.packPendingVersion.collectAsStateWithLifecycle(0L)
+        if (pending > state.version) {
+            Text(
+                text = "远端 v${formatPackVersion(pending)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         // 显示「上次尝试」而不是「上次成功」：后者会让人以为根本没查过
         Text(
             text = "上次检查：${formatCheckTime(if (state.lastAttemptAt > 0L) state.lastAttemptAt else state.lastCheckAt)}",
@@ -288,22 +313,34 @@ internal fun PackEntry() {
                 scope.launch {
                     // 手动检查一律 force：绕过 1 小时间隔与「此前失败」标记，
                     // 否则用户点了按钮也只会再看到一次「已跳过」
-                    log = when (val result = ResourcePackChecker.checkAndApply(context, settings, force = true)) {
+                    log = when (
+                        val result = ResourcePackChecker.checkAndApply(context, settings, force = true) {
+                            phase = it
+                        }
+                    ) {
                         is PackCheckResult.Applied -> "已应用 v${formatPackVersion(result.version)}"
                         PackCheckResult.UpToDate -> "已是最新"
                         PackCheckResult.Skipped -> "该版本此前失败过，已跳过"
                         is PackCheckResult.Blocked -> "需要应用更新到 ${result.minAppVersion} 以上才能使用"
-                        is PackCheckResult.Failed -> "失败：${result.reason}"
+                        // 网络类失败只给一句能行动的话，细节进日志
+                        is PackCheckResult.Failed ->
+                            if (result.retryable) "检查失败，请检查网络后重试" else "失败：${result.reason}"
                     }
+                    phase = null
                     busy = false
                 }
             }
         ) {
             Text(
-                when {
-                    busy -> "检查中…"
-                    state.failedVersion > 0L -> "重试"
-                    else -> "立即检查资源包"
+                when (val p = phase) {
+                    null -> when {
+                        busy -> "检查中…"
+                        state.failedVersion > 0L -> "重试"
+                        else -> "立即检查资源包"
+                    }
+                    app.nbult.lite.data.pack.PackPhase.Requesting -> "请求下载…"
+                    is app.nbult.lite.data.pack.PackPhase.Downloading -> "下载中… ${p.percent}%"
+                    app.nbult.lite.data.pack.PackPhase.Applying -> "正在应用…"
                 }
             )
         }
@@ -335,11 +372,17 @@ internal fun UpdateDialog(
     install: InstallState,
     onDownload: () -> Unit,
     onInstall: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    /** 复查发现更新的版本：外层需要把弹窗内容换掉。 */
+    onSuperseded: (UpdateInfo) -> Unit = {},
+    /** 刚发生过版本替换，显示一句「此版本已过期」。 */
+    staleHint: Boolean = false
 ) {
     val settings = LocalAppContainer.current.settings
     val scope = rememberCoroutineScope()
     var noRemind by remember { mutableStateOf(false) }
+    // 点「下载」后先进这一段：先复查版本，再决定是下载还是换成新版本
+    var requesting by remember(info.versionCode) { mutableStateOf(false) }
 
     // 勾了「不再提醒」就是一个独立意愿，点确认还是取消都该记住
     fun rememberChoice() {
@@ -367,6 +410,14 @@ internal fun UpdateDialog(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (staleHint) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "此版本已过期，已为你切换到新版本",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
                 // 说明是 Markdown（Release 正文原样同步）。以前直接当纯文本塞进 Text，
                 // 于是 `**加粗**`、`- `、反引号全都原样显示出来，字号还只有 12sp。
@@ -421,7 +472,7 @@ internal fun UpdateDialog(
 
                     Spacer(Modifier.width(4.dp))
                     Button(
-                        enabled = install !is InstallState.HandedOff,
+                        enabled = install !is InstallState.HandedOff && !requesting,
                         onClick = {
                             rememberChoice()
                             when (install) {
@@ -431,17 +482,37 @@ internal fun UpdateDialog(
                                 }
                                 is InstallState.Downloading -> Unit
                                 else -> {
-                                    AppLog.log("Update", "开始下载 ${info.versionName}")
-                                    onDownload()
+                                    // 先复查一次：用户可能刚从别处升了级，或上游又发了新版。
+                                    // 复查失败不拦下载 —— 网络抖动不该让人下不了已知版本。
+                                    requesting = true
+                                    scope.launch {
+                                        val again = runCatching { UpdateCenter.refresh(settings) }.getOrNull()
+                                        requesting = false
+                                        val newer = (again as? UpdateState.Available)?.info
+                                        if (newer != null && newer.versionCode > info.versionCode) {
+                                            AppLog.log(
+                                                "Update",
+                                                "请求下载 ${info.versionName} → 复查发现 ${newer.versionName}，已切换"
+                                            )
+                                            onSuperseded(newer)
+                                        } else {
+                                            if (again is UpdateState.Failed) {
+                                                AppLog.log("Update", "复查失败，按已知版本下载 ${info.versionName}")
+                                            }
+                                            AppLog.log("Update", "开始下载 ${info.versionName}")
+                                            onDownload()
+                                        }
+                                    }
                                 }
                             }
                         }
                     ) {
                         Text(
-                            when (install) {
-                                is InstallState.Downloading -> "下载中 ${install.percent}%"
-                                is InstallState.ReadyToInstall -> "安装"
-                                is InstallState.HandedOff -> "等待系统安装"
+                            when {
+                                requesting -> "请求下载…"
+                                install is InstallState.Downloading -> "下载中… ${install.percent}%"
+                                install is InstallState.ReadyToInstall -> "安装"
+                                install is InstallState.HandedOff -> "等待系统安装"
                                 else -> "下载"
                             }
                         )

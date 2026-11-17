@@ -74,7 +74,9 @@ object ResourcePackChecker {
     suspend fun checkAndApply(
         context: Context,
         settings: app.nbult.lite.data.SettingsStore,
-        force: Boolean = false
+        force: Boolean = false,
+        /** 阶段回调：界面据此显示「请求下载… / 下载中… 42%」。不传就只写日志。 */
+        onPhase: (PackPhase) -> Unit = {}
     ): PackCheckResult = withContext(Dispatchers.IO) {
         runCatching {
             val now = System.currentTimeMillis()
@@ -88,6 +90,7 @@ object ResourcePackChecker {
             // 每次尝试都记时间：界面上的「上次检查」必须反映「试过」，而不是「成功过」
             ResourcePackStore.markAttempt(context, now)
 
+            onPhase(PackPhase.Requesting)
             val manifestResult = fetchManifest()
             if (manifestResult is ManifestResult.Err) {
                 return@runCatching networkFail(context, manifestResult.detail)
@@ -135,7 +138,7 @@ object ResourcePackChecker {
 
             // 先记 pending：只要发现了新包用户就该知道，哪怕后面没下成
             settings.setPackPending(manifest.version)
-            applyNew(context, manifest, preferredStart, now)
+            applyNew(context, manifest, preferredStart, now, onPhase)
         }.getOrElse {
             // 走到这里说明是代码层面的意外，按网络类处理，不拉黑版本
             ResourcePackStore.recordError(context, "检查异常：${it.javaClass.simpleName} ${it.message}")
@@ -147,12 +150,15 @@ object ResourcePackChecker {
         context: Context,
         manifest: PackManifest,
         preferredStart: Int,
-        now: Long
+        now: Long,
+        onPhase: (PackPhase) -> Unit
     ): PackCheckResult {
         val payload = HashMap<String, String>(manifest.files.size)
         var preferred = preferredStart
+        var done = 0
 
         for (file in manifest.files) {
+            onPhase(PackPhase.Downloading(done, manifest.files.size))
             when (val result = download(manifest.version, file.path, preferred)) {
                 is DownloadResult.Err -> return networkFail(context, result.detail)
 
@@ -165,9 +171,11 @@ object ResourcePackChecker {
                         return contentFail(context, manifest, "${file.path} 校验不符")
                     }
                     payload[file.path] = String(result.bytes, Charsets.UTF_8)
+                    done++
                 }
             }
         }
+        onPhase(PackPhase.Applying)
 
         // 逐文件过闸门：入口、资讯、学校清单、学校规则各有一套判定。
         // 按**路径后缀**分派而不是认死字面路径 —— 只校验 portal/entries.json 与

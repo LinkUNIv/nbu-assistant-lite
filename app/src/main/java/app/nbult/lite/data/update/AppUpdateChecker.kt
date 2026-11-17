@@ -146,7 +146,7 @@ object AppUpdateChecker {
             reason.contains("网络", true) ||
             reason.contains("无法获取", true)
         return if (networkish) {
-            UpdateState.Failed("网络中断，没取到版本信息。换个网络或稍后再试。")
+            UpdateState.Failed("检查失败，请检查网络后重试")
         } else {
             UpdateState.Failed(reason.ifBlank { "检查更新失败，请稍后再试。" })
         }

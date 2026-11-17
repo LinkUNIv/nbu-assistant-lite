@@ -94,6 +94,18 @@ data class PackState(
 }
 
 /** 检索结果。UI 与日志都从这里取值，避免各自拼字符串。 */
+/** 检查/下载的阶段，供界面显示「请求下载… / 下载中… 42%」。 */
+sealed interface PackPhase {
+    data object Requesting : PackPhase
+    /**
+     * 按**文件数**报进度：资源包是多文件，没有整包总字节数，用文件数比编一个假百分比诚实。
+     */
+    data class Downloading(val done: Int, val total: Int) : PackPhase {
+        val percent: Int get() = if (total <= 0) 0 else done * 100 / total
+    }
+    data object Applying : PackPhase
+}
+
 sealed interface PackCheckResult {
     /** 远端不比本地新，什么都不做。 */
     data object UpToDate : PackCheckResult

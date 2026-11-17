@@ -114,14 +114,26 @@ object AppUpdateChecker {
     suspend fun check(): UpdateState = withContext(Dispatchers.IO) {
         runCatching {
             val static = readStaticManifest()
-            if (static != null && !isStale(static)) {
-                AppLog.log("Update", "清单来自静态镜像 v${static.optInt("versionCode")}")
-                return@withContext evaluateManifest(static)
+            if (static != null && !isStale(static.json)) {
+                val from = if (static.sourceIndex == 0) "raw" else "jsDelivr"
+                AppLog.log("Update", "清单来自静态镜像 v${static.json.optInt("versionCode")}（$from）")
+                val evaluated = evaluateManifest(static.json)
+                // jsDelivr 缓存能吃十几小时：它说"已最新"恰恰是最需要怀疑的结论。
+                // 这时候多打一次 API 交叉核对，宁可慢一秒，也不能让用户永远看不到新版本。
+                if (evaluated is UpdateState.UpToDate && static.sourceIndex > 0) {
+                    val cross = legacyCheck()
+                    if (cross is UpdateState.Available) {
+                        AppLog.log("Update", "缓存清单说已最新，API 交叉核对发现 ${cross.info.versionName}")
+                        return@withContext cross
+                    }
+                    AppLog.log("Update", "缓存清单已最新，API 核对一致")
+                }
+                return@withContext evaluated
             }
             val legacy = legacyCheck()
             if (legacy is UpdateState.Failed && static != null) {
-                AppLog.log("Update", "API 链路失败，改用过期静态清单（v${static.optInt("versionCode")}）")
-                return@withContext evaluateManifest(static)
+                AppLog.log("Update", "API 链路失败，改用过期静态清单（v${static.json.optInt("versionCode")}）")
+                return@withContext evaluateManifest(static.json)
             }
             // 两轮镜像 + API 都失败，才把原因告诉用户，并说清下一步
             if (legacy is UpdateState.Failed) friendlyFailure(legacy.message) else legacy
@@ -264,15 +276,23 @@ object AppUpdateChecker {
      * 顺序不能反 —— jsDelivr 对分支内容有长缓存（实测十几小时），新包发布后它还在发旧的；
      * raw 是实时的，只是偶尔连不上。
      */
-    private fun readStaticManifest(): JSONObject? {
+    /**
+     * 读到的清单 + 来源下标（0=raw，1=jsDelivr）。
+     *
+     * 下标必须带出去：jsDelivr 对分支内容是长缓存（实测十几小时），
+     * 它说"没有新版本"不能直接信 —— 见 [check] 里的交叉核对。
+     */
+    private data class StaticManifest(val json: JSONObject, val sourceIndex: Int)
+
+    private fun readStaticManifest(): StaticManifest? {
         val channel = UpdateChannel.current.lowercase()
         val path = "release/latest-$channel.json"
         // 实测两个镜像会在同一瞬间一起 Connection reset（校园网常见），一次失败就放弃
         // 等于"检查更新永远失败"。等 400ms 再来一轮，成本可忽略、命中率明显不同。
         repeat(MIRROR_ROUNDS) { round ->
-            for (base in STATIC_BASES) {
-                val text = getText("$base/$path", staticClient) ?: continue
-                runCatching { return JSONObject(text) }
+            STATIC_BASES.forEachIndexed { index, base ->
+                val text = getText("$base/$path", staticClient) ?: return@forEachIndexed
+                runCatching { return StaticManifest(JSONObject(text), index) }
                     .onFailure { AppLog.log("Update", "静态清单不是合法 JSON：$base") }
             }
             if (round < MIRROR_ROUNDS - 1) {

@@ -15,6 +15,9 @@
 
 ## 下载与安装
 
+> ⚠️ **若你还在 0.38.18 及更早版本**：应用内「检查更新」可能被 CDN 缓存挡住，一直提示已是最新。
+> 请直接从 [Releases](https://github.com/LinkUNIv/nbu-assistant-lite/releases) 下载最新 APK 手动安装一次，之后自更新恢复正常。
+
 当前预览版本：**0.38.19 Preview**（2026-11-17）
 
 [下载 Preview](https://github.com/LinkUNIv/nbu-assistant-lite/releases/tag/v0.38.19-Preview) · [完整更新说明](docs/releases/v0.38.19-Preview.md)

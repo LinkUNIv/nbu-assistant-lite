@@ -410,6 +410,10 @@ app/src/main/assets/
 
 标签为 `v0.35.49-Preview`，发布说明为 `docs/releases/v0.35.49-Preview.md`，GitHub 标记 prerelease，不能标记为稳定最新版。使用 `:app:testPreviewUnitTest :app:assemblePreview`，保留原固定签名配置；正式版与预览版包名不同，用户数据不共享。
 
+**发布后必做：刷新 CDN 缓存。** 清单文件在 `packs` 分支，应用优先读 raw，失败回落 jsDelivr；
+而 jsDelivr 对分支内容长缓存十几小时。发布完成后执行 `bash tools/purge-cdn.sh`，
+否则旧版客户端会一直读到旧清单、报「已是最新」（0.38.19 之前的老版本没有交叉核对）。
+
 运行 `python tools/package-source.py --output /path/to/source.zip` 打包源码；在 Git 仓库中仅收录已跟踪和未忽略的文件，排除构建缓存、密钥、本机配置、日志和私有样本。不要使用临时 OCR 样本目录作为源码发布资产。构建产物放 GitHub Release，不提交 APK、映射或 ZIP 到 Git 历史。
 
 发布资产应包含 APK、源码 ZIP、映射压缩包、APK SHA-256、`SHA256SUMS.txt` 与 `manifest.json`。签名/清单中的 applicationId 为 `app.nbult.lite.preview`。源码 ZIP 与 APK 必须对应同一提交；重新打包后同步更新校验值。OCR 私有照片真机回归存在未通过项，须在预览说明中保留，不应声称完整实机验收通过。

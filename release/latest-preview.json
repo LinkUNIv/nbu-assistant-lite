@@ -1,12 +1,12 @@
 {
-  "versionCode": 3816,
-  "versionName": "0.38.16",
+  "versionCode": 3817,
+  "versionName": "0.38.17",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.16-Preview/nbu-assistant-lite-0.38.16-Preview.apk",
-  "sha256": "9b13af0ce17b2ac4d97c1f960229115eff4665b914f4840c5579d38ad1ea841f",
-  "size": 26507869,
-  "notes": "**修复跨周滑动时课表重叠**\n\n- 从五天课的一周滑到六天课的一周时，存在异常重叠的问题已修复。",
-  "generatedAt": 1794820833482,
-  "tag": "v0.38.16-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.17-Preview/nbu-assistant-lite-0.38.17-Preview.apk",
+  "sha256": "428cb5e11cdb39f5b46618624d41413bbc09dec42caffec6cd751f30dae05b19",
+  "size": 26508289,
+  "notes": "**六天、七天周的课表更好读；检查更新更耐断网**\n\n- 去掉切换周次时的列宽收放动画：翻页本就落位后才换列数，这段动画只让相邻页短暂宽窄不一致。\n- 六列布局不再被判为「紧凑」：课名字号从 10sp 回到 11sp，也不再因为窄而隐藏顶标。\n- 列窄时顶标改极短写法而不是消失：错峰显示「+10」，公选课显示「选」。\n- 节次栏按列数收窄：六列 36dp、七列 32dp，把宽度让给课程列。\n- 七天周只留课名、实际上课时间与地点，老师姓名让位（一格里放不下四行）。\n- 检查更新：两个镜像同时失败时自动再试一轮，不再一次失败就放弃。\n- 失败提示改成能行动的说法：「网络中断，没取到版本信息。换个网络或稍后再试。」",
+  "generatedAt": 1794884852906,
+  "tag": "v0.38.17-Preview"
 }

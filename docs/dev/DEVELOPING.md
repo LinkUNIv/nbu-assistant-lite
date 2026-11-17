@@ -53,6 +53,14 @@
 
 ```bash
 ./gradlew :app:assemblePreview   # 预览包
+```
+
+> **本机构建卡死（2026-11-16 起）**：`compilePreviewKotlin` 连续两次 10 分钟无输出，
+> 内存充足、`gradle --stop` 无效、`-Dkotlin.compiler.execution.strategy=in-process` 同样卡。
+> 临时绕法：**先推 main 让 CI 编译**（CI 一直正常），绿了再打标签。
+> 遇到类似症状先怀疑编译进程被环境阻断，不要改代码。
+
+```bash
 ./gradlew :app:assembleDebug     # 调试包
 ./gradlew :app:assembleRelease   # 正式包，必须配置固定签名
 ```

@@ -25,6 +25,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -260,9 +261,15 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                     .weight(1f)
                                     .fillMaxWidth()
                             ) {
-                                // 时间栏按**当前周**的列数收窄；每页的列宽仍用这个值算，
-                                // 与真实布局宽度一致，不会因为各页列数不同而错位
-                                val timeWidth = WeekGridMetrics.timeWidthFor(state.visibleDays.size)
+                                // 时间栏按**当前周**的列数收窄（40 / 36 / 32dp）。
+                                // 落位瞬间列数变了，若宽度硬切就是肉眼可见的一抖 ——
+                                // 这里插值 220ms，并且**所有页共用插值后的宽度**：
+                                // 之前只让落位页插值，相邻页用精确值，滑动中会看到宽窄不一致。
+                                val timeWidth by animateDpAsState(
+                                    targetValue = WeekGridMetrics.timeWidthFor(state.visibleDays.size),
+                                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                                    label = "timetableTimeWidth"
+                                )
                                 // 分页 lambda 里是 PagerScope，拿不到外层的 maxWidth，
                                 // 先在这里取出来
                                 val gridWidth = maxWidth

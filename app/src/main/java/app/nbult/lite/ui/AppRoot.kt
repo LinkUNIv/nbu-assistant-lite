@@ -471,11 +471,13 @@ fun AppRoot() {
         }
         // 公告：读资源包里的 announcements.json。包换版本会重组，所以按 revisions 重新读
         val packRevisions by app.nbult.lite.data.pack.ResourcePackStore.revisions.collectAsStateWithLifecycle()
+        // LaunchedEffect 的块不是 @Composable，不能在里面读 CompositionLocal
+        val announceContext = appContext
         var announcements by remember { mutableStateOf<List<app.nbult.lite.data.pack.Announcement>>(emptyList()) }
         LaunchedEffect(packRevisions) {
             announcements = runCatching {
                 app.nbult.lite.data.pack.Announcements.load(
-                    context,
+                    announceContext,
                     app.nbult.lite.BuildConfig.VERSION_CODE
                 )
             }.getOrDefault(emptyList())

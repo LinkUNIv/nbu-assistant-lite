@@ -1,9 +1,13 @@
 {
-  "version": 202611161552,
-  "updatedAt": "2026-11-16T15:52:46+08:00",
-  "notes": "民政课程名分两行导致被截断：开启 namePrefixMerge 并按节次行锚点并入，需 0.38.15",
+  "version": 202611192213,
+  "updatedAt": "2026-11-19T22:13:06+08:00",
+  "notes": "新增公告（announcements.json）：置顶使用说明 + 提醒样式；0.38.20 起显示",
   "minAppVersion": 3815,
   "files": [
+    {
+      "path": "announcements.json",
+      "sha256": "31a4ae7e2f3a19a85e563009377b159c637ef4344ae7241cad666aeecb87e55a"
+    },
     {
       "path": "calendar/nbu_calendar.json",
       "sha256": "f1bd8758515d4a92f299833dac26e47d4811ddfad44cc46075171aa890e4f4ee"

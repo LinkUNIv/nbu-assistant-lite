@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import app.nbult.lite.domain.TimetableEntry
 import app.nbult.lite.domain.DateUtil
 import app.nbult.lite.domain.WeekMask
 import app.nbult.lite.domain.AppClock
@@ -291,6 +292,16 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                 // 列宽直接用目标值。0.30.x 曾用 180ms 插值把 5↔6 列的突变
                                 // 变成"收放"，但翻页本就在落位后才换列数，这段动画反而让
                                 // 相邻页短暂宽窄不一致，用户反馈多余 —— 已去掉
+                                // 叠放格点击后要选一门：状态放在屏幕级，弹层不随页面销毁
+                                var stackPick by remember { mutableStateOf<List<TimetableEntry>?>(null) }
+                                // 模态弹层，挂在布局树哪个位置都不影响显示
+                                stackPick?.let { group ->
+                                    CourseStackSheet(
+                                        entries = group,
+                                        onPick = { pick -> stackPick = null; vm.select(pick) },
+                                        onDismiss = { stackPick = null }
+                                    )
+                                }
                                 val railMetaSize = if (targetColumnWidth < 54.dp) 9.sp else 10.sp
 
                                 // 滑动期间统计每帧耗时（高刷模式在 Activity 里声明）
@@ -460,7 +471,8 @@ fun TimetableScreen(vm: TimetableViewModel) {
                                             },
                                             today = today,
                                             visibleDays = pageDays,
-                                            onEntryClick = { vm.select(it) }
+                                            onEntryClick = { vm.select(it) },
+                                            onStackClick = { stackPick = it }
                                         )
                                     }
                                 }

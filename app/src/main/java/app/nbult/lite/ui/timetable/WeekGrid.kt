@@ -149,7 +149,10 @@ object WeekGridMetrics {
 /** 课程块的预计算文案，避免绘制阶段重复格式化。 */
 private data class BlockVisual(
     val entry: TimetableEntry,
-    val weekLabel: String
+    val weekLabel: String,
+    /** 同一格里叠了几门课（1 = 普通，>1 时画层叠边与角标）。 */
+    val stackSize: Int = 1,
+    val stackEntries: List<TimetableEntry> = emptyList()
 )
 
 /** 取某节课的完整起止时间，如 08:00-09:35；缺作息时返回空串。 */
@@ -723,7 +726,9 @@ fun WeekBody(
     today: Long = 0L,
     /** 要渲染的星期，升序。没有周末课时就少两列，工作日能宽出 40%。 */
     visibleDays: List<Int> = listOf(1, 2, 3, 4, 5, 6, 7),
-    onEntryClick: (TimetableEntry) -> Unit = {}
+    onEntryClick: (TimetableEntry) -> Unit = {},
+    /** 点到叠放格：把整组交给上层弹选择器。 */
+    onStackClick: ((List<TimetableEntry>) -> Unit)? = null
 ) {
     val headerHeight = WeekGridMetrics.headerHeight
     // 页面底色全透之后，格子没有白底兜着，网格线是唯一的分隔 ——
@@ -732,9 +737,17 @@ fun WeekBody(
     val todayColor = MaterialTheme.colorScheme.primary
     val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
 
+    // 一格多课（调课允许共存后成为合法状态）在这里被分成叠放组：
+    // **不做数据迁移**，旧库里已经重叠的数据打开即按新规则渲染
     val blocks = remember(weekEntries) {
-        weekEntries.map { entry ->
-            BlockVisual(entry = entry, weekLabel = WeekMask.label(entry.slot.weekMask))
+        app.nbult.lite.domain.CourseStacking.groupsOf(weekEntries).map { group ->
+            val front = app.nbult.lite.domain.CourseStacking.frontOf(group)
+            BlockVisual(
+                entry = front,
+                weekLabel = WeekMask.label(front.slot.weekMask),
+                stackSize = group.size,
+                stackEntries = group
+            )
         }
     }
     val dayDates = remember(weekStartEpochDay, sundayFirst) {
@@ -823,7 +836,8 @@ fun WeekBody(
             metaSize = metaSize,
             visibleDays = visibleDays,
             nameLimit = nameLimit,
-            onEntryClick = onEntryClick
+            onEntryClick = onEntryClick,
+            onStackClick = onStackClick
         )
     }
 }
@@ -1117,14 +1131,28 @@ private fun BlockLayer(
     metaSize: TextUnit,
     visibleDays: List<Int>,
     nameLimit: Int,
-    onEntryClick: (TimetableEntry) -> Unit
+    onEntryClick: (TimetableEntry) -> Unit,
+    /** 点到叠放格时把整组交出去，由上层弹选择器。为空时退化成取最前一门。 */
+    onStackClick: ((List<TimetableEntry>) -> Unit)? = null
 ) {
     val editGesture by LocalAppContainer.current.settings.editGesture
         .collectAsStateWithLifecycle(initialValue = "tap")
     Layout(
         content = {
             blocks.forEach { block ->
-                CourseBlock(
+                // 叠放：在课程卡底层再画一层错位的圆角块，右上角标出门数。
+                // 只叠一次（哪怕 3 门）—— 叠太厚会吃掉可读宽度
+                androidx.compose.foundation.layout.Box {
+                    if (block.stackSize > 1) {
+                        val peek = MaterialTheme.colorScheme.surfaceVariant
+                        androidx.compose.foundation.layout.Box(
+                            Modifier
+                                .matchParentSize()
+                                .padding(top = 5.dp, end = 5.dp)
+                                .background(peek.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                        )
+                    }
+                    CourseBlock(
                     dense = dense,
                     weekNumber = weekNumber,
                     entry = block.entry,
@@ -1134,7 +1162,24 @@ private fun BlockLayer(
                     nameSize = nameSize,
                     metaSize = metaSize,
                             nameLimit = nameLimit
-                )
+                    )
+                    if (block.stackSize > 1) {
+                        androidx.compose.material3.Text(
+                            text = "${block.stackSize}",
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 2.dp, end = 3.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                                    RoundedCornerShape(6.dp)
+                                )
+                                .padding(horizontal = 3.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontSize = 9.sp,
+                            lineHeight = 11.sp
+                        )
+                    }
+                }
             }
         },
         modifier = Modifier
@@ -1155,7 +1200,13 @@ private fun BlockLayer(
                         b.entry.slot.dayOfWeek == day &&
                             section >= b.entry.slot.startSection &&
                             section <= b.entry.slot.endSection
-                    }?.let { onEntryClick(it.entry) }
+                    }?.let { b ->
+                        if (b.stackSize > 1 && onStackClick != null) {
+                            onStackClick(b.stackEntries)
+                        } else {
+                            onEntryClick(b.entry)
+                        }
+                    }
                 }
                 if (editGesture == "long_press") detectTapGestures(onLongPress = open)
                 else detectTapGestures(onTap = open)

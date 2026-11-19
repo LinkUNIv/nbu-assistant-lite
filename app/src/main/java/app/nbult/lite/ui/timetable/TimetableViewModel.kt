@@ -646,6 +646,17 @@ class TimetableViewModel(
         }
     }
 
+    /**
+     * 冲突时选「仍然调整」：两边都留着。
+     *
+     * 这是放开"一格一课"的核心：调课不再因为目标时段有课就被拦住，
+     * 落库后课表按叠放渲染（见 `CourseStacking`），提醒侧会合并成一条。
+     */
+    fun confirmMoveWithOverlap() {
+        val pending = _state.value.pendingMove ?: return
+        viewModelScope.launch { writeMove(pending) }
+    }
+
     /** 冲突时选「取消更改」：一个字都不写。 */
     fun cancelPendingMove() {
         _state.value = _state.value.copy(pendingMove = null, message = "已取消更改")

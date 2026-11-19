@@ -600,14 +600,18 @@ fun TimetableScreen(vm: TimetableViewModel) {
                         )
                     }
                     Text(
-                        text = "「替换原课程」会把这些课在目标周设为停课，再完成本次调课。",
+                        text = "「仍然调整」会两门都留着，课表里按叠放显示；" +
+                            "「替换原课程」则把这些课在目标周停掉。",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
             confirmButton = {
-                TextButton(onClick = { vm.confirmMoveWithReplace() }) { Text("替换原课程") }
+                Row {
+                    TextButton(onClick = { vm.confirmMoveWithReplace() }) { Text("替换原课程") }
+                    TextButton(onClick = { vm.confirmMoveWithOverlap() }) { Text("仍然调整") }
+                }
             },
             dismissButton = {
                 TextButton(onClick = { vm.cancelPendingMove() }) { Text("取消更改") }

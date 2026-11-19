@@ -453,7 +453,18 @@ fun TodayCard(
                     )
                     if (!expanded) {
                         Text(
-                            text = listOf(firstRange, first.displayName, first.room)
+                            text = listOf(
+                                firstRange,
+                                // 同刻多课时点明门数：折叠态只显示一门，不写清楚会以为课丢了
+                                first.displayName + run {
+                                    val n = entries.count {
+                                        it.isActive && it.slot.dayOfWeek == first.slot.dayOfWeek &&
+                                            it.slot.startSection == first.slot.startSection
+                                    }
+                                    if (n > 1) " 等 $n 门" else ""
+                                },
+                                first.room
+                            )
                                 .filter { it.isNotBlank() }
                                 .joinToString(" · "),
                             style = MaterialTheme.typography.labelSmall,

@@ -202,7 +202,14 @@ internal suspend fun loadState(context: Context): WidgetState {
                 week = ScheduleService.currentWeek(snapshot.term, app.nbult.lite.domain.DateUtil.epochDayOf(now) + if (plan.isTomorrow) 1 else 0),
                 startTime = start,
                 endTime = end,
-                courseName = stripCourseCode(entry.course.name),
+                courseName = stripCourseCode(entry.course.name) + run {
+                    // 同刻多课：组件里也要点明门数，否则看起来像只有一门
+                    val n = plan.entries.count {
+                        it.isActive && it.slot.dayOfWeek == entry.slot.dayOfWeek &&
+                            it.slot.startSection == entry.slot.startSection
+                    }
+                    if (n > 1) " 等 $n 门" else ""
+                },
                 room = entry.slot.room,
                 sections = if (entry.slot.startSection == entry.slot.endSection) {
                     "${entry.slot.startSection}"

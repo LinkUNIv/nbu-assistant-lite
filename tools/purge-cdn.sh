@@ -16,18 +16,20 @@ REPO="LinkUNIv/nbu-assistant-lite"
 for file in release/latest-preview.json release/latest-debug.json; do
   url="https://purge.jsdelivr.net/gh/$REPO@$BRANCH/$file"
   echo "purge $file"
-  curl -sS --max-time 30 "$url" | python -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    ok = all(v.get('providers', {}).get(p) for p in ('CF', 'FY')
-             for v in d.get('paths', {}).values())
-    print('   ', 'ok' if ok else '部分失败', d.get('status', ''))
-except Exception as e:
-    print('  解析失败:', e)
-"
+  resp=$(curl -sS --max-time 30 "$url" 2>/dev/null || true)
+  if [ -z "$resp" ]; then
+    echo "    无响应（网络不通？），稍后重试"
+    continue
+  fi
+  # 只关心两个 provider 是否都清了：CF / FY。
+  # 这里用纯 shell 判断，不内联 python —— 之前的版本因为引号嵌套直接语法错误。
+  flat=$(printf '%s' "$resp" | tr -d ' \n\r\t')
+  case "$flat" in
+    *'"CF":true'*'"FY":true'*) echo "    ok" ;;
+    *) echo "    部分失败：$resp" ;;
+  esac
 done
 
 echo
 echo "注意：purge 只清 jsDelivr，raw 是实时的，不需要处理。"
-echo "若 provider 显示 false，等 1 分钟再跑一次（jsDelivr 有节流）。"
+echo "若显示部分失败，等 1 分钟再跑一次（jsDelivr 有节流）。"

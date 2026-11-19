@@ -65,6 +65,10 @@
 ./gradlew :app:assembleRelease   # 正式包，必须配置固定签名
 ```
 
+**测试也要在 ASCII 路径跑**：含中文的项目路径下 `:app:testPreviewUnitTest` 会全部报
+`java.lang.ClassNotFoundException`（classpath 里的中文把类加载搞坏），而 `assemblePreview`
+不受影响。所以单测请在 `/c/tmp/…` 这类纯 ASCII 目录跑，或用 CI。
+
 **路径要求**：`gradle.properties` 里有 `android.overridePathCheck=true`，用于在含非 ASCII 字符的路径下构建
 （AGP 默认拒绝）。更稳的做法仍是把项目放在纯 ASCII 路径下。
 

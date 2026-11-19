@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.nbult.lite.data.pack.Announcement
+import app.nbult.lite.util.AppLog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -45,9 +46,14 @@ fun AnnouncementSheet(
     onSeen: (Collection<String>) -> Unit
 ) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-    // 打开即视为已读（置顶项不参与未读计数）
+    // 打开即视为已读（置顶项不参与未读计数）；顺便记一行曝光日志 ——
+    // 没有后端，日志是唯一能回答「这条公告到底有没有人看到」的东西
     LaunchedEffect(items) {
-        val fresh = items.filter { !it.pinned }.map { it.id }
+        AppLog.log(
+            "Announce",
+            "看到 ${items.size} 条（未读 ${items.count { !it.pinned }}，置顶 ${items.count { it.pinned }}）"
+        )
+        val fresh = items.filter { !it.pinned }.map { it.seenKey }
         if (fresh.isNotEmpty()) onSeen(fresh)
     }
 
@@ -78,10 +84,10 @@ fun AnnouncementSheet(
 @Composable
 private fun AnnouncementItem(item: Announcement) {
     val colors = MaterialTheme.colorScheme
-    val accent = when (item.level) {
-        Announcement.Level.CRITICAL -> colors.error
-        Announcement.Level.IMPORTANT -> colors.primary
-        Announcement.Level.INFO -> colors.onSurfaceVariant
+    val accent = when (item.severity) {
+        Announcement.Severity.BLOCKING -> colors.error
+        Announcement.Severity.BANNER -> colors.primary
+        Announcement.Severity.SILENT -> colors.onSurfaceVariant
     }
     Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {

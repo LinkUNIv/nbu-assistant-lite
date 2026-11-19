@@ -483,8 +483,20 @@ fun AppRoot() {
             }.getOrDefault(emptyList())
         }
         val announcementSeen by container.settings.announcementSeen.collectAsStateWithLifecycle(emptySet())
-        val hasUnreadAnnouncements = announcements.any { !it.pinned && it.id !in announcementSeen }
+        // 只把「横幅/阻断」这两档算作未读；silent 只进列表，不亮红点
+        val unreadAnnouncements = announcements.filter {
+            !it.pinned && it.severity != app.nbult.lite.data.pack.Announcement.Severity.SILENT &&
+                it.seenKey !in announcementSeen
+        }
+        val hasUnreadAnnouncements = unreadAnnouncements.isNotEmpty()
         var announcementSheetOpen by remember { mutableStateOf(false) }
+        // blocking：启动后自动展开一次（行业里对应 Play 的「立即更新」那一档），
+        // 只展开、不阻断操作，用户关掉就能继续用
+        LaunchedEffect(unreadAnnouncements.map { it.seenKey }) {
+            if (unreadAnnouncements.any { it.severity == app.nbult.lite.data.pack.Announcement.Severity.BLOCKING }) {
+                announcementSheetOpen = true
+            }
+        }
 
         if (announcementSheetOpen) {
             app.nbult.lite.ui.announce.AnnouncementSheet(

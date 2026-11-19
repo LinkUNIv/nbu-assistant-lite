@@ -14,7 +14,10 @@ data class Announcement(
     val id: String,
     /** 置顶项：常驻列表首位，不可关闭，不计入未读红点。 */
     val pinned: Boolean,
-    val level: Level,
+    /** 交互强度：沉默（只进列表）/ 横幅（亮红点）/ 阻断（启动时自动展开一次）。 */
+    val severity: Severity,
+    /** 内容修订号。同一条公告改了正文就 +1，已读按 `id@revision` 记，老用户会重新看到。 */
+    val revision: Int,
     val title: String,
     val body: String,
     val link: String?,
@@ -23,7 +26,10 @@ data class Announcement(
     val minApp: Int,
     val maxApp: Int
 ) {
-    enum class Level { INFO, IMPORTANT, CRITICAL }
+    enum class Severity { SILENT, BANNER, BLOCKING }
+
+    /** 已读的键：公告改了正文（revision 变）就该重新看到。 */
+    val seenKey: String get() = "$id@$revision"
 
     companion object {
         /** 正文上限：超长直接判该条无效，避免塞满屏幕做钓鱼。 */
@@ -70,7 +76,11 @@ object Announcements {
         }
         // 同一 id 只保留第一条，防止包内重复导致红点永远消不掉
         return out.distinctBy { it.id }
-            .sortedWith(compareByDescending<Announcement> { it.pinned }.thenByDescending { it.level.ordinal })
+            .sortedWith(
+                compareByDescending<Announcement> { it.pinned }
+                    .thenByDescending { it.severity.ordinal }
+                    .thenByDescending { it.since }
+            )
     }
 
     private fun parseOne(o: JSONObject, appVersionCode: Int, now: Long): Announcement? {
@@ -105,16 +115,24 @@ object Announcements {
             }
         }
 
-        val level = when (o.optString("level").lowercase()) {
-            "critical" -> Announcement.Level.CRITICAL
-            "important" -> Announcement.Level.IMPORTANT
-            else -> Announcement.Level.INFO
+        // 旧包可能还在用 level（只影响配色）：按语义映射过来，避免升级后公告集体失效
+        val severity = when (o.optString("severity").lowercase()) {
+            "silent" -> Announcement.Severity.SILENT
+            "blocking" -> Announcement.Severity.BLOCKING
+            "banner" -> Announcement.Severity.BANNER
+            else -> when (o.optString("level").lowercase()) {
+                "critical" -> Announcement.Severity.BLOCKING
+                "important" -> Announcement.Severity.BANNER
+                else -> Announcement.Severity.SILENT
+            }
         }
+        val revision = o.optInt("revision", 1).coerceAtLeast(1)
 
         return Announcement(
             id = id,
             pinned = o.optBoolean("pinned", false),
-            level = level,
+            severity = severity,
+            revision = revision,
             title = title,
             body = body,
             link = link,

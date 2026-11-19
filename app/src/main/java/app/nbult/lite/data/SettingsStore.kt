@@ -51,6 +51,9 @@ class SettingsStore(private val context: Context) {
     private val keyUpdatePopup = booleanPreferencesKey("update_popup_enabled")
     // 资源包：用户已确认看到的版本 / 发现但还没生效的版本
     private val keyPackAck = longPreferencesKey("pack_ack_version")
+    /** 已读公告 id 集合。按 id 记，包升版但 id 不变时不重复提醒。 */
+    private val keyAnnouncementSeen =
+        androidx.datastore.preferences.core.stringSetPreferencesKey("announcement_seen")
     private val keyPackPending = longPreferencesKey("pack_pending_version")
 
     val lastNewsRefresh: Flow<Long> =
@@ -252,6 +255,22 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit {
             it.remove(keyPendingAppCode)
             it.remove(keyPendingAppNotes)
+        }
+    }
+
+    val announcementSeen: Flow<Set<String>> =
+        context.settingsDataStore.data.map { it[keyAnnouncementSeen] ?: emptySet() }
+
+    suspend fun markAnnouncementsSeen(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        context.settingsDataStore.edit { prefs ->
+            val merged = (prefs[keyAnnouncementSeen] ?: emptySet()) + ids
+            // 只保留最近 200 个，避免无限增长
+            prefs[keyAnnouncementSeen] = if (merged.size > 200) {
+                merged.toList().takeLast(200).toSet()
+            } else {
+                merged
+            }
         }
     }
 

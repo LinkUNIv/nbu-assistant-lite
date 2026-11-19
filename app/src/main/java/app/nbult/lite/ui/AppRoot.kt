@@ -469,6 +469,29 @@ fun AppRoot() {
                 WindowInsets.mandatorySystemGestures.getBottom(this)
             ).toDp()
         }
+        // 公告：读资源包里的 announcements.json。包换版本会重组，所以按 revisions 重新读
+        val packRevisions by app.nbult.lite.data.pack.ResourcePackStore.revisions.collectAsStateWithLifecycle()
+        var announcements by remember { mutableStateOf<List<app.nbult.lite.data.pack.Announcement>>(emptyList()) }
+        LaunchedEffect(packRevisions) {
+            announcements = runCatching {
+                app.nbult.lite.data.pack.Announcements.load(
+                    context,
+                    app.nbult.lite.BuildConfig.VERSION_CODE
+                )
+            }.getOrDefault(emptyList())
+        }
+        val announcementSeen by container.settings.announcementSeen.collectAsStateWithLifecycle(emptySet())
+        val hasUnreadAnnouncements = announcements.any { !it.pinned && it.id !in announcementSeen }
+        var announcementSheetOpen by remember { mutableStateOf(false) }
+
+        if (announcementSheetOpen) {
+            app.nbult.lite.ui.announce.AnnouncementSheet(
+                items = announcements,
+                onDismiss = { announcementSheetOpen = false },
+                onSeen = { ids -> railScope.launch { container.settings.markAnnouncementsSeen(ids) } }
+            )
+        }
+
         SideRail(
             tabs = tabs,
             currentRoute = currentRoute,
@@ -485,6 +508,9 @@ fun AppRoot() {
             // 两条都要满足：导入过课表，且该校有签到系统（湘潭的规则里 attendance=false）
             showAttendance = timetableState.entries.isNotEmpty() &&
                 (container.schoolRules?.capabilities?.attendance != false),
+            showAnnouncements = true,
+            hasUnreadAnnouncements = hasUnreadAnnouncements,
+            onOpenAnnouncements = { announcementSheetOpen = true },
             // 长按圆钮直进外观页
             onOpenAppearance = { navController.navigateOnce("settings/appearance") },
             onSelect = { route ->

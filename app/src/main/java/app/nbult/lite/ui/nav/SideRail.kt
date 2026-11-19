@@ -95,6 +95,10 @@ fun SideRail(
     modifier: Modifier = Modifier,
     /** 是否显示点名入口。没有课表、或该校没有签到系统时传 false。 */
     showAttendance: Boolean = true,
+    /** 公告入口：常驻（置顶的使用说明永远有内容），有未读时带红点。 */
+    showAnnouncements: Boolean = true,
+    hasUnreadAnnouncements: Boolean = false,
+    onOpenAnnouncements: () -> Unit = {},
 ) {
     if (!visible || tabs.isEmpty()) return
 
@@ -128,6 +132,29 @@ fun SideRail(
             Spacer(Modifier.height(RailMetrics.ToggleToProgress))
             ProgressCapsule(progress)
             Spacer(Modifier.height(8.dp))
+            // 公告：常驻入口，与点名同款面板。置顶项（使用说明）永远有内容，
+            // 所以不按"有没有未读"决定是否显示 —— 那会让按钮忽隐忽现
+            if (showAnnouncements) {
+                Box(
+                    Modifier.width(RailMetrics.Width).height(48.dp)
+                        .acrylicPanel(RoundedCornerShape(24.dp))
+                        .clickable(onClickLabel = "公告") { onOpenAnnouncements() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    androidx.compose.material3.Text("公告", color = MaterialTheme.colorScheme.primary)
+                    if (hasUnreadAnnouncements) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 6.dp, end = 6.dp)
+                                .size(7.dp)
+                                .background(MaterialTheme.colorScheme.error, RoundedCornerShape(4.dp))
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+
             // 没有课表、或该校没有签到系统时整块不出现 —— 入口摆在那里却打不开，
             // 比没有入口更让人困惑
             if (showAttendance) {

@@ -46,6 +46,7 @@
 | 启动 +12 s | 资源包检查（下载 → 校验 → 落盘） | 1 小时 |
 | 课表写入 | 800 ms 去抖后刷新两个桌面组件；按课程重排提醒闹钟 | — |
 | 回前台 | 复查更新（`RESUMED`，首次跳过） | 6 小时 |
+| 资源包版本变化 | 重读 `announcements.json`（不缓存，包换版即重算） | — |
 
 三条由此产生的可感知行为：
 
@@ -85,26 +86,28 @@
 | 学校清单 `schools/index.json` | **资源包（2026-11-14 起）** | 否 | 同上 |
 | 官方校历原图地址（`calendar.officialImages`） | 资源包 | 否 | `ui/calendar/OfficialCalendarCard.kt` |
 | 楼栋推迟上课（`rules.lateStart`） | 资源包 | 否 | `domain/LateStartPolicy.kt` |
+| 公告（`announcements.json`） | 资源包 | 否 | `data/pack/Announcements.kt` → 侧栏「公告」 |
 | 解析算法、界面、动效、注入脚本、CHANGELOG | APK | **是** | — |
 
 读取顺序固定：**先查已落地的包，没有再读 assets**（`ResourcePackStore.readText`）。
 包内的算法与代码一律不生效——远程能改的只有参数与数据。
 
-### 5.1 内容分发原则（2026-11-14 定）
+### 5.1 内容分发原则（2026-11-14 定，**0.38.7 起已全部达成**）
 
-> **新增学校、新增入口、校历/作息更新、栏目调整，一律只发资源包，APK 不动。**
+> **新增学校、新增入口、校历/作息更新、栏目调整、发通知，一律只发资源包，APK 不动。**
 
-要做到这条，必须同时满足下面五条，缺一条就会变成「改了也得发版」：
+要做到这条必须同时满足五条，逐条现状：
 
-1. **读取层**：所有会被新增 / 修改的数据文件，读取处必须走 `ResourcePackStore.readText`，
-   不允许 `context.assets.open` 直读（`schools/index.json` 目前就是直读，必须改）。
-2. **发布层**：`tools/publish-pack.sh` 的清单要覆盖 `schools/`、`calendar/`、`portal/`、`news/`
-   的整棵数据目录，而不是现在的三个宁大文件。
-3. **守卫层**：`PackGuards` 的路径判断改后缀匹配（现在只认字面路径，`schools/<id>/news.json`
-   会直接跳过校验），host 判断改后缀匹配（现在精确比较，`jwc.xtu.edu.cn` 会被判新域名）。
-4. **兼容层**：新增字段一律可选，缺省值等于旧行为；旧版 App 读到读不懂的结构要整包跳过
-   （`minAppVersion`），而不是半套生效。
-5. **回滚层**：包坏了退回 assets 内置，且 `failedVersion` 拉黑该版本——不能出现「装不上也退不回」。
+| # | 要求 | 现状 |
+|---|---|---|
+| 1 | 读取层走 `ResourcePackStore.readText`，不许 `assets.open` 直读 | ✅ `SchoolCatalog`、`PortalCatalog`、`CalendarRepository`、`NewsSources` 全部走 store（`PackGuards` 里读内置清单用于**校验**，属例外） |
+| 2 | `publish-pack.sh` 覆盖整棵数据目录 | ✅ 用 `find . -type f` 打全量清单 |
+| 3 | 守卫按**后缀**匹配路径与域名 | ✅ `PackGuards.validateByPath` 全部 `endsWith`，`schools/<id>/news.json` 不再漏检 |
+| 4 | 新字段一律可选、缺省等于旧行为；读不懂的结构整包跳过 | ✅ `minAppVersion` + 规则字段全部带默认值 |
+| 5 | 包坏了退回内置，且拉黑该版本 | ✅ `failedVersion` + 24 小时重试窗口 |
+
+**一条例外值得记**：公告（`announcements.json`）走的是**逐条丢弃**而不是整包原子——
+公告是附加信息，一条写错不该把校历作息一起拒掉。这是全局唯一允许部分失效的数据类型。
 
 ### 5.2 信任边界
 
@@ -118,16 +121,22 @@
 
 ---
 
-## 6. 现存的四处名不副实
+## 6. 曾经的名不副实（均已修，留档防回退）
 
-细节与验收写进 `PENDING.md`「资源包作为内容分发通道」一节：
+0.38.7 之前，下面四条让"只发包不发版"实际上做不到。现在都已解决，**不要回退**：
 
-1. 入口页不按学校分流（`PortalCatalog.load` 写死 `portal/entries.json`，湘潭用户看到宁大 9 条）。
-2. 发布脚本不含 `schools/`，多校文件「能读、发不出」。
-3. 守卫按字面路径挂、host 精确匹配，开放 `schools/` 前必须先修，否则等于开后门。
-4. `schools/index.json` 直读 assets → 新学校必须发版（与 5.1 的方向冲突）。
+| # | 当时的问题 | 现状 |
+|---|---|---|
+| 1 | 入口页写死 `portal/entries.json`，湘潭用户看到宁大 9 条 | ✅ 路径由学校规则决定（`PortalScreen.DEFAULT_PATH` 只作回落） |
+| 2 | 发布脚本不含 `schools/`，多校文件"能读、发不出" | ✅ `find` 打全量 |
+| 3 | 守卫按字面路径挂、host 精确匹配 | ✅ 全部后缀匹配 |
+| 4 | `schools/index.json` 直读 assets，新学校必须发版 | ✅ 走 `ResourcePackStore`（`SchoolCatalog` 的注释还写着 assets，属文案滞后） |
 
----
+## 6.1 真正的边界（记住这条比记 bug 清单有用）
+
+**远程能改的只有参数与数据，改不了算法。** 遇到"这个能不能发包解决"，先问三句：
+有文本层吗？结构与已有学校同族吗？写法在 `weekSyntax` 与正则能力内吗？
+三句都"是"→ 只发包；任一"否"→ 需要发版加能力（参见 `PENDING.md` 第六节的 `parserVersion`）。
 
 ## 7. 读代码的入口
 

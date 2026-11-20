@@ -1,12 +1,12 @@
 {
-  "versionCode": 3820,
-  "versionName": "0.38.20",
+  "versionCode": 3821,
+  "versionName": "0.38.21",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.20-Preview/nbu-assistant-lite-0.38.20-Preview.apk",
-  "sha256": "2d6e507875aaa06f2aae5b5d57af4e0e3817ac1f410ccdbfeeb46f11320ebc5e",
-  "size": 26525157,
-  "notes": "**新增侧栏公告入口；课表支持同一时段多门课**\n\n- 侧栏常驻「公告」功能。\n- 公告随资源包下发，支持不同提醒样式，提高维护效率。\n- 同一时段有多门课时，可以支持叠放，不出现重叠后只能选择一门课程的 bug。\n- 接上条，调课遇到冲突可以继续调整。\n- 接上条，提醒、小组件、今日日程课程描述对重叠课程的相关优化。",
-  "generatedAt": 1795098212857,
-  "tag": "v0.38.20-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.21-Preview/nbu-assistant-lite-0.38.21-Preview.apk",
+  "sha256": "aa3871d752fbb242ce5ae536587477b696ac5033527140e62a6a5e4e98876de3",
+  "size": 26525201,
+  "notes": "**优化 PDF 导入体验**\n\n- 优化 PDF 导入中函数调用失效的问题。",
+  "generatedAt": 1795156772553,
+  "tag": "v0.38.21-Preview"
 }

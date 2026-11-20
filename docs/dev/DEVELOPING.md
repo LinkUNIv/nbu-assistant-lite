@@ -404,7 +404,8 @@ app/src/main/assets/
 ## 相关文档
 
 - [`../../CHANGELOG.md`](../../CHANGELOG.md) — 逐版本变更
-- [`NOTES.md`](NOTES.md) — 早期开发笔记（**含已被推翻的设计，请对照 README 的已知限制阅读**）
+- [`NOTES.md`](NOTES.md) — 设计取舍与踩坑（**只写「为什么」，操作步骤看本文**）；
+  已被推翻的做法统一记在第七节，别照旧笔记开发
 - [`PENDING.md`](PENDING.md) — 路线图与未排期事项
 - [`ATTENDANCE_BROWSER.md`](ATTENDANCE_BROWSER.md) — 考勤页内置浏览器与签到识别的实现边界
 - [`WEBVIEW.md`](WEBVIEW.md) — WebView 内嵌校园页面的参考实现分析与取舍

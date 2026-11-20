@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.11.20",
+  "version": "2026.11.15",
   "schools": [
     {
       "id": "nbu",
@@ -19,12 +19,6 @@
       "name": "长沙民政职业技术学院",
       "builtin": false,
       "rules": "schools/csmy/rules.json"
-    },
-    {
-      "id": "scmzu",
-      "name": "中南民族大学",
-      "builtin": false,
-      "rules": "schools/scmzu/rules.json"
     }
   ]
 }

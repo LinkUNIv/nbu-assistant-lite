@@ -59,7 +59,7 @@
       "rowGapPt": 13.5,
       "headerPerPage": false,
       "namePrefixMerge": true,
-      "cellRegex": "^(?<name>[^\\[]+?)\\s*\\[(?<code>[^\\]]*)\\]\\s*(?<weeks>\\d[\\d,\\-]*\\s*周(?:\\s*[（(]\\s*[单双]\\s*[)）])?)\\s*[（(]\\s*第?\\s*(?<s1>\\d+)\\s*[-—~]\\s*(?<s2>\\d+)\\s*节\\s*[)）]\\s*(?<teacher>[^\\d]*?)\\s*(?<room>.+)$",
+      "cellRegex": "^(?<name>[^\\[]+?)\\s*\\[(?<code>[^\\]]*)\\]\\s*(?<weeks>\\d[\\d,\\-]*\\s*周(?:\\s*[（(]\\s*[单双]\\s*[)）])?)\\s*[（(]\\s*第?\\s*(?<s1>\\d+)\\s*[-—~]\\s*(?<s2>\\d+)\\s*节\\s*[)）]\\s*(?<teacher>[^\\d]*)\\s*(?<room>.+)$",
       "noiseDrop": [
         "节次",
         "课程名称",
@@ -67,7 +67,8 @@
         "备注",
         "上课老师",
         "同学课表"
-      ]
+      ],
+      "multiCourse": true
     }
   },
   "capabilities": {

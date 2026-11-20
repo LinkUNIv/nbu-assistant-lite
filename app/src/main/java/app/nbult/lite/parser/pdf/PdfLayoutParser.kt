@@ -148,15 +148,57 @@ internal object PdfLayoutParser {
     private fun toSlots(cellText: String, dayOfWeek: Int, params: PdfTableParams): List<ParsedSlot> {
         val regex = params.cellRegex?.let { runCatching { Regex(it, RegexOption.DOT_MATCHES_ALL) }.getOrNull() }
             ?: return emptyList()
-        // 有切分规则时先把"一串多课"掰开，否则 room 会把下一门课的课名吃进去
-        val chunks = params.cellSplit
-            ?.let { runCatching { Regex(it) }.getOrNull() }
-            ?.let { split -> cellText.split(split).filter { it.isNotBlank() } }
-            ?: listOf(cellText)
-        return chunks.flatMap { chunk ->
-            regex.findAll(chunk).mapNotNull { m -> toSlot(m, cellText, dayOfWeek, params) }.toList()
+        val chunks = if (params.multiCourse) splitByCourseAnchors(cellText) else listOf(cellText)
+        return chunks.mapNotNull { chunk ->
+            regex.find(chunk)?.let { m -> toSlot(m, chunk, dayOfWeek, params) }
         }
     }
+
+    /**
+     * 把「一格多课」的长文本切成每门课一段。
+     *
+     * 文本长这样（无分隔符）：
+     * `法律逻辑学[01]4-19周(第1-2节)教师01 15号楼15609 人工智能…[02]3-18周(双)(第5-6节)教师02 16号楼…`
+     *
+     * 每门课**只有一个**「(n-m 节)」标记，夹在课名之后、教师之前。所以：
+     * ① 找出所有节次标记；
+     * ② 每个标记向前回溯：最近的 `[课号]`，再往前一段中文 → 就是这门课的起点；
+     * ③ 第 i 段 = [起点_i, 起点_{i+1})，最后一段到结尾。
+     *
+     * 这样不依赖分隔符，也不怕地点是中文（「模拟法庭」）。
+     */
+    private fun splitByCourseAnchors(cellText: String): List<String> {
+        val markers = SECTION_MARKER.findAll(cellText).toList()
+        if (markers.size <= 1) return listOf(cellText)
+
+        val starts = markers.mapNotNull { m -> courseStartBefore(cellText, m.range.first) }
+        if (starts.size != markers.size) return listOf(cellText)   // 回溯失败就退回老路径
+
+        return starts.mapIndexed { i, start ->
+            val end = starts.getOrNull(i + 1) ?: cellText.length
+            cellText.substring(start, end).trim()
+        }.filter { it.isNotBlank() }
+    }
+
+    /** 从节次标记往前找「课名 + [课号]」的起点；找不到返回 null。 */
+    private fun courseStartBefore(text: String, markerStart: Int): Int? {
+        val head = text.substring(0, markerStart)
+        val code = CODE_TAIL.findAll(head).lastOrNull() ?: return null
+        // 从 [课号] 往前吃，直到撞上数字或 ASCII 字母（那是上一门的教室/房间号）。
+        // 括号必须算名字的一部分：「人工智能与计算思维(实验)」里 ')' 紧挨着 [课号]，
+        // 把它当阻断字符会让回溯失败，整格退回单门解析 —— 第二门课就此消失。
+        var i = code.range.first
+        while (i > 0) {
+            val c = text[i - 1]
+            if (c.isDigit() || c in 'a'..'z' || c in 'A'..'Z') break
+            i--
+        }
+        while (i < code.range.first && text[i].isWhitespace()) i++
+        return if (i < code.range.first) i else null
+    }
+
+    /** 文本里所有「[课号]」的位置，用来回溯课程起点。 */
+    private val CODE_TAIL = Regex("\\[[^\\]]{0,12}\\]")
 
     private fun toSlot(
         m: MatchResult,

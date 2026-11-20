@@ -21,12 +21,12 @@ internal data class PdfTableParams(
     /** 单元格文本的模板正则（含命名分组）。为空则无法解析单元格内容。 */
     val cellRegex: String? = null,
     /**
-     * 一格多课时的切分正则（可选）。
+     * 一格多课：按「(n-m 节)」锚点把一串文本切成多门课。
      *
-     * 拼出来的单元格文本没有分隔符，两门课会连成一串；先用它切块，再逐块套 [cellRegex]。
-     * 中南民大：`(?=[\u4e00-\u9fa5（(].{0,30}?\s*\[)` —— 在"课程名 + [课号]"前断开。
+     * 不能用正则预查切分 —— 拼出来的文本没有分隔符，预查会在每个中文字符处命中
+     * （实测把「法律逻辑学」切成「学」）。这里改为按锚点位置切。
      */
-    val cellSplit: String? = null,
+    val multiCourse: Boolean = false,
     /** 噪声行：整段等于这些词就丢掉（学时统计之类）。 */
     val noiseDrop: List<String> = emptyList(),
     /** 周次写法，来自学校规则。换一种写法只改 JSON。 */

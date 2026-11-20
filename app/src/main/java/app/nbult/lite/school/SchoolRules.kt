@@ -191,7 +191,7 @@ internal data class SchoolRules(
                     // 这两个开关以前只写在 data class 上、**没有从 JSON 读**：
                     // csmy 的 rules.json 明明写了 namePrefixMerge=true，实际一直按 false 跑
                     namePrefixMerge = it.optBoolean("namePrefixMerge", false),
-                    cellSplit = it.optString("cellSplit").takeIf { v -> v.isNotBlank() }
+                    multiCourse = it.optBoolean("multiCourse", false)
                 )
             }
             return SchoolImporter(
@@ -275,8 +275,8 @@ internal data class PdfImportParams(
     val noiseDrop: List<String> = emptyList(),
     /** 课程名跨行时并回（民政需要，湘潭不需要）。 */
     val namePrefixMerge: Boolean = false,
-    /** 一格多课时的切分正则（中南民大需要：同格排着单周与双周两门）。 */
-    val cellSplit: String? = null
+    /** 一格多课（中南民大：同格排着单周与双周两门）。开着才按节次锚点切分。 */
+    val multiCourse: Boolean = false
 )
 
 /** 模块开关。关掉的模块在界面上不出现，路由也拦住。 */

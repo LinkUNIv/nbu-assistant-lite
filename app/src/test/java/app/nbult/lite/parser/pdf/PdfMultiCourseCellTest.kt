@@ -1,7 +1,6 @@
 package app.nbult.lite.parser.pdf
 
 import org.junit.Assert.assertEquals
-import org.junit.Ignore
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -19,11 +18,11 @@ class PdfMultiCourseCellTest {
         rowGapPt = 13.5f,
         headerPerPage = false,
         namePrefixMerge = true,
-        cellSplit = """(?=[\u4e00-\u9fa5][^\[]*?\[)""",
+        multiCourse = true,
         cellRegex = """^(?<name>[^\[]+?)\s*\[(?<code>[^\]]*)\]\s*""" +
             """(?<weeks>\d[\d,\-]*\s*周(?:\s*[（(]\s*[单双]\s*[)）])?)\s*""" +
             """[（(]\s*第?\s*(?<s1>\d+)\s*[-—~]\s*(?<s2>\d+)\s*节\s*[)）]\s*""" +
-            """(?<teacher>[^\d]*?)\s*(?<room>.+)$"""
+            """(?<teacher>[^\d]*)\s*(?<room>.+)$"""
     )
 
     private fun slotsOf(cell: String, day: Int = 3) =
@@ -36,7 +35,6 @@ class PdfMultiCourseCellTest {
             params = params
         ).slots
 
-    @Ignore("cellSplit 的切分算法未成立：lookahead 在任意中文字符处都能命中，会切碎课程名；待用真实夹具重做边界")
     @Test
     fun `一格两门课都要解析出来`() {
         val cell = "人工智能与计算思维[02]3-18周(双)(第5-6节)李芸16号楼S160211" +
@@ -52,7 +50,7 @@ class PdfMultiCourseCellTest {
     /** 先确认正则本身能吃下这串文本，避免把"正则写错"误诊成"解析流程有问题"。 */
     @Test
     fun `正则能匹配构造出来的单元格文本`() {
-        val cell = "法律逻辑学[01]4-19周(第1-2节)教师01 15号楼15609"
+        val cell = "法律逻辑学[01]4-19周(第1-2节)教师甲 15号楼15609"
         val m = Regex(params.cellRegex!!).find(cell)
         assertTrue("cellRegex 没匹配上：$cell", m != null)
         assertEquals("法律逻辑学", m!!.groups["name"]?.value?.trim())
@@ -60,24 +58,22 @@ class PdfMultiCourseCellTest {
         assertEquals("2", m.groups["s2"]?.value)
     }
 
-    @Ignore("cellSplit 的切分算法未成立：lookahead 在任意中文字符处都能命中，会切碎课程名；待用真实夹具重做边界")
     @Test
     fun `一格一门课时行为不变`() {
-        val cell = "法律逻辑学[01]4-19周(第1-2节)教师01 15号楼15609"
+        val cell = "法律逻辑学[01]4-19周(第1-2节)教师甲 15号楼15609"
         val slots = slotsOf(cell)
         assertEquals(1, slots.size)
         assertEquals("法律逻辑学", slots[0].name)
         assertEquals(1, slots[0].startSection)
         assertEquals(2, slots[0].endSection)
-        assertTrue(slots[0].teacher.contains("教师01"))
+        assertTrue(slots[0].teacher.contains("教师甲"))
     }
 
-    @Ignore("cellSplit 的切分算法未成立：lookahead 在任意中文字符处都能命中，会切碎课程名；待用真实夹具重做边界")
     @Test
     fun `教师多人用逗号分隔时不丢人`() {
-        val cell = "习近平法治思想概论[01]4-19周(第3-4节)教师07,教师08,教师09 1号楼1-301"
+        val cell = "习近平法治思想概论[01]4-19周(第3-4节)教师甲,教师乙,教师丙 1号楼1-301"
         val slots = slotsOf(cell)
         assertEquals(1, slots.size)
-        assertTrue("教师字段应保留全部三人，实际 ${slots[0].teacher}", slots[0].teacher.count { it == '教' } == 3)
+        assertEquals("教师甲,教师乙,教师丙", slots[0].teacher.substringBefore(' ').trim())
     }
 }

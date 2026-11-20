@@ -59,7 +59,7 @@ internal object PdfLayoutParser {
                 // 前面那些不含节次的块是**这门课名字的前半截**，并进来再解析。
                 if (!params.namePrefixMerge) {
                     clusterRows(columnItems, params.rowGapPt).forEach { block ->
-                        toSlot(block.text, column + 1, params)?.let { cells.add(it) }
+                        cells.addAll(toSlots(block.text, column + 1, params))
                     }
                     return@forEach
                 }
@@ -85,7 +85,7 @@ internal object PdfLayoutParser {
                         parts.forEach { append(it) }
                         append(blocks[i].text)
                     }
-                    toSlot(text, column + 1, params)?.let { cells.add(it) }
+                    cells.addAll(toSlots(text, column + 1, params))
                     i++
                 }
             }
@@ -95,7 +95,13 @@ internal object PdfLayoutParser {
         return ParseResult(ParseSource.PDF_TABLE, cells, warnings)
     }
 
-    private val SECTION_MARKER = Regex("\\(\\s*\\d+\\s*(?:[-—~]\\s*\\d+\\s*)?节\\s*\\)")
+    /**
+     * 「(1-2节)」与「(第 1-2 节)」都算节次标记。
+     *
+     * 湘潭写前者、中南民大写后者；只认一种会导致整份课表**一个格子都取不到**，
+     * 而且日志里只看到"未识别的表格结构"，很难指向这一行。
+     */
+    private val SECTION_MARKER = Regex("\\(\\s*(?:第)?\\s*\\d+\\s*(?:[-—~]\\s*\\d+\\s*)?节\\s*\\)")
 
     /** 这一块里有没有「(1-2节)」这种节次标记 —— 有它才是格子的起点。 */
     private fun hasSectionMarker(text: String): Boolean =
@@ -132,10 +138,32 @@ internal object PdfLayoutParser {
     /** 一「块」：同一格子内被 y 聚类到一起的若干行。 */
     private data class RowBlock(val y: Float, val text: String)
 
-    private fun toSlot(cellText: String, dayOfWeek: Int, params: PdfTableParams): ParsedSlot? {
+    /**
+     * 一格可能有多门课。
+     *
+     * 中南民大的打印页里，周三 5-6 节同时排着「3-18 周(双)」与「5-20 周(单)」两门，
+     * 用 `find` 只会取到第一门，第二门静默消失 —— 用户不会知道课表少了一节课。
+     * 所以这里改成遍历**全部**匹配；对只有一门课的模板，行为与之前完全一致。
+     */
+    private fun toSlots(cellText: String, dayOfWeek: Int, params: PdfTableParams): List<ParsedSlot> {
         val regex = params.cellRegex?.let { runCatching { Regex(it, RegexOption.DOT_MATCHES_ALL) }.getOrNull() }
-            ?: return null
-        val m = regex.find(cellText) ?: return null
+            ?: return emptyList()
+        // 有切分规则时先把"一串多课"掰开，否则 room 会把下一门课的课名吃进去
+        val chunks = params.cellSplit
+            ?.let { runCatching { Regex(it) }.getOrNull() }
+            ?.let { split -> cellText.split(split).filter { it.isNotBlank() } }
+            ?: listOf(cellText)
+        return chunks.flatMap { chunk ->
+            regex.findAll(chunk).mapNotNull { m -> toSlot(m, cellText, dayOfWeek, params) }.toList()
+        }
+    }
+
+    private fun toSlot(
+        m: MatchResult,
+        cellText: String,
+        dayOfWeek: Int,
+        params: PdfTableParams
+    ): ParsedSlot? {
         val name = m.groups["name"]?.value?.trim().orEmpty()
         val start = m.groups["s1"]?.value?.toIntOrNull()
         val end = m.groups["s2"]?.value?.toIntOrNull()

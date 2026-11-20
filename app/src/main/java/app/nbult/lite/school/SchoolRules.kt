@@ -187,7 +187,11 @@ internal data class SchoolRules(
                     rowGapPt = it.optDouble("rowGapPt", 14.0).toFloat(),
                     headerPerPage = it.optBoolean("headerPerPage", true),
                     cellRegex = it.optString("cellRegex").takeIf { s -> s.isNotBlank() },
-                    noiseDrop = it.optJSONArray("noiseDrop").toStringList()
+                    noiseDrop = it.optJSONArray("noiseDrop").toStringList(),
+                    // 这两个开关以前只写在 data class 上、**没有从 JSON 读**：
+                    // csmy 的 rules.json 明明写了 namePrefixMerge=true，实际一直按 false 跑
+                    namePrefixMerge = it.optBoolean("namePrefixMerge", false),
+                    cellSplit = it.optString("cellSplit").takeIf { v -> v.isNotBlank() }
                 )
             }
             return SchoolImporter(
@@ -270,7 +274,9 @@ internal data class PdfImportParams(
     /** 噪声行：整段等于这些词的片段直接丢掉（学时统计等）。 */
     val noiseDrop: List<String> = emptyList(),
     /** 课程名跨行时并回（民政需要，湘潭不需要）。 */
-    val namePrefixMerge: Boolean = false
+    val namePrefixMerge: Boolean = false,
+    /** 一格多课时的切分正则（中南民大需要：同格排着单周与双周两门）。 */
+    val cellSplit: String? = null
 )
 
 /** 模块开关。关掉的模块在界面上不出现，路由也拦住。 */

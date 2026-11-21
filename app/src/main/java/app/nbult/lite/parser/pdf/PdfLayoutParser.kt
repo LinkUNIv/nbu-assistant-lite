@@ -52,11 +52,16 @@ internal object PdfLayoutParser {
 
         // 续表页没有表头：沿用上一页的列锚
         var anchors: List<Float> = emptyList()
+        var anchorCenters: List<Float> = emptyList()
 
         fragments.groupBy { it.page }.toSortedMap().forEach { (page, items) ->
             val header = items.filter { it.text.trim().startsWith(params.columnAnchor) }
             if (header.size >= 2) {
-                anchors = header.sortedBy { it.x }.map { it.x }
+                val sortedHeader = header.sortedBy { it.x }
+                anchors = sortedHeader.map { it.x }
+                // 表头是**居中**文字：按中心归列时要用 x + 宽/2，
+                // 但 header 模式的左边界仍按 x 算 —— 两套都留着，别互相干扰
+                anchorCenters = sortedHeader.map { it.x + halfWidth(it) }
             } else if (params.headerPerPage && anchors.isEmpty()) {
                 warnings.add("第 ${page + 1} 页没有表头，且此前也没读到表头，该页跳过")
                 return@forEach
@@ -74,7 +79,15 @@ internal object PdfLayoutParser {
             }
 
             // 先归列，再在每列内按 y 聚类
-            body.groupBy { columnOf(it.x, left, step) }.forEach { (column, columnItems) ->
+            val useCenter = params.columnEdge == "center"
+            val right = anchors.last() + step / 2f
+            body.groupBy { f ->
+                if (useCenter && anchorCenters.size == anchors.size) {
+                    columnByCenter(f, anchorCenters, left, right)
+                } else {
+                    columnOf(f.x, left, step)
+                }
+            }.forEach { (column, columnItems) ->
                 if (column !in 0 until WEEKDAY_COUNT) return@forEach
                 // 课程名可能被行距阈值切到上一块（民政样本里名字两行相隔 13.5pt，
                 // 而格子边界是 25.5pt，单靠阈值两边都不好过）。改成以「(n-m节)」行为锚点：
@@ -130,6 +143,23 @@ internal object PdfLayoutParser {
         SECTION_MARKER.containsMatchIn(text)
 
     private fun columnOf(x: Float, left: Float, step: Float): Int = floor((x - left) / step).toInt()
+
+    /**
+     * 按文字中心就近归列。
+     *
+     * 正文常比表头更靠左（表头居中、正文左对齐），只按左边界整除会整体错列；
+     * 用中心点比较更稳，但**必须给左右边界**：否则「节次」列（第1节 / 08:00~08:45）
+     * 也会被算进星期一。
+     */
+    private fun columnByCenter(f: TextFragment, anchors: List<Float>, left: Float, right: Float): Int {
+        val center = f.x + halfWidth(f)
+        if (center < left || center > right) return -1
+        return anchors.indices.minByOrNull { abs(anchors[it] - center) } ?: -1
+    }
+
+    /** 半个字宽：优先用真实宽度，没有就按字号估。 */
+    private fun halfWidth(f: TextFragment): Float =
+        (if (f.width > 0f) f.width else estimatedWidth(f.text)) / 2f
 
     /**
      * 同一列内按 y 从大到小排序，相邻片段 y 差超过阈值就断开。

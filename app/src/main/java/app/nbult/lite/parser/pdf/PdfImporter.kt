@@ -31,6 +31,11 @@ internal class PdfImporter(
         // 文字层优先；没有文字层、或学校规则要求识图时，渲染成图再 OCR。
         // 识图这条路的坐标也会换算回 PDF 点空间，因此后面的列锚/行距/正则照用。
         var fragments = if (pdf.ocr) emptyList() else extractor.extract(bytes)
+        AppLog.log(
+            "Parse",
+            "路由：规则ocr=${pdf.ocr} cellSource=${pdf.cellSource} multiCourse=${pdf.multiCourse} " +
+                "文字层片段=${fragments.size}"
+        )
         if (fragments.isEmpty()) {
             AppLog.log("Parse", "无可用文字层，改用识图")
             fragments = kotlinx.coroutines.runBlocking { ocrExtractor.extract(bytes) }

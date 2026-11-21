@@ -161,7 +161,10 @@ internal object PdfLayoutParser {
      * 用 `find` 只会取到第一门，第二门静默消失 —— 用户不会知道课表少了一节课。
      * 所以这里改成遍历**全部**匹配；对只有一门课的模板，行为与之前完全一致。
      */
-    private fun toSlots(cellText: String, dayOfWeek: Int, params: PdfTableParams): List<ParsedSlot> {
+    private fun toSlots(rawCellText: String, dayOfWeek: Int, params: PdfTableParams): List<ParsedSlot> {
+        // 归一化必须在正则之前：OCR 会把「号棱」认成「号楼」、把「—」当成连字符，
+        // 这些字符肉眼几乎看不出差别，但正则一条都匹配不上
+        val cellText = app.nbult.lite.parser.TextNormalizer.normalizeTimetable(rawCellText)
         val regex = params.cellRegex?.let { runCatching { Regex(it, RegexOption.DOT_MATCHES_ALL) }.getOrNull() }
             ?: return emptyList()
         val chunks = if (params.multiCourse) splitByCourseAnchors(cellText) else listOf(cellText)

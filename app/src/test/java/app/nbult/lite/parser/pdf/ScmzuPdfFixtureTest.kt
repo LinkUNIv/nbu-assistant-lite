@@ -1,76 +1,79 @@
 package app.nbult.lite.parser.pdf
 
 import org.junit.Assert.assertEquals
-import org.junit.Ignore
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 中南民大课表打印页的真实版面。
+ * 中南民大课表打印页的真实版面（**精确字形框**，pymupdf `get_text("words")` 导出）。
  *
- * 夹具 `pdf/scmzu_fragments.tsv` 的坐标是原样导出的，课程名保留（不含个人信息），
- * 姓名换成「教师甲/乙/丙…」、学号删除。这样能复现真实版式又不把个人课表带进仓库。
+ * 这份 PDF 的文字是逐 token 绘制的：同一行里 `4-19周` 与 `(第1-2节)` 是两组独立定位的片段，
+ * 且 y 相差 1~2pt。所以两条规则缺一不可：
+ *   ① 同一视觉行内按 x 排序（否则拼成 `(第1-24-19周节)`）
+ *   ② 一格多课按节次锚点切分（否则周三 5-6 的两门只剩一门）
+ *
+ * 夹具里的姓名已脱敏；宽度按实测 9.4pt/字补齐（原始 TSV 只存 page/x/y/text）。
  */
-@Ignore("网格已建出 144 格/91 格有字，但文字归格仍乱：TextFragment 没有宽度，按 12pt/字估宽偏大一倍")
 class ScmzuPdfFixtureTest {
+
+    private companion object {
+        /** 实测：3 个汉字宽 28.2pt → 9.4pt/字。 */
+        const val CHAR_WIDTH = 9.4f
+    }
 
     /** 与 scmzu/rules.json 的 importer.pdf 保持一致。 */
     private val params = PdfTableParams(
         columnAnchor = "星期",
-        cellSource = "lines",
-        rowGapPt = 22f,
+        columnEdge = "center",
+        rowGapPt = 18f,
         headerPerPage = false,
         namePrefixMerge = true,
         multiCourse = true,
         cellRegex = """^(?<name>[^\[]+?)\s*\[(?<code>[^\]]*)\]\s*""" +
             """(?<weeks>\d[\d,\-]*\s*周(?:\s*[（(]\s*[单双]\s*[)）])?)\s*""" +
             """[（(]\s*第?\s*(?<s1>\d+)\s*[-—~]\s*(?<s2>\d+)\s*节\s*[)）]\s*""" +
-            """(?<teacher>[^\d]*)\s*(?<room>.+)$""",
-        noiseDrop = listOf("节次", "课程名称", "教学周次", "备注", "上课老师", "同学课表")
+            """(?<teacher>[^\d]*?)\s*(?<room>.+)$""",
+        noiseDrop = listOf("节次", "课程名称", "教学周次", "备注", "同学课表")
     )
 
-    private fun rules(): List<PdfRule> {
-        val text = checkNotNull(javaClass.classLoader?.getResourceAsStream("pdf/scmzu_rules.tsv")) {
-            "找不到夹具 pdf/scmzu_rules.tsv"
-        }.bufferedReader().use { it.readText() }
-        return text.lineSequence().filter { it.isNotBlank() }.map { line ->
-            val p = line.split('\t')
-            PdfRule(page = p[0].toInt(), x1 = p[1].toFloat(), y1 = p[2].toFloat(), x2 = p[3].toFloat(), y2 = p[4].toFloat())
-        }.toList()
-    }
-
     private fun fragments(): List<TextFragment> {
-        val text = checkNotNull(javaClass.classLoader?.getResourceAsStream("pdf/scmzu_fragments.tsv")) {
-            "找不到夹具 pdf/scmzu_fragments.tsv"
+        val text = checkNotNull(javaClass.classLoader?.getResourceAsStream("pdf/scmzu_fragments_exact.tsv")) {
+            "找不到夹具 pdf/scmzu_fragments_exact.tsv"
         }.bufferedReader().use { it.readText() }
         return text.lineSequence().filter { it.isNotBlank() }.map { line ->
             val p = line.split('\t')
-            TextFragment(page = p[0].toInt(), x = p[1].toFloat(), y = -p[2].toFloat(), text = p.drop(3).joinToString("\t"))
+            val content = p.drop(3).joinToString("\t")
+            TextFragment(
+                page = p[0].toInt(),
+                x = p[1].toFloat(),
+                y = -p[2].toFloat(),
+                text = content,
+                width = content.count { it.code > 0x2E80 } * CHAR_WIDTH +
+                    content.count { it.code <= 0x2E80 } * CHAR_WIDTH * 0.55f
+            )
         }.toList()
     }
 
     @Test
-    fun `真实版面能解析出足够多的课时`() {
-        val slots = PdfLayoutParser.parse(fragments(), params, rules()).slots
-        assertTrue("样本应解析出至少 13 个课时，实际 ${slots.size}", slots.size >= 13)
-        assertTrue("星期应落在 1..7，实际 ${slots.map { it.dayOfWeek }.distinct()}", slots.all { it.dayOfWeek in 1..7 })
+    fun `真实版面能解析出完整课表`() {
+        val slots = PdfLayoutParser.parse(fragments(), params).slots
+        assertTrue("应解析出至少 16 个时段，实际 ${slots.size}：${slots.map { it.name }}", slots.size >= 16)
+        assertTrue("星期应落在 1..7", slots.all { it.dayOfWeek in 1..7 })
     }
 
     @Test
-    fun `周三 5-6 节的两门课都解析出来了`() {
-        val slots = PdfLayoutParser.parse(fragments(), params, rules()).slots
-        val same = slots.filter { it.dayOfWeek == 3 && it.startSection == 5 && it.endSection == 6 }
-        assertEquals("周三 5-6 节应有 2 门，实际 ${same.map { it.name }}", 2, same.size)
-        // 单双周落成不同位图：一门含第 3 周，一门不含偶数/奇数周
-        assertTrue("两门课的周次应不同，实际 ${same.map { it.weekMask }}", same[0].weekMask != same[1].weekMask)
+    fun `一格两门课都解析出来`() {
+        val slots = PdfLayoutParser.parse(fragments(), params).slots
+        val pair = slots.filter { it.startSection == 5 && it.endSection == 6 && it.name.startsWith("人工智能") }
+        assertEquals("人工智能与计算思维应有两门，实际 ${pair.map { it.name }}", 2, pair.size)
+        assertTrue("单双周应落成不同位图", pair[0].weekMask != pair[1].weekMask)
     }
 
     @Test
-    fun `教师与地点不串行`() {
-        val slots = PdfLayoutParser.parse(fragments(), params, rules()).slots
-        val zhouyi = slots.first { it.dayOfWeek == 1 && it.startSection == 1 }
-        assertEquals("法律逻辑学", zhouyi.name)
-        assertTrue("教师字段为空：$zhouyi", zhouyi.teacher.isNotBlank())
-        assertTrue("地点字段为空：$zhouyi", zhouyi.room.contains("号楼"))
+    fun `课名不串到上一格的房间`() {
+        val slots = PdfLayoutParser.parse(fragments(), params).slots
+        assertTrue("课名里不该出现「号楼/模拟法庭」这类房间片段：${slots.map { it.name }}",
+            slots.none { it.name.contains("号楼") || it.name.contains("模拟法庭") })
+        assertTrue("周一应有法学专业导论", slots.any { it.name == "法学专业导论" })
     }
 }

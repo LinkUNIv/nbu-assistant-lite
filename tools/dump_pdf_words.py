@@ -35,6 +35,11 @@ try:
 except ImportError:
     sys.exit("缺少 pypdf：pip install pypdf")
 
+try:
+    import pymupdf  # 可选：装了就用**精确字形框**，宽度不再靠估
+except ImportError:
+    pymupdf = None
+
 CJK_THRESHOLD = 0x2E80
 
 
@@ -42,6 +47,21 @@ def estimate_width(text: str, font_size: float) -> float:
     """中文按 1em、其它按 0.5em 估宽（与 App 的 estimatedWidth 同口径）。"""
     units = sum(1.0 if ord(ch) > CJK_THRESHOLD else 0.5 for ch in text)
     return units * font_size
+
+
+def collect_fragments_exact(doc):
+    """用 pymupdf 的 words 取**精确**包围盒。
+
+    为什么值得多装一个包：pypdf 只能给文本起点，宽度得按字号估；
+    而这份教务 PDF 的文字是逐 token 绘制的，估宽差 30% 就会把字分到隔壁格。
+    """
+    out = []
+    for index, page in enumerate(doc):
+        for item in page.get_text("words"):
+            x0, y0, x1, y1, text = item[0], item[1], item[2], item[3], item[4]
+            if text.strip():
+                out.append((index, x0, y0, x1 - x0, text.strip()))
+    return out
 
 
 def collect_fragments(page, page_index: int):
@@ -121,6 +141,21 @@ def main():
 
     if not args.pdf.exists():
         sys.exit(f"文件不存在: {args.pdf}")
+
+    if pymupdf is not None:
+        doc = pymupdf.open(str(args.pdf))
+        exact = collect_fragments_exact(doc)
+        print(f"输入: {args.pdf}（pymupdf 精确坐标，{len(exact)} 段）")
+        if args.fixture:
+            args.fixture.parent.mkdir(parents=True, exist_ok=True)
+            args.fixture.write_text(
+                "\n".join(f"{i}\t{x:.1f}\t{y:.1f}\t{t}" for i, x, y, _w, t in exact) + "\n",
+                encoding="utf-8")
+            print(f"夹具已写出: {args.fixture}（{len(exact)} 行，宽度为精确值但夹具格式不带宽度）")
+        if args.preview:
+            for i, x, y, w, t in exact[: args.preview]:
+                print(f"  p{i} x={x:7.1f} y={y:7.1f} w={w:5.1f}  {t[:40]}")
+        return
 
     reader = PdfReader(str(args.pdf))
     print(f"输入: {args.pdf}")

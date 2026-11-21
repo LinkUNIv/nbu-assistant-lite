@@ -1,7 +1,20 @@
 {
   "schema": 1,
-  "updatedAt": "2026-11-19",
+  "updatedAt": "2026-11-22",
   "announcements": [
+    {
+      "id": "2026-11-22-release",
+      "pinned": true,
+      "pinOrder": 100,
+      "severity": "banner",
+      "revision": 1,
+      "title": "0.38.22 已发布：课表识别更准",
+      "body": "本次更新：\n1. PDF 课表取词更准，一格排着两门课（单周/双周）时两门都会导入。\n2. 「发现新版本」点一下就直接弹出更新说明，不再只显示\"正在检查\"。\n3. 公告支持滚动，长正文可展开与收起。\n\n当前支持的院校：宁波大学、湘潭大学、长沙民政职业技术学院。\n导入方式：到教务系统导出课表文件（PDF/Excel/Word），在「课表 → 导入」里选择即可。",
+      "since": 1795275000,
+      "until": 0,
+      "minApp": 0,
+      "maxApp": 0
+    },
     {
       "id": "guide-basic",
       "pinned": true,
@@ -12,7 +25,8 @@
       "since": 0,
       "until": 0,
       "minApp": 0,
-      "maxApp": 0
+      "maxApp": 0,
+      "pinOrder": 10
     },
     {
       "id": "2026-11-19-updater",

@@ -208,6 +208,8 @@ class NbuLiteApp : Application() {
         appScope.launch {
             kotlinx.coroutines.delay(12_000)
             ResourcePackChecker.checkAndApply(this@NbuLiteApp, container.settings)
+            // 公告与资源包是两条通道：包被门槛跳过时，公告仍应照常更新
+            app.nbult.lite.data.pack.AnnouncementChannel.refresh(this@NbuLiteApp)
         }
 
         appScope.launch {

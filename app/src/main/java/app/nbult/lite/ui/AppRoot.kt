@@ -469,18 +469,13 @@ fun AppRoot() {
                 WindowInsets.mandatorySystemGestures.getBottom(this)
             ).toDp()
         }
-        // 公告：读资源包里的 announcements.json。包换版本会重组，所以按 revisions 重新读
-        val packRevisions by app.nbult.lite.data.pack.ResourcePackStore.revisions.collectAsStateWithLifecycle()
-        // LaunchedEffect 的块不是 @Composable，不能在里面读 CompositionLocal
+        // 公告：走**独立通道**（release/announcements.json）。
+        // 不再挂在资源包上 —— 否则整包抬了 minAppVersion，公告会连带对旧版失效。
         val announceContext = appContext
-        var announcements by remember { mutableStateOf<List<app.nbult.lite.data.pack.Announcement>>(emptyList()) }
-        LaunchedEffect(packRevisions) {
-            announcements = runCatching {
-                app.nbult.lite.data.pack.Announcements.load(
-                    announceContext,
-                    app.nbult.lite.BuildConfig.VERSION_CODE
-                )
-            }.getOrDefault(emptyList())
+        val announcements by app.nbult.lite.data.pack.AnnouncementChannel.items
+            .collectAsStateWithLifecycle()
+        LaunchedEffect(Unit) {
+            app.nbult.lite.data.pack.AnnouncementChannel.loadCached(announceContext)
         }
         val announcementSeen by container.settings.announcementSeen.collectAsStateWithLifecycle(emptySet())
         // 只把「横幅/阻断」这两档算作未读；silent 只进列表，不亮红点

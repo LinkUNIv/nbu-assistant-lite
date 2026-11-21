@@ -31,6 +31,12 @@ internal object PdfLayoutParser {
     private const val MIN_CELL_WIDTH = 20f
     private const val MIN_CELL_HEIGHT = 14f
 
+    /** 判定「两个片段是否在同一视觉行」的 y 容差。 */
+    private const val LINE_TOLERANCE = 3.5f
+
+    /** 回溯课名时遇到这些字就停：它们是房间后缀，属于上一门课。 */
+    private const val ROOM_TAIL_CHARS = "楼室庭场馆"
+
     fun parse(
         fragments: List<TextFragment>,
         params: PdfTableParams,
@@ -131,7 +137,16 @@ internal object PdfLayoutParser {
      */
     private fun clusterRows(items: List<TextFragment>, gap: Float): List<RowBlock> {
         if (items.isEmpty()) return emptyList()
-        val sorted = items.sortedWith(compareByDescending<TextFragment> { it.y }.thenBy { it.x })
+        // 同一视觉行里的片段 y 会差 1~2pt（基线对齐差异），直接按 y 排会把
+        // "4-19周" 和 "(第1-2节)" 交错成 "(第1-24-19周节)"。
+        // 所以先把 y 相近的归成一行，行内按 x 排，再按 y 从下往上拼。
+        val rows = mutableListOf<MutableList<TextFragment>>()
+        items.sortedByDescending { it.y }.forEach { fragment ->
+            val row = rows.lastOrNull()
+            if (row != null && abs(row.first().y - fragment.y) <= LINE_TOLERANCE) row.add(fragment)
+            else rows.add(mutableListOf(fragment))
+        }
+        val sorted = rows.flatMap { row -> row.sortedBy { it.x } }
         val cells = mutableListOf<RowBlock>()
         val buffer = StringBuilder()
         var lastY: Float? = null
@@ -210,6 +225,9 @@ internal object PdfLayoutParser {
         while (i > 0) {
             val c = text[i - 1]
             if (c.isDigit() || c in 'a'..'z' || c in 'A'..'Z') break
+            // 房间后缀（楼/室/庭/场/馆）属于**上一门课**，继续往前吃会把
+            // "号楼模拟法庭" 拼进下一门的课名里
+            if (c in ROOM_TAIL_CHARS) break
             i--
         }
         while (i < code.range.first && text[i].isWhitespace()) i++

@@ -76,7 +76,7 @@
     "login": false,
     "widget": true
   },
-  "notes": "课表来自教务系统「报表打印页面」导出的 PDF（有文本层）。同格可能排着单周与双周两门课，靠 cellSplit 拆开后逐门解析。",
+  "notes": "课表来自教务系统「报表打印页面」导出的 PDF（有文本层）。同格可能排着单周与双周两门课，靠 multiCourse 按节次锚点切分后逐门解析。",
   "domains": [
     "scuec.edu.cn"
   ],

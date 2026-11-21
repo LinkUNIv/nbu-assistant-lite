@@ -184,6 +184,9 @@ internal data class SchoolRules(
             val pdf = optJSONObject("pdf")?.let {
                 PdfImportParams(
                     columnAnchor = it.optString("columnAnchor", "星期"),
+                    columnEdge = it.optString("columnEdge", "header"),
+                    cellSource = it.optString("cellSource", "text"),
+                    ocr = it.optBoolean("ocr", false),
                     rowGapPt = it.optDouble("rowGapPt", 14.0).toFloat(),
                     headerPerPage = it.optBoolean("headerPerPage", true),
                     cellRegex = it.optString("cellRegex").takeIf { s -> s.isNotBlank() },
@@ -265,6 +268,12 @@ internal data class SchoolImporter(
 internal data class PdfImportParams(
     /** 列锚：表头里出现这个前缀的单元格，其 x 作为该列的起点。 */
     val columnAnchor: String = "星期",
+    /** 列边界算法：`header`（默认）或 `center`（正文偏左的版式）。 */
+    val columnEdge: String = "header",
+    /** 表格线来源：`text`（默认，文字聚类）或 `lines`（读 PDF 矢量线还原网格）。 */
+    val cellSource: String = "text",
+    /** 强制走识图：文字层不可靠的学校（逐 token 绘制）用这个开关。 */
+    val ocr: Boolean = false,
     /** 同列纵向间距超过这个值才算新单元格，否则是同格的换行。 */
     val rowGapPt: Float = 14f,
     /** 每页都重新找表头：续表没有表头，固定阈值会整页丢失。 */

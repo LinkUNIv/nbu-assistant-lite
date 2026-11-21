@@ -5,7 +5,9 @@ internal data class TextFragment(
     val page: Int,
     val x: Float,
     val y: Float,
-    val text: String
+    val text: String,
+    /** 这一行的实际宽度（pt），来自 PDFBox 的字形宽度求和；夹具里没有时为 0。 */
+    val width: Float = 0f
 )
 
 /**
@@ -14,6 +16,22 @@ internal data class TextFragment(
 internal data class PdfTableParams(
     /** 表头锚：以「星期」开头的片段，其 x 作为该列中心。 */
     val columnAnchor: String = "星期",
+    /**
+     * 列边界怎么算。
+     *
+     * - `header`（默认）：`表头 x - 半列宽` 当左边界，适合"表头居中、正文左对齐"的老版式；
+     * - `center`：按**文字中心**就近归列，适合正文比表头更靠左的版式（中南民大）。
+     *   这个差异不是参数能调出来的：老算法把左边缘文字算进了前一列。
+     */
+    val columnEdge: String = "header",
+    /**
+     * 表格线从哪来。
+     *
+     * - `text`（默认）：不读矢量，靠文字坐标聚类（湘潭 / 民政的版式）；
+     * - `lines`：读 PDF 里的细矩形还原网格。中南民大这类"行高按跨节次不等高"的版式，
+     *   文字聚类用的行距是全局常数，调不出来；格子边界 PDF 自己画了。
+     */
+    val cellSource: String = "text",
     /** 同列相邻片段的 y 差超过它才算新单元格。实测行距 12pt、格间距 15.5pt。 */
     val rowGapPt: Float = 14f,
     /** 续表页没有表头，要沿用上一页的列锚，所以每页都要重新判断。 */

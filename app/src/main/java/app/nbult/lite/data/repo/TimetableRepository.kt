@@ -24,15 +24,31 @@ class TimetableRepository(
 
     private val dao = database.timetableDao()
 
-    private val expansionCache by lazy {
-        WeekExpansionCache(java.io.File(java.io.File(database.openHelper.writableDatabase.path).parentFile, "week-expansion-v1.cache"))
+    /**
+     * 周展开缓存。
+     *
+     * 内存库（单测）没有文件路径，此时**不建缓存**而不是崩：`writableDatabase.path` 是 String?，
+     * 直接 `File(path).parentFile` 在无路径时会拼出错误目录。
+     */
+    private val expansionCache: WeekExpansionCache? by lazy {
+        val path = database.openHelper.writableDatabase.path ?: return@lazy null
+        WeekExpansionCache(java.io.File(java.io.File(path).parentFile, "week-expansion-v1.cache"))
     }
 
-    fun clearExpansionCache() = expansionCache.clear()
+    fun clearExpansionCache() = expansionCache?.clear()
 
     suspend fun expandedWeeks(snapshot: Snapshot): List<List<TimetableEntry>> =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            expansionCache.get(snapshot.term, snapshot.entries, snapshot.overrides)
+            expansionCache?.get(snapshot.term, snapshot.entries, snapshot.overrides)
+                ?: run {
+                    // 内存库（单测）没有文件路径，就不走缓存：逐周现算，语义与缓存一致
+                    val weeks = (snapshot.term?.totalWeeks ?: 20).coerceAtLeast(1)
+                    (1..weeks).map { w ->
+                        app.nbult.lite.domain.ScheduleService.weekEntries(
+                            snapshot.entries, w, snapshot.overrides
+                        )
+                    }
+                }
         }
 
     data class Snapshot(

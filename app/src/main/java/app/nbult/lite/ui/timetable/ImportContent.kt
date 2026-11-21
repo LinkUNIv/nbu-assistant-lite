@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material3.Icon
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -113,7 +114,7 @@ fun ImportContent(
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(
-                imageVector = Icons.Outlined.OpenInNew,
+                imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp)
             )

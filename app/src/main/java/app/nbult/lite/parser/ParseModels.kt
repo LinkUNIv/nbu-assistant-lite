@@ -20,14 +20,7 @@ data class ParsedSlot(
 data class ParseResult(
     val source: ParseSource,
     val slots: List<ParsedSlot>,
-    val warnings: List<String>,
-    /**
-     * 课表里提到、但没有安排时间的课程名（如中南民大页脚的「劳动教育」）。
-     *
-     * 不导入它们：没有节次的课塞进格子只会变成一格无时间的课。但也不能装作没看见 ——
-     * 用户会以为导入丢了课。
-     */
-    val unscheduled: List<String> = emptyList()
+    val warnings: List<String>
 ) {
     val confident: List<ParsedSlot> get() = slots.filter { it.confidence >= 0.8f }
     val needsReview: List<ParsedSlot> get() = slots.filter { it.confidence < 0.8f }

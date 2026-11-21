@@ -1,5 +1,6 @@
 package app.nbult.lite.parser.pdf
 
+import app.nbult.lite.util.AppLog
 import app.nbult.lite.parser.FieldExtractor
 import app.nbult.lite.parser.ParseSource
 import app.nbult.lite.parser.ParsedSlot
@@ -23,8 +24,23 @@ internal object PdfLayoutParser {
 
     private const val WEEKDAY_COUNT = 7
 
-    fun parse(fragments: List<TextFragment>, params: PdfTableParams): ParseResult {
+    /** 表格线判定：厚 ≤2.5pt、长 ≥15pt；更宽的就是底色块。 */
+    private const val MAX_RULE_THICKNESS = 2.5f
+    private const val MIN_RULE_LENGTH = 15f
+    /** 双边框会造出 ~10pt 窄缝，低于这个宽/高的不算格子。 */
+    private const val MIN_CELL_WIDTH = 20f
+    private const val MIN_CELL_HEIGHT = 14f
+
+    fun parse(
+        fragments: List<TextFragment>,
+        params: PdfTableParams,
+        rules: List<PdfRule> = emptyList()
+    ): ParseResult {
         if (fragments.isEmpty()) return ParseResult.EMPTY
+        // 有表格线且声明了 lines：按网格切，不再依赖"表头 + 半列宽"的假设
+        if (params.cellSource == "lines" && rules.isNotEmpty()) {
+            parseByRules(fragments, rules, params)?.let { return it }
+        }
         val cells = mutableListOf<ParsedSlot>()
         val warnings = mutableListOf<String>()
 
@@ -199,6 +215,103 @@ internal object PdfLayoutParser {
 
     /** 文本里所有「[课号]」的位置，用来回溯课程起点。 */
     private val CODE_TAIL = Regex("\\[[^\\]]{0,12}\\]")
+
+    /**
+     * 按表格线切格。
+     *
+     * 中南民大的课表每门课画一个框，行高随跨节次数变化（44 / 51 / 82pt）。
+     * 文字聚类用的行距是**一个全局常数**，不可能同时适配 1 节格与 3 节格；
+     * 而格子边界 PDF 自己画了，读出来即可。
+     */
+    private fun parseByRules(
+        fragments: List<TextFragment>,
+        rules: List<PdfRule>,
+        params: PdfTableParams
+    ): ParseResult? {
+        val usable = rules.filter { it.thickness <= MAX_RULE_THICKNESS && it.length >= MIN_RULE_LENGTH }
+        if (usable.isEmpty()) return null
+        val xs = clusterValues(usable.filter { it.isVertical }.map { (it.x1 + it.x2) / 2f })
+        val ys = clusterValues(usable.filter { !it.isVertical }.map { (it.y1 + it.y2) / 2f })
+        if (xs.size < 3 || ys.size < 3) return null
+
+        val lefts = mutableListOf<Float>()
+        val rights = mutableListOf<Float>()
+        val tops = mutableListOf<Float>()
+        val bottoms = mutableListOf<Float>()
+        // ⚠️ ys 是升序（y 越大越靠上，所以数值上是"大"的在后）：top 取后一个、bottom 取前一个。
+        // 反过来写会算出负高度，格子全被当成窄缝丢掉 —— 表现是"网格一个都没有、悄悄退回文字聚类"。
+        for (jy in 0 until ys.size - 1) {
+            val top = ys[jy + 1]
+            val bottom = ys[jy]
+            if (top - bottom < MIN_CELL_HEIGHT) continue
+            for (ix in 0 until xs.size - 1) {
+                val l = xs[ix]
+                val r = xs[ix + 1]
+                if (r - l < MIN_CELL_WIDTH) continue
+                lefts.add(l); rights.add(r); tops.add(top); bottoms.add(bottom)
+            }
+        }
+        if (lefts.isEmpty()) return null
+
+        // 文字按**重叠面积最大**归格。按"起点在格内"会漏掉整行长文本
+        // （长课名的起点常在左边界之外，实测 13 门只剩 4 条）。
+        val bucket = Array(lefts.size) { mutableListOf<TextFragment>() }
+        for (f in fragments) {
+            val fRight = f.x + if (f.width > 0f) f.width else estimatedWidth(f.text)
+            val fTop = f.y + 2f
+            val fBottom = f.y - 12f
+            var best = -1
+            var bestArea = 0f
+            for (i in lefts.indices) {
+                val ox = minOf(fRight, rights[i]) - maxOf(f.x, lefts[i])
+                if (ox <= 0f) continue
+                val oy = minOf(fTop, tops[i]) - maxOf(fBottom, bottoms[i])
+                if (oy <= 0f) continue
+                val area = ox * oy
+                if (area > bestArea) { bestArea = area; best = i }
+            }
+            if (best >= 0) bucket[best].add(f)
+        }
+
+        val anchors = fragments.filter { it.text.trim().startsWith(params.columnAnchor) }.sortedBy { it.x }
+        if (anchors.size < 2) return null
+
+        val cells = mutableListOf<ParsedSlot>()
+        for (i in lefts.indices) {
+            val inside = bucket[i]
+            if (inside.isEmpty()) continue
+            val text = inside.sortedByDescending { it.y }.joinToString("") { it.text.trim() }
+            if (!text.contains("周")) continue          // 节次列、表头、备注行都没有「周」
+            val cx = (lefts[i] + rights[i]) / 2f
+            val dayIndex = anchors.indices.minByOrNull { abs(anchors[it].x - cx) } ?: continue
+            cells.addAll(toSlots(text, dayIndex + 1, params))
+        }
+        if (cells.isEmpty()) return null
+        AppLog.log("Parse", "按表格线解析：${xs.size - 1} 列 × ${ys.size - 1} 行 → ${cells.size} 个时段")
+        return ParseResult(ParseSource.PDF_TABLE, cells, emptyList())
+    }
+
+    /** 估算一行文字宽度：中文 12pt、其它 6pt。长文本的起点常在格左边界之外，必须算宽度。 */
+    private fun estimatedWidth(text: String): Float =
+        text.sumOf { c -> if (c.code > 0x2E80) 12.0 else 6.0 }.toFloat()
+
+    /** 合并相距很近的线坐标（双边框、抗锯齿重叠）。 */
+    private fun clusterValues(values: List<Float>, tolerance: Float = 2.5f): List<Float> {
+        if (values.isEmpty()) return emptyList()
+        val sorted = values.sorted()
+        val out = mutableListOf<Float>()
+        var start = sorted.first()
+        var sum = 0f
+        var count = 0
+        for (v in sorted) {
+            if (v - start > tolerance) {
+                out.add(sum / count); start = v; sum = 0f; count = 0
+            }
+            sum += v; count++
+        }
+        out.add(sum / count)
+        return out
+    }
 
     private fun toSlot(
         m: MatchResult,

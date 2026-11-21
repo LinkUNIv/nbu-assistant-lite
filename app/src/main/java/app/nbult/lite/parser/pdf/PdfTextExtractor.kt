@@ -34,12 +34,16 @@ internal class PdfTextExtractor(context: Context) {
                         // PDFBox 的 yDirAdj 是**自上而下递增**，而归列算法的前提是
                         // 「y 越大越靠上」。这里取反，别让方向约定漏到上层去 ——
                         // 湘潭那份样本上，方向搞反会让单元格里的多行按逆序拼接，正则直接不匹配。
+                        // 真实宽度：字形推进量求和。归格/归列都要用它 ——
+                        // 按字数估宽会把长课名的框算大一倍，文字被分到相邻格
+                        val width = textPositions.sumOf { it.widthDirAdj.toDouble() }.toFloat()
                         fragments.add(
                             TextFragment(
                                 page = pageNumber,
                                 x = first.xDirAdj,
                                 y = -first.yDirAdj,
-                                text = trimmed
+                                text = trimmed,
+                                width = width
                             )
                         )
                     }

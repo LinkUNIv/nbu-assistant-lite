@@ -12,8 +12,15 @@ import org.json.JSONObject
  */
 data class Announcement(
     val id: String,
-    /** 置顶项：常驻列表首位，不可关闭，不计入未读红点。 */
+    /** 置顶项：常驻列表首位，不可关闭，不计入未读红点。允许多条同时置顶。 */
     val pinned: Boolean,
+    /**
+     * 置顶顺序，由**发布方**指定（大的在前）。
+     *
+     * 不用时间排序：长期置顶的使用说明可能是一年前写的，按时间会被新公告挤到后面。
+     * 没写（0）时退回按 `since` 排，所以老包不用改。
+     */
+    val pinOrder: Int,
     /** 交互强度：沉默（只进列表）/ 横幅（亮红点）/ 阻断（启动时自动展开一次）。 */
     val severity: Severity,
     /** 内容修订号。同一条公告改了正文就 +1，已读按 `id@revision` 记，老用户会重新看到。 */
@@ -78,6 +85,8 @@ object Announcements {
         return out.distinctBy { it.id }
             .sortedWith(
                 compareByDescending<Announcement> { it.pinned }
+                    // 置顶之间按发布方指定的 pinOrder（可能有多条置顶）
+                    .thenByDescending { if (it.pinned) it.pinOrder else 0 }
                     .thenByDescending { it.severity.ordinal }
                     .thenByDescending { it.since }
             )
@@ -131,6 +140,7 @@ object Announcements {
         return Announcement(
             id = id,
             pinned = o.optBoolean("pinned", false),
+            pinOrder = o.optInt("pinOrder", 0),
             severity = severity,
             revision = revision,
             title = title,

@@ -11,6 +11,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -21,8 +25,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,29 +66,38 @@ fun AnnouncementSheet(
         if (fresh.isNotEmpty()) onSeen(fresh)
     }
 
+    // 参数名 items 会和 LazyListScope.items() 撞名，先取个别名
+    val entries = items
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = state) {
-        Column(
-            Modifier
+        // LazyColumn 而不是 Column+verticalScroll：公告多起来时，后者会把所有条目
+        // 一次性测量并组合，长正文叠几条就卡；Lazy 只组合可见项。
+        LazyColumn(
+            modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .heightIn(max = 520.dp)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)
         ) {
-            Text("公告", style = MaterialTheme.typography.titleMedium)
-            if (items.isEmpty()) {
-                Text(
-                    "暂无公告",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            item { Text("公告", style = MaterialTheme.typography.titleMedium) }
+            if (entries.isEmpty()) {
+                item {
+                    Text(
+                        "暂无公告",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-            items.forEach { item ->
+            items(entries, key = { it.seenKey }) { item ->
                 AnnouncementItem(item)
             }
         }
     }
 }
+
+/** 折叠态显示的行数。超过就出现「展开」。 */
+private const val COLLAPSED_LINES = 6
 
 @Composable
 private fun AnnouncementItem(item: Announcement) {
@@ -119,14 +137,31 @@ private fun AnnouncementItem(item: Announcement) {
             }
         }
         Spacer(Modifier.height(4.dp))
-        // 置顶（使用说明）直接展开；普通公告保留完整正文，但限制行数免得占满屏幕
+        // 置顶（使用说明）默认展开；普通公告先折叠，**装不下才**显示「展开」——
+        // 短公告挂一个"展开"按钮反而让人以为有隐藏内容（此处以前是 6 行截断且无处可展）
+        var expanded by remember(item.seenKey) { mutableStateOf(item.pinned) }
+        var overflowed by remember(item.seenKey) { mutableStateOf(false) }
         Text(
             text = item.body,
             style = MaterialTheme.typography.bodyMedium,
             color = colors.onSurfaceVariant,
-            maxLines = if (item.pinned) Int.MAX_VALUE else 6,
-            overflow = TextOverflow.Ellipsis
+            maxLines = if (expanded) Int.MAX_VALUE else COLLAPSED_LINES,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { layout: TextLayoutResult ->
+                if (!expanded) overflowed = layout.hasVisualOverflow
+            }
         )
+        if (!item.pinned && (overflowed || expanded)) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = if (expanded) "收起" else "展开",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.primary,
+                modifier = Modifier
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 2.dp)
+            )
+        }
         if (item.link != null) {
             Spacer(Modifier.height(4.dp))
             Text(

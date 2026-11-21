@@ -121,6 +121,9 @@ internal fun VersionEntry(badge: Boolean) {
     val install by installer.state.collectAsStateWithLifecycle()
     // 下载中打开弹窗时没有 UpdateInfo，用上次落盘的说明补齐（不重新请求）
     val pendingNotes by settings.pendingAppNotes.collectAsStateWithLifecycle("")
+    val pendingUrl by settings.pendingAppUrl.collectAsStateWithLifecycle("")
+    val pendingSha by settings.pendingAppSha.collectAsStateWithLifecycle("")
+    val pendingSize by settings.pendingAppSize.collectAsStateWithLifecycle(0L)
     // 刚被「此版本已过期」替换过，弹窗里要提示一句
     var staleHint by remember { mutableStateOf(false) }
 
@@ -193,6 +196,19 @@ internal fun VersionEntry(badge: Boolean) {
                     // 已经查到：弹窗，由用户点「下载」
                     state is VersionUi.Found -> dialogInfo = (state as VersionUi.Found).info
                     state is VersionUi.Checking -> Unit
+                    // 已知有新版但内存里没详情：用**落盘的清单字段**直接开弹窗。
+                    // 以前的写法在这里重新检查，而检查有 6 小时节流 —— 用户点一下只看到
+                    // 「正在检查…」然后「已是最新」，等于点了没反应（2026-11-21 反馈）
+                    latestCode > BuildConfig.VERSION_CODE && pendingUrl.isNotBlank() -> {
+                        dialogInfo = UpdateInfo(
+                            versionCode = latestCode.toInt(),
+                            versionName = latestName,
+                            apkUrl = pendingUrl,
+                            sha256 = pendingSha,
+                            notes = pendingNotes,
+                            size = pendingSize
+                        )
+                    }
                     else -> {
                         state = VersionUi.Checking
                         scope.launch {

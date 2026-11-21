@@ -47,6 +47,12 @@ class SettingsStore(private val context: Context) {
     private val keyPendingAppCode = longPreferencesKey("update_pending_code")
     private val keyPendingAppNotes = stringPreferencesKey("update_pending_notes")
 
+    // 清单里另外三个字段也要落盘：否则「发现新版本」只在内存里，
+    // 用户点一下会去重新检查（有 6 小时节流），看起来像"点了没反应"
+    private val keyPendingAppUrl = stringPreferencesKey("update_pending_url")
+    private val keyPendingAppSha = stringPreferencesKey("update_pending_sha")
+    private val keyPendingAppSize = longPreferencesKey("update_pending_size")
+
     /** 是否在启动检查到新版本时弹窗。只管自动弹窗，手动检查不受影响。 */
     private val keyUpdatePopup = booleanPreferencesKey("update_popup_enabled")
     // 资源包：用户已确认看到的版本 / 发现但还没生效的版本
@@ -204,6 +210,18 @@ class SettingsStore(private val context: Context) {
     val pendingAppNotes: Flow<String> =
         context.settingsDataStore.data.map { it[keyPendingAppNotes] ?: "" }
 
+    /** 待装版本的下载地址；空串表示没记录过。 */
+    val pendingAppUrl: Flow<String> =
+        context.settingsDataStore.data.map { it[keyPendingAppUrl] ?: "" }
+
+    /** 待装版本的 sha256；空串表示没记录过。 */
+    val pendingAppSha: Flow<String> =
+        context.settingsDataStore.data.map { it[keyPendingAppSha] ?: "" }
+
+    /** 待装版本的字节数；0 表示未知。 */
+    val pendingAppSize: Flow<Long> =
+        context.settingsDataStore.data.map { it[keyPendingAppSize] ?: 0L }
+
     /** 启动检查到新版本时是否弹窗；关掉之后仍可在「关于」手动检查。 */
     val updatePopupEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[keyUpdatePopup] ?: true }
@@ -237,11 +255,20 @@ class SettingsStore(private val context: Context) {
      *
      * 只在拿到非空说明时写入 —— 空说明写进去会弹出一个空壳，比不弹更差。
      */
-    suspend fun setPendingApp(code: Long, notes: String) {
+    suspend fun setPendingApp(
+        code: Long,
+        notes: String,
+        url: String = "",
+        sha: String = "",
+        size: Long = 0L
+    ) {
         if (code <= 0L || notes.isBlank()) return
         context.settingsDataStore.edit {
             it[keyPendingAppCode] = code
             it[keyPendingAppNotes] = notes
+            it[keyPendingAppUrl] = url
+            it[keyPendingAppSha] = sha
+            it[keyPendingAppSize] = size
         }
     }
 

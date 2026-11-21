@@ -89,7 +89,13 @@ object UpdateCenter {
                 settings.setUpdateChecked(now, result.info.versionCode.toLong(), result.info.versionName)
                 // 与下载、安装完全解耦：这里落盘，后面用户取消、装失败、杀掉进程都还在。
                 // 装成功之后靠版本号对上再弹「本版更新了什么」。
-                settings.setPendingApp(result.info.versionCode.toLong(), result.info.notes)
+                settings.setPendingApp(
+                    code = result.info.versionCode.toLong(),
+                    notes = result.info.notes,
+                    url = result.info.apkUrl,
+                    sha = result.info.sha256,
+                    size = result.info.size
+                )
                 AppLog.log("Update", "发现新版本 ${result.info.versionName}（${result.info.versionCode}）")
             }
 

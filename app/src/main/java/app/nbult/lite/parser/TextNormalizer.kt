@@ -3,24 +3,19 @@ package app.nbult.lite.parser
 /**
  * 解析前的文本归一化。
  *
- * 两类噪声都来自同一个源头：**OCR 与排版用的不是标准字符**。
+ * 两类噪声来自同一源头：**OCR 与排版用的不是标准字符**。
  * 不加这一步，正则会在"看起来一样"的字符上失配 —— 这类失败最难查，
  * 因为日志里文字是对的，眼睛看不出差别。
+ *
+ * 原则：**只做无损替换**。全局把「棱」当「楼」会误伤「棱镜」，
+ * 所以形近字一律放到 [normalizeTimetable] 里按上下文替换。
  */
 internal object TextNormalizer {
-
-    /** 形近字：只收"在课表语境里几乎不可能出现原字"的那些，避免误伤。 */
-    private val CONFUSABLES = mapOf(
-        '棱' to '楼',   // 5 号楼 → 5 号棱
-        '萘' to '第',   // 第 1 节 → 萘 1 节
-        '蒡' to '第',
-        '脊' to '节',
-        '甥' to '周'
-    )
 
     /** 连字符的各种写法，统一成 ASCII 短横。 */
     private val DASHES = charArrayOf('—', '–', '－', '~', '～', '至', '─', 'ー')
 
+    /** 只做"任何语境下都等价"的替换：连字符与全角字符。 */
     fun normalize(raw: String): String {
         if (raw.isEmpty()) return raw
         val sb = StringBuilder(raw.length)
@@ -28,7 +23,6 @@ internal object TextNormalizer {
             sb.append(
                 when {
                     ch in DASHES -> '-'
-                    CONFUSABLES.containsKey(ch) -> CONFUSABLES.getValue(ch)
                     // 全角数字/字母 → 半角：OCR 偶尔把「４」认成全角
                     ch in '０'..'９' -> '0' + (ch - '０')
                     ch in 'Ａ'..'Ｚ' -> 'A' + (ch - 'Ａ')
@@ -41,16 +35,17 @@ internal object TextNormalizer {
     }
 
     /**
-     * 课表语境专用：只做**局部**纠正，不动正文。
+     * 课表语境专用：形近字按**上下文**纠正。
      *
-     * 例如「15 号棱 15609」里「棱」在「号」后面才改成「楼」，
-     * 避免把真的叫「棱」的字改掉。
+     * 「棱」本身是正常汉字（棱镜），只有紧跟「号」时才必然是「号楼」；
+     * 同理「萘」在化学课名里合法，只有出现在「第…节」的位置上才是误识。
      */
     fun normalizeTimetable(raw: String): String {
         var out = normalize(raw)
         out = out.replace("号棱", "号楼").replace("号樓", "号楼")
-        out = out.replace("萘 ", "第 ").replace("萘", "第")
-        // "第1-2节" 与 "第 1 - 2 节" 统一成紧凑写法，正则只需认一种
+        // 「萘 1 - 2 节」这种位置上的「萘」一定是「第」
+        out = Regex("萘\\s*(?=\\d)").replace(out, "第")
+        // 节次写法统一成紧凑形态，正则只需认一种
         out = Regex("第\\s*(\\d+)\\s*-\\s*(\\d+)\\s*节").replace(out, "第$1-$2节")
         return out
     }

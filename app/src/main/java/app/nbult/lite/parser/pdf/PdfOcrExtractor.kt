@@ -39,40 +39,46 @@ internal class PdfOcrExtractor(private val context: Context) {
         val temp = File.createTempFile("timetable-ocr", ".pdf", context.cacheDir)
         try {
             temp.writeBytes(bytes)
-            ParcelFileDescriptor.open(temp, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
-                PdfRenderer(pfd).use { renderer ->
-                    val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-                    for (index in 0 until renderer.pageCount) {
-                        renderer.openPage(index).use { page ->
-                            val bitmap = renderPage(page)
-                            val text = suspendCancellableCoroutine { cont ->
-                                recognizer.process(InputImage.fromBitmap(bitmap, 0))
-                                    .addOnSuccessListener { cont.resume(it) }
-                                    .addOnFailureListener { cont.resume(null) }
-                            }
-                            bitmap.recycle()
-                            if (text == null) continue
-                            for (block in text.textBlocks) {
-                                for (line in block.lines) {
-                                    val box = line.boundingBox ?: continue
-                                    val trimmed = line.text.trim()
-                                    if (trimmed.isEmpty()) continue
-                                    out.add(
-                                        TextFragment(
-                                            page = index,
-                                            x = box.left / SCALE,
-                                            // 统一到"y 越大越靠上"：图片坐标是自上而下
-                                            y = -box.top / SCALE,
-                                            text = trimmed,
-                                            width = box.width() / SCALE
-                                        )
-                                    )
-                                }
-                            }
+            // 用 try/finally 而不是 `use { }`：`use` 是 inline 函数，
+            // 在它的 lambda 里 `continue` 到外层 for 属于实验特性，编译直接失败
+            // （CI: The feature "break continue in inline lambdas" is experimental）。
+            val pfd = ParcelFileDescriptor.open(temp, ParcelFileDescriptor.MODE_READ_ONLY)
+            val renderer = PdfRenderer(pfd)
+            val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+            try {
+                for (index in 0 until renderer.pageCount) {
+                    val page = renderer.openPage(index)
+                    val bitmap = renderPage(page)
+                    page.close()
+                    val text = suspendCancellableCoroutine { cont ->
+                        recognizer.process(InputImage.fromBitmap(bitmap, 0))
+                            .addOnSuccessListener { cont.resume(it) }
+                            .addOnFailureListener { cont.resume(null) }
+                    }
+                    bitmap.recycle()
+                    val blocks = text?.textBlocks ?: emptyList()
+                    for (block in blocks) {
+                        for (line in block.lines) {
+                            val box = line.boundingBox ?: continue
+                            val trimmed = line.text.trim()
+                            if (trimmed.isEmpty()) continue
+                            out.add(
+                                TextFragment(
+                                    page = index,
+                                    x = box.left / SCALE,
+                                    // 图片坐标自上而下，统一成"y 越大越靠上"
+                                    y = -box.top / SCALE,
+                                    text = trimmed,
+                                    width = box.width() / SCALE
+                                )
+                            )
                         }
                     }
-                    recognizer.close()
                 }
+            } finally {
+                recognizer.close()
+                renderer.close()
+                pfd.close()
             }
         } finally {
             temp.delete()

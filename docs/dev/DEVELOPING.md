@@ -404,6 +404,10 @@ app/src/main/assets/
 ## 相关文档
 
 - [`../../CHANGELOG.md`](../../CHANGELOG.md) — 逐版本变更
+- `tools/dump_pdf_words.py` — 导出 PDF 的**带坐标文字**（+ 可选表格线），用于在 PC 上
+  调几何算法、生成单测夹具；输出格式与 `app/src/test/resources/pdf/*_fragments.tsv` 一致。
+  用法：`python tools/dump_pdf_words.py 报表.pdf --fixture <夹具路径> --rules <线表路径>`
+  **导出的是原文，含姓名学号，入库前必须脱敏。**
 - [`NOTES.md`](NOTES.md) — 设计取舍与踩坑（**只写「为什么」，操作步骤看本文**）；
   已被推翻的做法统一记在第七节，别照旧笔记开发
 - [`PENDING.md`](PENDING.md) — 路线图与未排期事项

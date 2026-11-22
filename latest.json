@@ -1,7 +1,7 @@
 {
-  "version": 202611221515,
-  "updatedAt": "2026-11-22T15:11:51+08:00",
-  "notes": "修正中南民大行距（18→26），恢复周一课程",
+  "version": 202611221520,
+  "updatedAt": "2026-11-22T15:38:49+08:00",
+  "notes": "中南民大：按课号分组（配合 0.38.26）",
   "minAppVersion": 3823,
   "files": [
     {
@@ -42,7 +42,7 @@
     },
     {
       "path": "schools/scmzu/rules.json",
-      "sha256": "ef95cd49ec90fde193c2b4325774d714b239378061abb445176a70e6d4cbb307"
+      "sha256": "8fc1e698cbbec00b9b37789208893e4115a89c4de9b8ccdff7e419f3e37c7baf"
     },
     {
       "path": "schools/xtu/calendar.json",

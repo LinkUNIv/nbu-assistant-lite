@@ -88,6 +88,7 @@ internal object PdfLayoutParser {
                     columnOf(f.x, left, step)
                 }
             }.forEach { (column, columnItems) ->
+                AppLog.log("Parse", "归列：第 ${column + 1} 列 ${columnItems.size} 段")
                 if (column !in 0 until WEEKDAY_COUNT) return@forEach
                 // 课程名可能被行距阈值切到上一块（民政样本里名字两行相隔 13.5pt，
                 // 而格子边界是 25.5pt，单靠阈值两边都不好过）。改成以「(n-m节)」行为锚点：
@@ -212,6 +213,10 @@ internal object PdfLayoutParser {
         val cellText = app.nbult.lite.parser.TextNormalizer.normalizeTimetable(rawCellText)
         val regex = params.cellRegex?.let { runCatching { Regex(it, RegexOption.DOT_MATCHES_ALL) }.getOrNull() }
             ?: return emptyList()
+        if (!regex.containsMatchIn(cellText)) {
+            // 匹配不上时把原文打出来：否则只会看到"少了几门课"，无从下手
+            AppLog.log("Parse", "未匹配：周$dayOfWeek «${cellText.take(80)}»")
+        }
         val chunks = if (params.multiCourse) splitByCourseAnchors(cellText) else listOf(cellText)
         return chunks.mapNotNull { chunk ->
             regex.find(chunk)?.let { m -> toSlot(m, chunk, dayOfWeek, params) }

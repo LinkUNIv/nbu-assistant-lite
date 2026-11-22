@@ -1,12 +1,12 @@
 {
-  "versionCode": 3824,
-  "versionName": "0.38.24",
+  "versionCode": 3825,
+  "versionName": "0.38.25",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.24-Preview/nbu-assistant-lite-0.38.24-Preview.apk",
-  "sha256": "c3c0f4da980563347e8c0a1269f8041e74705b8f5ef4449dfe1a469338b91115",
-  "size": 26525561,
-  "notes": "**解析诊断日志**\n\n- 导入课表时逐条记录解析结果（周几、节次、周次、教师、地点），并记录每列片段数与匹配失败的原文本。",
-  "generatedAt": 1795328802892,
-  "tag": "v0.38.24-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.25-Preview/nbu-assistant-lite-0.38.25-Preview.apk",
+  "sha256": "3c7272ed891cc5474e516f700b5d30b67761ccb5312ae2636b88f7a74bc126f2",
+  "size": 26542057,
+  "notes": "**修复课表导入丢课**\n\n- 修复某些 PDF 里「节次时间」与课程名在同一行时，整门课被丢弃的问题（中南民族大学周一全空即由此引起）。\n- 去掉课名里混进来的上一门课地点。",
+  "generatedAt": 1795330791291,
+  "tag": "v0.38.25-Preview"
 }

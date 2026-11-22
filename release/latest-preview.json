@@ -1,12 +1,12 @@
 {
-  "versionCode": 3825,
-  "versionName": "0.38.25",
+  "versionCode": 3826,
+  "versionName": "0.38.26",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.25-Preview/nbu-assistant-lite-0.38.25-Preview.apk",
-  "sha256": "3c7272ed891cc5474e516f700b5d30b67761ccb5312ae2636b88f7a74bc126f2",
-  "size": 26542057,
-  "notes": "**修复课表导入丢课**\n\n- 修复某些 PDF 里「节次时间」与课程名在同一行时，整门课被丢弃的问题（中南民族大学周一全空即由此引起）。\n- 去掉课名里混进来的上一门课地点。",
-  "generatedAt": 1795330791291,
-  "tag": "v0.38.25-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.26-Preview/nbu-assistant-lite-0.38.26-Preview.apk",
+  "sha256": "6fd7e5c3ee70c35029b37ddb41769eb3e4f15cfc3d5a8dc0df416ca27751eb5c",
+  "size": 26525773,
+  "notes": "**课表按课号分组，修复同一门课被拆散**\n\n- 导入时改为按课程编号（[01] 这类）划分每门课，不再依赖行距：同一门课的名字、周次、教师、地点即使相隔很远也会拼在一起。",
+  "generatedAt": 1795332994286,
+  "tag": "v0.38.26-Preview"
 }

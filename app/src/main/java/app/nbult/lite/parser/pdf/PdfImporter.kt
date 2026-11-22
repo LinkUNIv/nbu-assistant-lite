@@ -68,6 +68,15 @@ internal class PdfImporter(
         if (result.slots.isEmpty()) {
             throw ParseException("未识别的表格结构：没有取到任何课程")
         }
+        // 逐条落日志：出问题时用户只要导出日志，就能看出是哪一格错了，
+        // 不必再去猜"周一为什么是空的"
+        result.slots.take(24).forEach {
+            AppLog.log(
+                "Parse",
+                "时段：周${it.dayOfWeek} ${it.startSection}-${it.endSection}节 " +
+                    "${it.name} | 周次位图=${it.weekMask.toString(2)} | 教师=${it.teacher} | 地点=${it.room}"
+            )
+        }
         return result
     }
 }

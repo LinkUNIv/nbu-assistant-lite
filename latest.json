@@ -1,8 +1,8 @@
 {
-  "version": 202611220130,
-  "updatedAt": "2026-11-22T01:28:55+08:00",
-  "notes": "资源包 202611220130",
-  "minAppVersion": 3804,
+  "version": 202611221130,
+  "updatedAt": "2026-11-22T11:31:55+08:00",
+  "notes": "资源包 202611221130",
+  "minAppVersion": 3823,
   "files": [
     {
       "path": "announcements.json",
@@ -22,7 +22,7 @@
     },
     {
       "path": "schools/index.json",
-      "sha256": "eb4f5cbaf7cbb0d2f21b1c869c1ac96f884029b9863b5f2fff6a618c64e2c710"
+      "sha256": "8d288dc42ded18f1a7ed6a5fdb1da72b2ba4240a900db3256a3a9b3b40b979d5"
     },
     {
       "path": "schools/csmy/calendar.json",

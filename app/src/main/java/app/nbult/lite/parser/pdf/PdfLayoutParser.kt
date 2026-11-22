@@ -32,6 +32,14 @@ internal object PdfLayoutParser {
     private const val MIN_CELL_WIDTH = 20f
     private const val MIN_CELL_HEIGHT = 14f
 
+    /** 行首的节次/时间前缀，例如 (08:00-08:45)、第1节、(第1-2节)。只裁这些。 */
+    private val SECTION_TIME_PREFIX =
+        Regex("""^\s*(?:\(?\d{1,2}:\d{2}\s*[-~—]\s*\d{1,2}:\d{2}\)?|第?\s*\d+\s*[-~—]?\s*\d*\s*节)""")
+
+    /** 整个片段就是节次列内容（裁完没有剩下课程名时用来判断是否丢弃）。 */
+    private val SECTION_ONLY =
+        Regex("""^\s*(?:\(?\d{1,2}:\d{2}[^)]*\)?|第?\s*\d+\s*[-~—]?\s*\d*\s*节)\s*$""")
+
     /** 判定「两个片段是否在同一视觉行」的 y 容差。 */
     private const val LINE_TOLERANCE = 3.5f
 
@@ -172,17 +180,19 @@ internal object PdfLayoutParser {
      * 数字、括号、空格去掉。
      */
     private fun clipToTableLeft(f: TextFragment, left: Float): TextFragment? {
+        // 只在「起点在表格左侧」且「开头确实像节次/时间」时才裁。
+        // 早先按几何位置一刀切，把湘潭、民政那些起点略偏左的正文也裁了，测试立刻挂掉。
         if (f.x >= left - 1f) return f
-        val width = if (f.width > 0f) f.width else estimatedWidth(f.text)
-        if (f.text.isEmpty() || width <= 0f) return null
-        val perChar = width / f.text.length
-        if (perChar <= 0f) return null
-        val drop = ((left - f.x) / perChar).roundToInt().coerceIn(0, f.text.length)
-        val rest = f.text.substring(drop)
-        if (rest.isBlank()) return null
-        return f.copy(x = left, text = rest, width = width - drop * perChar)
+        val trimmed = f.text.trimStart()
+        val prefix = SECTION_TIME_PREFIX.find(trimmed)
+        if (prefix == null) {
+            // 整段都是节次列内容（没有课程名）→ 丢弃；否则原样保留
+            return if (SECTION_ONLY.matches(trimmed)) null else f
+        }
+        val rest = trimmed.substring(prefix.range.last + 1).trim()
+        if (rest.isEmpty()) return null
+        return f.copy(x = left, text = rest)
     }
-
     /**
      * 去掉课名里混进来的房间前缀。
      *

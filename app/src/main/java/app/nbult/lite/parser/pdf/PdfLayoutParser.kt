@@ -6,6 +6,7 @@ import app.nbult.lite.parser.ParseSource
 import app.nbult.lite.parser.ParsedSlot
 import app.nbult.lite.parser.ParseResult
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.floor
 
 /**
@@ -73,10 +74,15 @@ internal object PdfLayoutParser {
             // 表头居中、正文左对齐：列左边界要回退半个列宽
             val left = anchors.first() - step / 2f
 
-            val body = items.filter { f ->
+            val rawBody = items.filter { f ->
                 !f.text.trim().startsWith(params.columnAnchor) &&
                     f.text.trim() !in params.noiseDrop
             }
+            // PDFBox 按**视觉行**取词：一行的起点若在「节次/时间」列，整段文字会从那里开始，
+            // 中心点就落到星期一里，于是 "(08:00-08:45)  法律逻辑学[01]…" 被当成课名，
+            // 后面缺教师与地点 → 正则不匹配 → 整门课丢掉（中南民大周一全空的成因）。
+            // 处理：把越过表格左边界的前缀按字符宽度裁掉，剩下的部分重新归属。
+            val body = rawBody.mapNotNull { f -> clipToTableLeft(f, left) }
 
             // 先归列，再在每列内按 y 聚类
             val useCenter = params.columnEdge == "center"
@@ -156,6 +162,41 @@ internal object PdfLayoutParser {
         val center = f.x + halfWidth(f)
         if (center < left || center > right) return -1
         return anchors.indices.minByOrNull { abs(anchors[it] - center) } ?: -1
+    }
+
+    /**
+     * 裁掉越过表格左边界的文字前缀。
+     *
+     * 只对"起点在左边界之外"的片段生效；裁完为空就整段丢弃（那是纯节次列内容）。
+     * 裁剪按**平均字宽**估算，允许偏一两个字 —— 后面的 [sanitizeName] 会把残留的
+     * 数字、括号、空格去掉。
+     */
+    private fun clipToTableLeft(f: TextFragment, left: Float): TextFragment? {
+        if (f.x >= left - 1f) return f
+        val width = if (f.width > 0f) f.width else estimatedWidth(f.text)
+        if (f.text.isEmpty() || width <= 0f) return null
+        val perChar = width / f.text.length
+        if (perChar <= 0f) return null
+        val drop = ((left - f.x) / perChar).roundToInt().coerceIn(0, f.text.length)
+        val rest = f.text.substring(drop)
+        if (rest.isBlank()) return null
+        return f.copy(x = left, text = rest, width = width - drop * perChar)
+    }
+
+    /**
+     * 去掉课名里混进来的房间前缀。
+     *
+     * 实测样例：`16号楼 S160211人工智能与计算思维(实验)` —— 上一门课的地点被并进了
+     * 下一门的课名，因为两段文字在 PDF 里紧邻。
+     */
+    private fun sanitizeName(raw: String): String {
+        val text = raw.trim()
+        val idx = text.lastIndexOf("号楼")
+        if (idx < 0 || idx + 2 >= text.length) return text
+        val rest = text.substring(idx + 2).trimStart { c ->
+            c.isDigit() || c == ' ' || (c.code < 128 && c.isLetter())
+        }
+        return if (rest.isBlank()) text else rest
     }
 
     /** 半个字宽：优先用真实宽度，没有就按字号估。 */
@@ -375,7 +416,7 @@ internal object PdfLayoutParser {
         dayOfWeek: Int,
         params: PdfTableParams
     ): ParsedSlot? {
-        val name = m.groups["name"]?.value?.trim().orEmpty()
+        val name = sanitizeName(m.groups["name"]?.value.orEmpty())
         val start = m.groups["s1"]?.value?.toIntOrNull()
         val end = m.groups["s2"]?.value?.toIntOrNull()
         val weeks = m.groups["weeks"]?.value.orEmpty()

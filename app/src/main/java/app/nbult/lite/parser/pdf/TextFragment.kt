@@ -56,5 +56,13 @@ internal data class PdfTableParams(
      * 两边都不好过。打开后以「(n-m节)」行为锚点，把**紧邻的无节次块**并回名字。
      * 默认关：湘潭那类一格一段的 PDF 不需要，开了反而有风险。
      */
-    val namePrefixMerge: Boolean = false
+    val namePrefixMerge: Boolean = false,
+    /**
+     * 按**课号**（`[01]` 这类）划分每门课，而不是靠行距。
+     *
+     * 有的教务系统同一门课的四五行间距不一（21pt、40pt 都出现过），单靠阈值必然把
+     * 教师、地点切到别的块里丢掉。课号是天然边界：出现即新的一门课。
+     * 默认关，只对需要它的学校开启。
+     */
+    val groupByCourseCode: Boolean = false
 )

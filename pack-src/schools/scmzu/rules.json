@@ -56,7 +56,7 @@
     ],
     "pdf": {
       "columnAnchor": "星期",
-      "rowGapPt": 18,
+      "rowGapPt": 20,
       "headerPerPage": false,
       "namePrefixMerge": true,
       "cellRegex": "^(?<name>[^\\[]+?)\\s*\\[(?<code>[^\\]]*)\\]\\s*(?<weeks>\\d[\\d,\\-]*\\s*周(?:\\s*[（(]\\s*[单双]\\s*[)）])?)\\s*[（(]\\s*第?\\s*(?<s1>\\d+)\\s*[-—~]\\s*(?<s2>\\d+)\\s*节\\s*[)）]\\s*(?<teacher>[^\\d]*)\\s*(?<room>.+)$",
@@ -69,7 +69,8 @@
         "同学课表"
       ],
       "multiCourse": true,
-      "columnEdge": "center"
+      "columnEdge": "center",
+      "groupByCourseCode": true
     }
   },
   "capabilities": {

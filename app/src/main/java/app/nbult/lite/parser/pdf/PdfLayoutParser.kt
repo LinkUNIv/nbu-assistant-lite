@@ -107,6 +107,13 @@ internal object PdfLayoutParser {
                 // 课程名可能被行距阈值切到上一块（民政样本里名字两行相隔 13.5pt，
                 // 而格子边界是 25.5pt，单靠阈值两边都不好过）。改成以「(n-m节)」行为锚点：
                 // 前面那些不含节次的块是**这门课名字的前半截**，并进来再解析。
+                if (params.groupByCourseCode) {
+                    // 以课号为边界重新归组：无论行距多大，一门课的所有行都跟着它的课号走
+                    mergeByCourseCode(clusterRows(columnItems, params.rowGapPt)).forEach { text ->
+                        cells.addAll(toSlots(text, column + 1, params))
+                    }
+                    return@forEach
+                }
                 if (!params.namePrefixMerge) {
                     clusterRows(columnItems, params.rowGapPt).forEach { block ->
                         cells.addAll(toSlots(block.text, column + 1, params))
@@ -250,6 +257,32 @@ internal object PdfLayoutParser {
 
     /** 一「块」：同一格子内被 y 聚类到一起的若干行。 */
     private data class RowBlock(val y: Float, val text: String)
+
+    /** 课号：`[01]`、`[04]` 这类。用它当课程边界比行距可靠得多。 */
+    private val COURSE_CODE = Regex("""\[[^\]]{1,8}\]""")
+
+    /**
+     * 按课号把行块拼成"一门课"。
+     *
+     * 规则：遇到带课号的块就开新的一门，其后的块（哪怕隔得很远）都归它，
+     * 直到下一个带课号的块出现。没有课号的块在开头时（页脚之类）单独成组。
+     */
+    private fun mergeByCourseCode(blocks: List<RowBlock>): List<String> {
+        val out = mutableListOf<String>()
+        val buffer = StringBuilder()
+        var started = false
+        blocks.forEach { block ->
+            val hasCode = COURSE_CODE.containsMatchIn(block.text)
+            if (hasCode && started) {
+                out += buffer.toString()
+                buffer.clear()
+            }
+            buffer.append(block.text)
+            if (hasCode) started = true
+        }
+        if (buffer.isNotEmpty()) out += buffer.toString()
+        return out.filter { it.isNotBlank() }
+    }
 
     /**
      * 一格可能有多门课。

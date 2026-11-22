@@ -1,12 +1,12 @@
 {
-  "versionCode": 3823,
-  "versionName": "0.38.23",
+  "versionCode": 3824,
+  "versionName": "0.38.24",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.23-Preview/nbu-assistant-lite-0.38.23-Preview.apk",
-  "sha256": "d90e3eacc879a7f7cdc30739d12f8b4b7467ce368b67a88a12165a1fe3b091a2",
-  "size": 26525469,
-  "notes": "**公告改为独立通道**\n\n- 公告不再随资源包下发，改为单独通道。\n- 取不到远端时保留本地缓存，不会因为一次网络失败把公告清空。\n- 为中南民族大学添加专项优化。",
-  "generatedAt": 1795318175210,
-  "tag": "v0.38.23-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.24-Preview/nbu-assistant-lite-0.38.24-Preview.apk",
+  "sha256": "c3c0f4da980563347e8c0a1269f8041e74705b8f5ef4449dfe1a469338b91115",
+  "size": 26525561,
+  "notes": "**解析诊断日志**\n\n- 导入课表时逐条记录解析结果（周几、节次、周次、教师、地点），并记录每列片段数与匹配失败的原文本。",
+  "generatedAt": 1795328802892,
+  "tag": "v0.38.24-Preview"
 }

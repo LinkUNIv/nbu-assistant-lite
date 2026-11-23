@@ -1,7 +1,7 @@
 {
-  "version": 202611230955,
-  "updatedAt": "2026-11-23T10:23:41+08:00",
-  "notes": "中南民大：配合 0.38.28（页眉裁剪）",
+  "version": 202611231420,
+  "updatedAt": "2026-11-23T14:12:46+08:00",
+  "notes": "中南民大：加入作息（11 节）与学年起止",
   "minAppVersion": 3823,
   "files": [
     {
@@ -41,8 +41,12 @@
       "sha256": "80b007c01d780b785cfd9f205656315e9cc24fd1838dc6987a98937d11261102"
     },
     {
+      "path": "schools/scmzu/calendar.json",
+      "sha256": "d8f0cbc4be248a35da10edb45cb4ad8cf62477f664a3f32d7690d98bc11a703f"
+    },
+    {
       "path": "schools/scmzu/rules.json",
-      "sha256": "49636972418a7aad2e729b8dca32804973cfbbd61059e134ef09e8b270a603e2"
+      "sha256": "1ac4a885e2f240f4f1088676aaab97eae8562e01882263adbc19afa8a1b525b0"
     },
     {
       "path": "schools/xtu/calendar.json",

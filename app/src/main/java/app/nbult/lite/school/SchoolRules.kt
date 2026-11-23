@@ -194,7 +194,8 @@ internal data class SchoolRules(
                     // 这两个开关以前只写在 data class 上、**没有从 JSON 读**：
                     // csmy 的 rules.json 明明写了 namePrefixMerge=true，实际一直按 false 跑
                     namePrefixMerge = it.optBoolean("namePrefixMerge", false),
-                    multiCourse = it.optBoolean("multiCourse", false)
+                    multiCourse = it.optBoolean("multiCourse", false),
+                    groupByCourseCode = it.optBoolean("groupByCourseCode", false)
                 )
             }
             return SchoolImporter(
@@ -285,7 +286,14 @@ internal data class PdfImportParams(
     /** 课程名跨行时并回（民政需要，湘潭不需要）。 */
     val namePrefixMerge: Boolean = false,
     /** 一格多课（中南民大：同格排着单周与双周两门）。开着才按节次锚点切分。 */
-    val multiCourse: Boolean = false
+    val multiCourse: Boolean = false,
+    /**
+     * 按**课号**（`[01]` 这类）划分每门课，不靠行距。
+     *
+     * 同一门课的名字、周次、教师、地点在这类 PDF 里间距不一（实测 21pt 与 40pt 都有），
+     * 单靠阈值会把教师和地点切出去、当成无主片段丢掉。
+     */
+    val groupByCourseCode: Boolean = false
 )
 
 /** 模块开关。关掉的模块在界面上不出现，路由也拦住。 */

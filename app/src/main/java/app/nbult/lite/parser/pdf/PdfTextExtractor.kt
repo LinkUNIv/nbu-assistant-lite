@@ -27,25 +27,48 @@ internal class PdfTextExtractor(context: Context) {
                 val pageNumber = page
                 val stripper = object : PDFTextStripper() {
                     override fun writeString(text: String, textPositions: List<TextPosition>) {
-                        val trimmed = text.trim()
-                        if (trimmed.isEmpty() || textPositions.isEmpty()) return
-                        // 一行可能由多段组成；取最左那段的坐标作为这一行的归属依据
-                        val first = textPositions.minByOrNull { it.xDirAdj } ?: return
-                        // PDFBox 的 yDirAdj 是**自上而下递增**，而归列算法的前提是
-                        // 「y 越大越靠上」。这里取反，别让方向约定漏到上层去 ——
-                        // 湘潭那份样本上，方向搞反会让单元格里的多行按逆序拼接，正则直接不匹配。
-                        // 真实宽度：字形推进量求和。归格/归列都要用它 ——
-                        // 按字数估宽会把长课名的框算大一倍，文字被分到相邻格
-                        val width = textPositions.sumOf { it.widthDirAdj.toDouble() }.toFloat()
-                        fragments.add(
-                            TextFragment(
-                                page = pageNumber,
-                                x = first.xDirAdj,
-                                y = -first.yDirAdj,
-                                text = trimmed,
-                                width = width
-                            )
-                        )
+                        if (textPositions.isEmpty()) return
+                        // **不按行合并**：一行横跨两列时，合并后只能整体归到一列，
+                        // 会把邻居的课名/教师一起拖进来（实测「周宪法学[04]…陈光斌,聂长建」）。
+                        // 按词输出，每个词有自己的 x，才能各自归列。
+                        val sorted = textPositions.sortedBy { it.xDirAdj }
+                        var buffer = StringBuilder()
+                        var startX = 0f
+                        var widthSum = 0f
+                        var prevEnd = Float.NaN
+                        var glyphY = 0f
+                        fun flush() {
+                            val raw = buffer.toString().trim()
+                            if (raw.isNotEmpty()) {
+                                fragments.add(
+                                    TextFragment(
+                                        page = pageNumber,
+                                        x = startX,
+                                        y = -glyphY,
+                                        text = raw,
+                                        width = widthSum
+                                    )
+                                )
+                            }
+                            buffer = StringBuilder()
+                            widthSum = 0f
+                        }
+                        for (position in sorted) {
+                            val glyph = position.unicode ?: ""
+                            if (glyph.isBlank()) continue
+                            // 词间距：按字号的比例判断，避免中文字距被误切
+                            val gapLimit = (position.fontSizeInPt * 0.35f).coerceIn(2f, 12f)
+                            val gap = if (prevEnd.isNaN()) 0f else position.xDirAdj - prevEnd
+                            if (buffer.isNotEmpty() && gap > gapLimit) flush()
+                            if (buffer.isEmpty()) {
+                                startX = position.xDirAdj
+                                glyphY = position.yDirAdj
+                            }
+                            buffer.append(glyph)
+                            widthSum += position.widthDirAdj
+                            prevEnd = position.xDirAdj + position.widthDirAdj
+                        }
+                        flush()
                     }
                 }
                 stripper.sortByPosition = true

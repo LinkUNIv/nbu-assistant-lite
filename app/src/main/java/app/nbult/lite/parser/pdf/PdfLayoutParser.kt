@@ -37,6 +37,11 @@ internal object PdfLayoutParser {
         Regex("""^\s*(?:\(?\d{1,2}:\d{2}\s*[-~—]\s*\d{1,2}:\d{2}\)?|第?\s*\d+\s*[-~—]?\s*\d*\s*节)""")
 
     /** 整个片段就是节次列内容（裁完没有剩下课程名时用来判断是否丢弃）。 */
+    /** 地点：`15号楼15609`、`体育场馆南湖田径场`、`S160211` 这几种写法。 */
+    private val ROOM_PATTERN = Regex(
+        """\d+\s*号楼\s*[A-Za-z]?[\d\-]*|[^\s，,]{0,6}(?:场馆|教室)[^\s，,]{0,10}|S\d{4,}"""
+    )
+
     private val SECTION_ONLY =
         Regex("""^\s*(?:\(?\d{1,2}:\d{2}[^)]*\)?|第?\s*\d+\s*[-~—]?\s*\d*\s*节)\s*$""")
 
@@ -62,6 +67,7 @@ internal object PdfLayoutParser {
         // 续表页没有表头：沿用上一页的列锚
         var anchors: List<Float> = emptyList()
         var anchorCenters: List<Float> = emptyList()
+        var headerY = Float.POSITIVE_INFINITY
 
         fragments.groupBy { it.page }.toSortedMap().forEach { (page, items) ->
             val header = items.filter { it.text.trim().startsWith(params.columnAnchor) }
@@ -71,6 +77,8 @@ internal object PdfLayoutParser {
                 // 表头是**居中**文字：按中心归列时要用 x + 宽/2，
                 // 但 header 模式的左边界仍按 x 算 —— 两套都留着，别互相干扰
                 anchorCenters = sortedHeader.map { it.x + halfWidth(it) }
+                // 表头之上的都是页眉（「报表打印页面」「XX 同学课表」），不能并进第一门课
+                headerY = sortedHeader.maxOf { it.y }
             } else if (params.headerPerPage && anchors.isEmpty()) {
                 warnings.add("第 ${page + 1} 页没有表头，且此前也没读到表头，该页跳过")
                 return@forEach
@@ -84,7 +92,8 @@ internal object PdfLayoutParser {
 
             val rawBody = items.filter { f ->
                 !f.text.trim().startsWith(params.columnAnchor) &&
-                    f.text.trim() !in params.noiseDrop
+                    f.text.trim() !in params.noiseDrop &&
+                    f.y < headerY - 1f
             }
             // PDFBox 按**视觉行**取词：一行的起点若在「节次/时间」列，整段文字会从那里开始，
             // 中心点就落到星期一里，于是 "(08:00-08:45)  法律逻辑学[01]…" 被当成课名，
@@ -469,7 +478,9 @@ internal object PdfLayoutParser {
         return ParsedSlot(
             name = name,
             teacher = m.groups["teacher"]?.value?.trim().orEmpty(),
-            room = m.groups["room"]?.value?.trim().orEmpty(),
+            // 房间号只取像房间的那一段：单元格尾部的周次/噪声会被并进来
+            // （实测「15号楼155121-3」「10号楼10302李雄平」）
+            room = ROOM_PATTERN.find(m.groups["room"]?.value.orEmpty())?.value?.trim().orEmpty(),
             dayOfWeek = dayOfWeek,
             startSection = start,
             endSection = end,

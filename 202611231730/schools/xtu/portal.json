@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "version": "2026.11.14",
+  "updatedAt": "2026-11-14",
+  "notice": "",
+  "categories": [
+    "学习",
+    "生活",
+    "服务"
+  ],
+  "entries": [
+    {
+      "id": "X1",
+      "title": "教务系统",
+      "subtitle": "jwc.xtu.edu.cn",
+      "url": "https://jwc.xtu.edu.cn",
+      "category": "学习"
+    },
+    {
+      "id": "X2",
+      "title": "图书馆",
+      "subtitle": "借阅、座位、数据库",
+      "url": "https://lib.xtu.edu.cn",
+      "category": "学习"
+    },
+    {
+      "id": "X3",
+      "title": "新闻网",
+      "subtitle": "湘潭大学新闻网",
+      "url": "https://news.xtu.edu.cn",
+      "category": "学习"
+    },
+    {
+      "id": "X4",
+      "title": "校园一卡通",
+      "subtitle": "充值、消费查询",
+      "url": "https://ecard.xtu.edu.cn",
+      "category": "生活"
+    },
+    {
+      "id": "X5",
+      "title": "邮箱",
+      "subtitle": "mail.xtu.edu.cn",
+      "url": "https://mail.xtu.edu.cn",
+      "category": "生活"
+    },
+    {
+      "id": "X6",
+      "title": "WebVPN",
+      "subtitle": "校外访问校内资源",
+      "url": "https://vpn.xtu.edu.cn",
+      "category": "服务"
+    },
+    {
+      "id": "X7",
+      "title": "校历",
+      "subtitle": "2026-2027 学年",
+      "url": "https://www.xtu.edu.cn/xysh/ggfw/xl.htm",
+      "category": "服务",
+      "action": "calendar"
+    },
+    {
+      "id": "XTEST",
+      "title": "包内测试条目",
+      "subtitle": "看到这一条说明资源包已生效",
+      "url": "https://www.xtu.edu.cn/xysh/ggfw/xl.htm",
+      "category": "服务"
+    }
+  ]
+}

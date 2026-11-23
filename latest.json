@@ -1,7 +1,7 @@
 {
-  "version": 202611231520,
-  "updatedAt": "2026-11-23T15:04:33+08:00",
-  "notes": "中南民大：新增规则自检样例（脱敏夹具 + 期望 18 条）",
+  "version": 202611231730,
+  "updatedAt": "2026-11-23T17:27:30+08:00",
+  "notes": "【验证包】自检期望值故意设为 40，用于确认失败提示",
   "minAppVersion": 3823,
   "files": [
     {
@@ -62,7 +62,7 @@
     },
     {
       "path": "schools/scmzu/selftest.json",
-      "sha256": "2d6ff382f007ce45b97e9176587a65a2a1d90dfbae6f07320f6ec38fe93b5226"
+      "sha256": "e6545f7e84a0b796aecfe6730b56c2e6f453a6ced1ce259bb7cc5e7264fca9ff"
     },
     {
       "path": "schools/xtu/calendar.json",

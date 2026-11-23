@@ -1,0 +1,13 @@
+{
+  "fixture": "fixtures/scmzu.tsv",
+  "expectSlots": 40,
+  "mustContain": [
+    "法律逻辑学",
+    "人工智能与计算思维(实验)",
+    "体育1"
+  ],
+  "mustNotContain": [
+    "号楼",
+    "学年第一学期"
+  ]
+}

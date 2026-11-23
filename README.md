@@ -18,13 +18,13 @@
 > ⚠️ **若你还在 0.38.18 及更早版本**：应用内「检查更新」可能被 CDN 缓存挡住，一直提示已是最新。
 > 请直接从 [Releases](https://github.com/LinkUNIv/nbu-assistant-lite/releases) 下载最新 APK 手动安装一次，之后自更新恢复正常。
 
-当前预览版本：**0.38.26 Preview**（2026-11-22）
+当前预览版本：**0.38.27 Preview**（2026-11-22）
 
-[下载 Preview](https://github.com/LinkUNIv/nbu-assistant-lite/releases/tag/v0.38.26-Preview) · [完整更新说明](docs/releases/v0.38.26-Preview.md)
+[下载 Preview](https://github.com/LinkUNIv/nbu-assistant-lite/releases/tag/v0.38.27-Preview) · [完整更新说明](docs/releases/v0.38.27-Preview.md)
 
 | 文件 | 大小 | 运行要求 |
 |---|---|---|
-| `nbu-assistant-lite-0.38.26-Preview.apk` | 约 25 MiB（含离线 OCR 与 PDF 原生库，已裁剪架构） | Android 7.0（API 24）及以上 |
+| `nbu-assistant-lite-0.38.27-Preview.apk` | 约 25 MiB（含离线 OCR 与 PDF 原生库，已裁剪架构） | Android 7.0（API 24）及以上 |
 
 - 下载完成后使用文件管理器打开安装
 - 同包名、同签名的升级可覆盖安装并保留数据；卸载后重新安装会清空本地数据

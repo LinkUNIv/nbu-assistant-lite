@@ -1,7 +1,7 @@
 {
-  "version": 202611231420,
-  "updatedAt": "2026-11-23T14:12:46+08:00",
-  "notes": "中南民大：加入作息（11 节）与学年起止",
+  "version": 202611231435,
+  "updatedAt": "2026-11-23T14:21:09+08:00",
+  "notes": "中南民大：作息 + 资讯源（4 栏）+ 校园入口",
   "minAppVersion": 3823,
   "files": [
     {
@@ -45,8 +45,16 @@
       "sha256": "d8f0cbc4be248a35da10edb45cb4ad8cf62477f664a3f32d7690d98bc11a703f"
     },
     {
+      "path": "schools/scmzu/news.json",
+      "sha256": "5abd8d6885d88c628c93253d1d6521630b6c618b49d5d0eeceb6997a5c0f9460"
+    },
+    {
+      "path": "schools/scmzu/portal.json",
+      "sha256": "ba4bae4d3212a19112bd7d21ae6d732b1406b6a86cb80847498ea06bbff3c2af"
+    },
+    {
       "path": "schools/scmzu/rules.json",
-      "sha256": "1ac4a885e2f240f4f1088676aaab97eae8562e01882263adbc19afa8a1b525b0"
+      "sha256": "b2494e64ce8e9606be22e498bbac348374e2f2dbf7323ce96304a16b428d76f9"
     },
     {
       "path": "schools/xtu/calendar.json",

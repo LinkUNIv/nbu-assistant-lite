@@ -386,7 +386,7 @@ internal object PdfLayoutParser {
         val markers = SECTION_MARKER.findAll(cellText).toList()
         if (markers.size <= 1) return listOf(cellText)
 
-        val starts = markers.mapNotNull { m -> courseStartBefore(cellText, m.range.first) }
+        val starts = markers.mapNotNull { m -> courseStartBefore(cellText, m.range.first, roomTail) }
         if (starts.size != markers.size) return listOf(cellText)   // 回溯失败就退回老路径
 
         return starts.mapIndexed { i, start ->
@@ -396,7 +396,7 @@ internal object PdfLayoutParser {
     }
 
     /** 从节次标记往前找「课名 + [课号]」的起点；找不到返回 null。 */
-    private fun courseStartBefore(text: String, markerStart: Int): Int? {
+    private fun courseStartBefore(text: String, markerStart: Int, roomTail: String): Int? {
         val head = text.substring(0, markerStart)
         val code = CODE_TAIL.findAll(head).lastOrNull() ?: return null
         // 从 [课号] 往前吃，直到撞上数字或 ASCII 字母（那是上一门的教室/房间号）。

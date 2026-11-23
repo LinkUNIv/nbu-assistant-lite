@@ -137,6 +137,51 @@
 - [ ] 解析器可扩展：遇"一天内并排双栏"时按"列内 x 再聚一次"切子列（真遇到再做）
 - [ ] `[日志]` 逐项按各自场景手测；`parserVersion` 验证旧包不报错
 
+# 八、资源包可维护性（0.38.30 → 0.39）
+
+> 起因：0.38.22~0.38.29 期间出现三次「包发出去才发现坏了」——缺 `events` 字段、
+> 校历路径指错学校、地点尾数粘连。缺的是**可验证性**，不是功能。
+
+- [ ] **0.38.30 房号尾数**：`15号楼155121` → `15512`
+      落点 `PdfLayoutParser.extractRoom` / `GLUED_WEEK`（已改，待发版）
+      [日志] 周二 9-11 地点应为 `15号楼15512`
+
+- [ ] **0.38.31 包内自检（P0）**
+      - [ ] `pack-src/schools/<id>/selftest.json`：`fixture` / `expectSlots` / `mustContain` / `mustNotContain`
+      - [ ] `pack-src/fixtures/<id>.tsv`：脱敏片段（姓名→教师甲，删学号与链接）
+      - [ ] `school/SelfTest.kt`：跑 `PdfLayoutParser.parse` 比对，结果进 StateFlow
+      - [ ] `debug/DebugScreen.kt`：显示「通过 18/18」或失败明细
+      - [ ] `tools/gen-selftest.py`：从 `exact.tsv` 生成脱敏夹具
+      - [ ] 判定用 `>= expectSlots` + 关键课名命中，不用 `==`
+      - [ ] 失败只警告、不禁用学校；缺 `selftest.json` 静默跳过
+      - [日志] 人为改坏 `cellRegex` 后面板标红并列出未匹配样本
+
+- [ ] **0.38.32 校历页增强**
+      - [ ] 学年/学期卡片直接显示起止与总周数（现在只有事件与图）
+      - [ ] 官方日历图缓存到本地，弱网也能看
+      - [日志] 切到民大后校历页显示「2 个学期 / 9 个节点 / 2 张图」
+
+- [ ] **0.39.0 L1 参数外置**
+      - [ ] `rules.json → importer.tuning`：`lineTolerance` `roomTailChars` `roomPattern`
+            `trailingRange` `sectionMarker` `courseCode` `sectionTimePrefix` `wordGapRatio`
+      - [ ] 默认值 = 现值，零行为变化；按 `PACK_CONTENT.md` 第六节的四处清单接线
+      - [ ] 每个字段先有自检覆盖，再外置
+      - [日志] 路由日志打印 tuning 关键值
+
+- [ ] **0.39.x 资源包结构治理**
+      - [ ] `latest.json.schema`：结构变更时旧 App 整包跳过（与 `minAppVersion` 语义区分）
+      - [ ] 保留上一版包 + 调试面板「回退上一版」
+      - [ ] `publish-pack.sh` 校验：出现未知字段时提示是否抬 `minAppVersion`
+
+- [ ] **0.39.x 诊断快照**
+      - [ ] 「导出诊断包」：`fragments` + `slots` + `unmatched` 存一份 JSON
+      - [日志] 导出后文件含 167 段片段与 18 条时段
+
+- [ ] **0.40 结构外置（视学校数）**
+      - [ ] L2 `pipeline` 数组；学校 ≥ 8 所再做
+      - [ ] 按校分包 `schools/<id>/latest.json`；学校 ≥ 5 所再做
+
+
 # 七、结构性 / 长期（P3–P4）
 
 - [ ] 新手引导（0.39.0，P3）：`SettingsStore.onboardingDone` 首启触发，**允许跳过**，

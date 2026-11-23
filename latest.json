@@ -1,7 +1,7 @@
 {
-  "version": 202611231735,
-  "updatedAt": "2026-11-23T17:30:43+08:00",
-  "notes": "恢复正常自检期望值（18）",
+  "version": 202611232210,
+  "updatedAt": "2026-11-23T22:30:09+08:00",
+  "notes": "中南民大：参数外置 tuning 段（配合 0.39.0）",
   "minAppVersion": 3823,
   "files": [
     {
@@ -58,7 +58,7 @@
     },
     {
       "path": "schools/scmzu/rules.json",
-      "sha256": "b2494e64ce8e9606be22e498bbac348374e2f2dbf7323ce96304a16b428d76f9"
+      "sha256": "dd67bb27656a33de1c4612a63775560d517f8a7233ed6e8774f55bccab3f6d52"
     },
     {
       "path": "schools/scmzu/selftest.json",

@@ -1,12 +1,12 @@
 {
-  "versionCode": 3830,
-  "versionName": "0.38.30",
+  "versionCode": 3900,
+  "versionName": "0.39.0",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.30-Preview/nbu-assistant-lite-0.38.30-Preview.apk",
-  "sha256": "556adc4ddc35603ae4b33345ef8bcea13e690c7d50380175fc7f4c02b42c400c",
-  "size": 26542613,
-  "notes": "**增加规则自检，提高应用效率**\n\n- 新增规则自检：用资源包里的脱敏样例跑一遍课表解析，结果在「设置 → 调试 → 规则自检」显示，通过时显示条数，失败时列出缺少与不该出现的课名。\n- 修复地点尾部粘连。",
-  "generatedAt": 1795419616572,
-  "tag": "v0.38.30-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.39.0-Preview/nbu-assistant-lite-0.39.0-Preview.apk",
+  "sha256": "17eadf3cb194aa63805b64e329dd03ac0ebc3571f423f8c984a360fba9aa70e7",
+  "size": 26542681,
+  "notes": "**进一步提高资源包效用，提高运行效率**\n\n- 行距容差、房间后缀字表、节次锚点、课号模式改为由资源包下发，默认值与原来一致。",
+  "generatedAt": 1795443489248,
+  "tag": "v0.39.0-Preview"
 }

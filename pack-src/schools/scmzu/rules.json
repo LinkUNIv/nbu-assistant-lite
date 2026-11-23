@@ -70,7 +70,8 @@
       ],
       "multiCourse": true,
       "columnEdge": "center",
-      "groupByCourseCode": true
+      "groupByCourseCode": true,
+      "dropAboveHeader": true
     }
   },
   "capabilities": {

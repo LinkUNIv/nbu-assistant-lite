@@ -63,6 +63,7 @@ internal class PdfImporter(
                 noiseDrop = pdf.noiseDrop,
                 namePrefixMerge = pdf.namePrefixMerge,
                 groupByCourseCode = pdf.groupByCourseCode,
+                dropAboveHeader = pdf.dropAboveHeader,
                 weekSyntax = rules?.weekSyntax ?: app.nbult.lite.parser.WeekSyntax()
             ),
             rules = pdfRules

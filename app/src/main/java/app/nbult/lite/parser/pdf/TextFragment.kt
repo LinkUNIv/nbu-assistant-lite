@@ -64,5 +64,11 @@ internal data class PdfTableParams(
      * 教师、地点切到别的块里丢掉。课号是天然边界：出现即新的一门课。
      * 默认关，只对需要它的学校开启。
      */
-    val groupByCourseCode: Boolean = false
+    val groupByCourseCode: Boolean = false,
+    /**
+     * 丢掉表头之上的片段（页眉：「报表打印页面」「XX 同学课表」）。
+     *
+     * 默认关：有些样本把表格上方的说明行也算进了夹具，关掉以免改变既有行为。
+     */
+    val dropAboveHeader: Boolean = false
 )

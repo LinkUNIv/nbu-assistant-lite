@@ -195,7 +195,8 @@ internal data class SchoolRules(
                     // csmy 的 rules.json 明明写了 namePrefixMerge=true，实际一直按 false 跑
                     namePrefixMerge = it.optBoolean("namePrefixMerge", false),
                     multiCourse = it.optBoolean("multiCourse", false),
-                    groupByCourseCode = it.optBoolean("groupByCourseCode", false)
+                    groupByCourseCode = it.optBoolean("groupByCourseCode", false),
+                    dropAboveHeader = it.optBoolean("dropAboveHeader", false)
                 )
             }
             return SchoolImporter(
@@ -293,7 +294,9 @@ internal data class PdfImportParams(
      * 同一门课的名字、周次、教师、地点在这类 PDF 里间距不一（实测 21pt 与 40pt 都有），
      * 单靠阈值会把教师和地点切出去、当成无主片段丢掉。
      */
-    val groupByCourseCode: Boolean = false
+    val groupByCourseCode: Boolean = false,
+    /** 丢掉表头之上的页眉片段（中南民大：页眉会被并进第一门课）。 */
+    val dropAboveHeader: Boolean = false
 )
 
 /** 模块开关。关掉的模块在界面上不出现，路由也拦住。 */

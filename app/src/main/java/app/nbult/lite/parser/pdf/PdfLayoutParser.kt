@@ -106,7 +106,7 @@ internal object PdfLayoutParser {
             val rawBody = items.filter { f ->
                 !f.text.trim().startsWith(params.columnAnchor) &&
                     f.text.trim() !in params.noiseDrop &&
-                    f.y < headerY - 1f
+                    (!params.dropAboveHeader || f.y < headerY - 1f)
             }
             // PDFBox 按**视觉行**取词：一行的起点若在「节次/时间」列，整段文字会从那里开始，
             // 中心点就落到星期一里，于是 "(08:00-08:45)  法律逻辑学[01]…" 被当成课名，

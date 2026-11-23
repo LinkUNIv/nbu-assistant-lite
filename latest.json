@@ -1,7 +1,7 @@
 {
-  "version": 202611231452,
-  "updatedAt": "2026-11-23T14:32:58+08:00",
-  "notes": "中南民大：校历补 events 字段（此前整体解析失败）",
+  "version": 202611231458,
+  "updatedAt": "2026-11-23T14:33:44+08:00",
+  "notes": "中南民大：校历补事件节点与官方日历图",
   "minAppVersion": 3823,
   "files": [
     {
@@ -42,7 +42,7 @@
     },
     {
       "path": "schools/scmzu/calendar.json",
-      "sha256": "a23e96b59c775e29ff8c4dbbf2d0a60fdd701e04ecd04de2a31d936bca3433a5"
+      "sha256": "8ffef4ed80ba0dfa0f7495eb02dedecd4d4267a6c1377b0aefa3006974ae93cd"
     },
     {
       "path": "schools/scmzu/news.json",

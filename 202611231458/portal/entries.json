@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-23",
+  "notice": "这些入口只做跳转：由系统默认浏览器打开，本应用不读取页面内容，也不保存任何登录状态。标注 HTTP 的站点使用明文传输，浏览器会提示「不安全」，请仅在可信网络下登录。",
+  "entries": [
+    {
+      "id": "A1",
+      "title": "教务管理系统",
+      "subtitle": "经信息门户登录 · 课表 · 成绩",
+      "url": "https://i.nbu.edu.cn",
+      "category": "学习",
+      "login": true,
+      "insecure": false
+    },
+    {
+      "id": "A2",
+      "title": "选课系统",
+      "subtitle": "选课 · 退改选 · 轮次通知",
+      "url": "https://jwxk.nbu.edu.cn",
+      "category": "学习",
+      "login": true,
+      "insecure": false
+    },
+    {
+      "id": "A5",
+      "title": "教务处通知",
+      "subtitle": "教学安排 · 考试 · 学籍",
+      "url": "https://jwc.nbu.edu.cn",
+      "category": "学习",
+      "login": false,
+      "insecure": false
+    },
+    {
+      "id": "A7",
+      "title": "图书馆",
+      "subtitle": "借阅 · 预约 · 数据库",
+      "url": "https://lib.nbu.edu.cn",
+      "category": "学习",
+      "login": false,
+      "insecure": false
+    },
+    {
+      "id": "B1",
+      "title": "校园一卡通",
+      "subtitle": "余额 · 流水 · 挂失",
+      "url": "http://card.nbu.edu.cn",
+      "category": "生活",
+      "login": true,
+      "insecure": true
+    },
+    {
+      "id": "B3",
+      "title": "校园卡充值指引",
+      "subtitle": "支付宝 / 易校园 / 公众号",
+      "url": "https://net.nbu.edu.cn/info/1007/23693.htm",
+      "category": "生活",
+      "login": false,
+      "insecure": false
+    },
+    {
+      "id": "B4",
+      "title": "校园邮箱",
+      "subtitle": "学号邮箱 · 首次需激活",
+      "url": "https://email.nbu.edu.cn",
+      "category": "生活",
+      "login": true,
+      "insecure": false
+    },
+    {
+      "id": "C1",
+      "title": "校历（官方）",
+      "subtitle": "逐年校历原图",
+      "url": "https://www.nbu.edu.cn/xl.htm",
+      "category": "服务",
+      "login": false,
+      "insecure": false
+    },
+    {
+      "id": "C2",
+      "title": "WebVPN",
+      "subtitle": "校外访问校内系统",
+      "url": "https://vpn.nbu.edu.cn",
+      "category": "服务",
+      "login": true,
+      "insecure": false
+    }
+  ]
+}

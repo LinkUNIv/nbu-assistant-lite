@@ -426,3 +426,48 @@ app/src/main/assets/
 运行 `python tools/package-source.py --output /path/to/source.zip` 打包源码；在 Git 仓库中仅收录已跟踪和未忽略的文件，排除构建缓存、密钥、本机配置、日志和私有样本。不要使用临时 OCR 样本目录作为源码发布资产。构建产物放 GitHub Release，不提交 APK、映射或 ZIP 到 Git 历史。
 
 发布资产应包含 APK、源码 ZIP、映射压缩包、APK SHA-256、`SHA256SUMS.txt` 与 `manifest.json`。签名/清单中的 applicationId 为 `app.nbult.lite.preview`。源码 ZIP 与 APK 必须对应同一提交；重新打包后同步更新校验值。OCR 私有照片真机回归存在未通过项，须在预览说明中保留，不应声称完整实机验收通过。
+
+## 解析适配：先离线复现，再发包
+
+2026-11-22~23 适配中南民大花了 8 个版本，代价来自**在设备上猜**。现在有三个工具，
+顺序是：**离线复现 → 定位到层 → 才动代码**。
+
+| 工具 | 用途 |
+|---|---|
+| `tools/dump_pdf_words.py` | 导出 PDF 的带坐标文字（装 pymupdf 时为精确字形框），生成夹具 |
+| `tools/sim/parse_sim.py` | 在 PC 上跑完整解析流程，输出时段与未匹配 |
+| `tools/check-release-notes.py` | 校验发布说明与 CHANGELOG 一致 |
+
+### 三条踩过的坑
+
+**① 取词粒度决定成败。** PDFBox 按**行**输出，一行横跨两列时只能整体归到一列，
+会把邻居的课名、教师一起拖走。改成按**词**输出（`PdfTextExtractor`，词间距 = 0.35×字号）
+后，同一份 PDF 从 7 条变成 18 条。这是结构性差异，调参调不出来。
+
+**② 新字段"加了没接上"是最贵的错误。** `groupByCourseCode` 先加到 `PdfTableParams`，
+但真正读 JSON 的是 `SchoolRules.PdfImportRules`，且 `PdfImporter` 构造时也没传 —— 
+连发两版都是空转。新增规则字段的检查清单：
+
+```
+① SchoolRules 里 JSON 解析 + 字段声明
+② PdfImporter 构造 PdfTableParams 时传参
+③ 路由日志里打印该字段（否则无法确认生效）
+④ 资源包里写值，CI 全绿后装机核对日志
+```
+
+**③ 规则类改动优先，但字段拆分往往只能改代码。** 正则里的 `(?<teacher>[^\d]*)`
+会把整段吞进 teacher，规则层无法表达"在哪里断开"。判断顺序：
+正则能表达 → 改包；涉及顺序/组合/切分逻辑 → 改代码。
+
+### 发包前的三个硬性检查
+
+| 检查 | 症状 |
+|---|---|
+| `docs/releases/<tag>.md` 必须存在 | 缺失则 CI `test -f` 直接 exit 1 |
+| 发布说明**不得**包含"版本号提升至…"一行 | 与 CHANGELOG 比对必然不一致 |
+| 标签与 `versionName` 一致 | 否则报"标签与代码版本不匹配" |
+
+### 规则外置的边界
+
+参数与正则可以外置（阈值、`cellRegex`、路径），**处理顺序不能**。
+外置之后编译期检查消失，必须先有包内自检（见 PENDING），否则等于把错误直接推给用户。

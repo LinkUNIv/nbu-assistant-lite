@@ -48,6 +48,8 @@ internal object PdfLayoutParser {
         if (text.isEmpty()) return text
         val hit = ROOM_PATTERN.find(text)?.value?.trim()
         val room = if (hit.isNullOrEmpty()) text else hit
+        // 「15号楼15512」后紧跟下一行的「1-3周」：先按"5 位房号 + 1 位数字 + -N"整段剪掉
+        GLUED_WEEK.find(room)?.let { return it.groups["num"]?.value ?: room }
         // 「15号楼155121-3」：后面的 `-3` 是下一行的周次被粘上来，房间号本身是 15512
         return TRAILING_RANGE.find(room)?.let { m ->
             m.groups["num"]?.value ?: room
@@ -72,6 +74,9 @@ internal object PdfLayoutParser {
     private val VENUE_WORDS = listOf("体育场馆", "体育馆", "场馆", "田径场", "教室")
 
     /** 末尾粘上的周次残片，如 `155121-3` 里的 `-3`（只在前段已有 4 位以上数字时剪掉）。 */
+    /** 房号后粘连的「1-3」（下一行的周次），只在前段是 5 位房号时才认。 */
+    private val GLUED_WEEK = Regex("""^(?<num>\d+\s*号楼\s*[A-Za-z]?\d{5})\d-\d{1,2}$""")
+
     private val TRAILING_RANGE = Regex("""^(?<num>\d+\s*号楼\s*[A-Za-z]?\d{4,})-\d{1,2}$""")
 
     /** 地点：`15号楼15609`、`体育场馆南湖田径场`、`S160211` 这几种写法。 */

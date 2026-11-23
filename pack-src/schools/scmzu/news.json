@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "columns": [
+    {
+      "id": 2201,
+      "name": "通知公告",
+      "listUrl": "https://www.scuec.edu.cn/sylm/tzgg.htm",
+      "source": "中南民大官网",
+      "idOffset": 0
+    },
+    {
+      "id": 2202,
+      "name": "南湖快讯",
+      "listUrl": "https://www.scuec.edu.cn/xww/stxy.htm",
+      "source": "民大新闻网",
+      "idOffset": 0
+    },
+    {
+      "id": 2203,
+      "name": "教育教学",
+      "listUrl": "https://www.scuec.edu.cn/xww/jyjx.htm",
+      "source": "民大新闻网",
+      "idOffset": 0
+    },
+    {
+      "id": 2204,
+      "name": "学术科研",
+      "listUrl": "https://www.scuec.edu.cn/xww/xsky.htm",
+      "source": "民大新闻网",
+      "idOffset": 0
+    }
+  ],
+  "rules": {
+    "linkSelector": "a[href*=\"info/\"]",
+    "minTitleLength": 4,
+    "articleIdPatterns": [
+      "/info/\\d+/(\\d+)\\.htm",
+      "[?&]wbnewsid=(\\d+)"
+    ],
+    "datePattern": "(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})(?:\\s+(\\d{1,2}):(\\d{2}))?",
+    "publishedPattern": "发布(?:日期|时间)[：: ]*\\s*(\\d{4})[/\\-.](\\d{1,2})[/\\-.](\\d{1,2})(?:\\s*(\\d{1,2}):(\\d{2}))?",
+    "contentRoots": [
+      "div.v_news_content",
+      "div.content",
+      "#vsb_content"
+    ],
+    "contentBlockSelector": "h2, h3, p, img, div.img-desc",
+    "bodyCandidateSelector": "div, article, section",
+    "minRootChars": 30,
+    "minBodyParagraphs": 2,
+    "minBlockChars": 2,
+    "noiseKeywords": [
+      "cenr",
+      "side",
+      "right",
+      "recommend",
+      "related",
+      "share",
+      "fx",
+      "footer",
+      "foot",
+      "nav",
+      "crumb",
+      "dqwz",
+      "banner",
+      "tjlist"
+    ],
+    "decorativeNames": [
+      "index_",
+      "ad_",
+      "foot_logo",
+      "logo",
+      "qq2017",
+      "qrcode",
+      "share"
+    ]
+  }
+}

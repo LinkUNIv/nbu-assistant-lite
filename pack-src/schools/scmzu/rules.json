@@ -47,9 +47,9 @@
   },
   "limits": {
     "maxWeeks": 20,
-    "maxSections": 14
+    "maxSections": 11
   },
-  "news": "schools/csmy/news.json",
+  "news": "schools/scmzu/news.json",
   "importer": {
     "formats": [
       "pdf"
@@ -90,6 +90,6 @@
     "odd": "(?:[(（]\\s*单\\s*[)）]|单周)",
     "even": "(?:[(（]\\s*双\\s*[)）]|双周)"
   },
-  "calendar": "schools/csmy/calendar.json",
-  "portal": "schools/csmy/portal.json"
+  "calendar": "schools/scmzu/calendar.json",
+  "portal": "schools/scmzu/portal.json"
 }

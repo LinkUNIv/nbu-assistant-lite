@@ -37,6 +37,19 @@ internal object PdfLayoutParser {
         Regex("""^\s*(?:\(?\d{1,2}:\d{2}\s*[-~—]\s*\d{1,2}:\d{2}\)?|第?\s*\d+\s*[-~—]?\s*\d*\s*节)""")
 
     /** 整个片段就是节次列内容（裁完没有剩下课程名时用来判断是否丢弃）。 */
+    /**
+     * 从正则尾部捞出地点。
+     *
+     * 匹配不上时**原样返回**：别的学校地点写法各异（`逸夫楼301`、`东区操场`），
+     * 强行套这个模式会把它们清空 —— 湘潭那批用例就是这么挂的。
+     */
+    private fun extractRoom(raw: String): String {
+        val text = raw.trim()
+        if (text.isEmpty()) return text
+        val hit = ROOM_PATTERN.find(text)?.value?.trim()
+        return if (hit.isNullOrEmpty()) text else hit
+    }
+
     /** 地点：`15号楼15609`、`体育场馆南湖田径场`、`S160211` 这几种写法。 */
     private val ROOM_PATTERN = Regex(
         """\d+\s*号楼\s*[A-Za-z]?[\d\-]*|[^\s，,]{0,6}(?:场馆|教室)[^\s，,]{0,10}|S\d{4,}"""
@@ -480,7 +493,7 @@ internal object PdfLayoutParser {
             teacher = m.groups["teacher"]?.value?.trim().orEmpty(),
             // 房间号只取像房间的那一段：单元格尾部的周次/噪声会被并进来
             // （实测「15号楼155121-3」「10号楼10302李雄平」）
-            room = ROOM_PATTERN.find(m.groups["room"]?.value.orEmpty())?.value?.trim().orEmpty(),
+            room = extractRoom(m.groups["room"]?.value.orEmpty()),
             dayOfWeek = dayOfWeek,
             startSection = start,
             endSection = end,

@@ -70,5 +70,7 @@ internal data class PdfTableParams(
      *
      * 默认关：有些样本把表格上方的说明行也算进了夹具，关掉以免改变既有行为。
      */
-    val dropAboveHeader: Boolean = false
+    val dropAboveHeader: Boolean = false,
+    /** 细参数（阈值与正则），来自资源包；默认值等于代码原值。 */
+    val tuning: app.nbult.lite.school.PdfTuning = app.nbult.lite.school.PdfTuning()
 )

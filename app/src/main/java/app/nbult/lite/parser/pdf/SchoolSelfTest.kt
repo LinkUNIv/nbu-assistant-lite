@@ -72,7 +72,8 @@ object SchoolSelfTest {
                     namePrefixMerge = pdf.namePrefixMerge,
                     weekSyntax = rules.weekSyntax,
                     groupByCourseCode = pdf.groupByCourseCode,
-                    dropAboveHeader = pdf.dropAboveHeader
+                    dropAboveHeader = pdf.dropAboveHeader,
+                    tuning = pdf.tuning
                 ),
                 rules = emptyList()
             ).slots

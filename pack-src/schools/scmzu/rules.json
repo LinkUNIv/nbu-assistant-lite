@@ -71,7 +71,13 @@
       "multiCourse": true,
       "columnEdge": "center",
       "groupByCourseCode": true,
-      "dropAboveHeader": true
+      "dropAboveHeader": true,
+      "tuning": {
+        "lineTolerance": 3.5,
+        "roomTailChars": "楼室庭场馆",
+        "sectionMarker": "\\(\\s*(?:第)?\\s*\\d+\\s*(?:[-—~]\\s*\\d+\\s*)?节\\s*\\)",
+        "courseCode": "\\[[^\\]]{1,8}\\]"
+      }
     }
   },
   "capabilities": {

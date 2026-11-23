@@ -196,7 +196,15 @@ internal data class SchoolRules(
                     namePrefixMerge = it.optBoolean("namePrefixMerge", false),
                     multiCourse = it.optBoolean("multiCourse", false),
                     groupByCourseCode = it.optBoolean("groupByCourseCode", false),
-                    dropAboveHeader = it.optBoolean("dropAboveHeader", false)
+                    dropAboveHeader = it.optBoolean("dropAboveHeader", false),
+                    tuning = it.optJSONObject("tuning")?.let { t ->
+                        PdfTuning(
+                            lineTolerance = t.optDouble("lineTolerance", 3.5).toFloat(),
+                            roomTailChars = t.optString("roomTailChars", "楼室庭场馆"),
+                            sectionMarker = t.optString("sectionMarker", PdfTuning().sectionMarker),
+                            courseCode = t.optString("courseCode", PdfTuning().courseCode)
+                        )
+                    } ?: PdfTuning()
                 )
             }
             return SchoolImporter(
@@ -296,7 +304,25 @@ internal data class PdfImportParams(
      */
     val groupByCourseCode: Boolean = false,
     /** 丢掉表头之上的页眉片段（中南民大：页眉会被并进第一门课）。 */
-    val dropAboveHeader: Boolean = false
+    val dropAboveHeader: Boolean = false,
+    /** 解析器的细参数。默认值 = 代码里的原值，写进包只为了能不改 APK 调。 */
+    val tuning: PdfTuning = PdfTuning()
+)
+
+/**
+ * 解析器调参。**默认值必须与代码原值一致**，否则升级 APK 就会改变既有学校的行为。
+ *
+ * 这些是"阈值与正则"，不含处理顺序 —— 顺序类改动仍然只能发版。
+ */
+internal data class PdfTuning(
+    /** 同一视觉行的 y 容差。 */
+    val lineTolerance: Float = 3.5f,
+    /** 回溯课名时遇到这些字就停（房间后缀）。 */
+    val roomTailChars: String = "楼室庭场馆",
+    /** `(第n-m节)` 锚点。 */
+    val sectionMarker: String = "\\(\\s*(?:第)?\\s*\\d+\\s*(?:[-—~]\\s*\\d+\\s*)?节\\s*\\)",
+    /** 课号 `[01]`。 */
+    val courseCode: String = "\\[[^\\]]{1,8}\\]"
 )
 
 /** 模块开关。关掉的模块在界面上不出现，路由也拦住。 */

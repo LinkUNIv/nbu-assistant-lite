@@ -160,29 +160,33 @@ internal object PdfLayoutParser {
                 // 前面那些不含节次的块是**这门课名字的前半截**，并进来再解析。
                 if (params.groupByCourseCode) {
                     // 以课号为边界重新归组：无论行距多大，一门课的所有行都跟着它的课号走
-                    mergeByCourseCode(clusterRows(columnItems, params.rowGapPt)).forEach { text ->
+                    mergeByCourseCode(
+                        clusterRows(columnItems, params.rowGapPt, params.tuning.lineTolerance),
+                        Regex(params.tuning.courseCode)
+                    ).forEach { text ->
                         cells.addAll(toSlots(text, column + 1, params))
                     }
                     return@forEach
                 }
                 if (!params.namePrefixMerge) {
-                    clusterRows(columnItems, params.rowGapPt).forEach { block ->
+                    clusterRows(columnItems, params.rowGapPt, params.tuning.lineTolerance).forEach { block ->
                         cells.addAll(toSlots(block.text, column + 1, params))
                     }
                     return@forEach
                 }
-                val blocks = clusterRows(columnItems, params.rowGapPt)
+                val blocks = clusterRows(columnItems, params.rowGapPt, params.tuning.lineTolerance)
                 // 只有"紧挨着"的前一块才算名字前半截；相隔一整个格子（约 25pt）的
                 // 那是上一门课的尾巴，绝不能并进来
                 val nearGap = params.rowGapPt * 1.6f
                 var i = 0
                 while (i < blocks.size) {
-                    if (!hasSectionMarker(blocks[i].text)) { i++; continue }
+                    val marker = Regex(params.tuning.sectionMarker)
+                    if (!hasSectionMarker(blocks[i].text, marker)) { i++; continue }
                     // 从锚点往回看：只有"挨着"的无节次块才是名字前半截
                     val parts = ArrayDeque<String>()
                     var refY = blocks[i].y
                     var j = i - 1
-                    while (j >= 0 && !hasSectionMarker(blocks[j].text) &&
+                    while (j >= 0 && !hasSectionMarker(blocks[j].text, marker) &&
                         abs(blocks[j].y - refY) <= nearGap
                     ) {
                         parts.addFirst(blocks[j].text)
@@ -212,8 +216,8 @@ internal object PdfLayoutParser {
     private val SECTION_MARKER = Regex("\\(\\s*(?:第)?\\s*\\d+\\s*(?:[-—~]\\s*\\d+\\s*)?节\\s*\\)")
 
     /** 这一块里有没有「(1-2节)」这种节次标记 —— 有它才是格子的起点。 */
-    private fun hasSectionMarker(text: String): Boolean =
-        SECTION_MARKER.containsMatchIn(text)
+    private fun hasSectionMarker(text: String, marker: Regex = SECTION_MARKER): Boolean =
+        marker.containsMatchIn(text)
 
     private fun columnOf(x: Float, left: Float, step: Float): Int = floor((x - left) / step).toInt()
 
@@ -275,7 +279,11 @@ internal object PdfLayoutParser {
      * 同一列内按 y 从大到小排序，相邻片段 y 差超过阈值就断开。
      * 拼接时**不加分隔符**：中文换行处会切断词语（`信息科技大楼北-` + `401`）。
      */
-    private fun clusterRows(items: List<TextFragment>, gap: Float): List<RowBlock> {
+    private fun clusterRows(
+        items: List<TextFragment>,
+        gap: Float,
+        tolerance: Float = LINE_TOLERANCE
+    ): List<RowBlock> {
         if (items.isEmpty()) return emptyList()
         // 同一视觉行里的片段 y 会差 1~2pt（基线对齐差异），直接按 y 排会把
         // "4-19周" 和 "(第1-2节)" 交错成 "(第1-24-19周节)"。
@@ -283,7 +291,7 @@ internal object PdfLayoutParser {
         val rows = mutableListOf<MutableList<TextFragment>>()
         items.sortedByDescending { it.y }.forEach { fragment ->
             val row = rows.lastOrNull()
-            if (row != null && abs(row.first().y - fragment.y) <= LINE_TOLERANCE) row.add(fragment)
+            if (row != null && abs(row.first().y - fragment.y) <= tolerance) row.add(fragment)
             else rows.add(mutableListOf(fragment))
         }
         val sorted = rows.flatMap { row -> row.sortedBy { it.x } }
@@ -318,12 +326,15 @@ internal object PdfLayoutParser {
      * 规则：遇到带课号的块就开新的一门，其后的块（哪怕隔得很远）都归它，
      * 直到下一个带课号的块出现。没有课号的块在开头时（页脚之类）单独成组。
      */
-    private fun mergeByCourseCode(blocks: List<RowBlock>): List<String> {
+    private fun mergeByCourseCode(
+        blocks: List<RowBlock>,
+        codeRegex: Regex = COURSE_CODE
+    ): List<String> {
         val out = mutableListOf<String>()
         val buffer = StringBuilder()
         var started = false
         blocks.forEach { block ->
-            val hasCode = COURSE_CODE.containsMatchIn(block.text)
+            val hasCode = codeRegex.containsMatchIn(block.text)
             if (hasCode && started) {
                 out += buffer.toString()
                 buffer.clear()
@@ -397,7 +408,7 @@ internal object PdfLayoutParser {
             if (c.isDigit() || c in 'a'..'z' || c in 'A'..'Z') break
             // 房间后缀（楼/室/庭/场/馆）属于**上一门课**，继续往前吃会把
             // "号楼模拟法庭" 拼进下一门的课名里
-            if (c in ROOM_TAIL_CHARS) break
+            if (c in params.tuning.roomTailChars) break
             i--
         }
         while (i < code.range.first && text[i].isWhitespace()) i++

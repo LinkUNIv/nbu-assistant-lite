@@ -1,12 +1,12 @@
 {
-  "versionCode": 3827,
-  "versionName": "0.38.27",
+  "versionCode": 3828,
+  "versionName": "0.38.28",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.27-Preview/nbu-assistant-lite-0.38.27-Preview.apk",
-  "sha256": "9e5e1dad0d3651714704d0dd3032e243398b3eb5648a68dbe479660361dd4488",
-  "size": 26542249,
-  "notes": "**修复按课号分组未生效**\n\n- 修正上一版遗漏：按课号分组的开关没有被传入解析器，导致该功能实际未生效。\n- 路由日志补上开关状态与行距，便于下次核对。",
-  "generatedAt": 1795397930768,
-  "tag": "v0.38.27-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.28-Preview/nbu-assistant-lite-0.38.28-Preview.apk",
+  "sha256": "e20f3fd2fd74c554a4eb8fdae43b73182035c736cd071e3260f88cbac57188a4",
+  "size": 26542381,
+  "notes": "**课表取词改为按词，修复串行与丢课**\n\n- 取词不再把整行合并：一行横跨两列时，会把相邻列的课名、教师一起拖进来。\n- 表头之上的页眉文字不再并进第一门课。\n- 地点只提取房间号本身，不再粘连周次或教师姓名。",
+  "generatedAt": 1795400581960,
+  "tag": "v0.38.28-Preview"
 }

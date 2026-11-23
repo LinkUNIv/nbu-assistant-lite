@@ -55,6 +55,15 @@ fun DebugScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val net by container.networkMonitor.status.collectAsStateWithLifecycle()
+    // 规则自检：拿包里的脱敏样例跑一遍解析，结果贴在这里。
+    // 规则可能来自资源包，改了没人编译拦住，只能靠它自己说"还能跑"。
+    var selfTest by remember { mutableStateOf<app.nbult.lite.parser.pdf.SchoolSelfTest.Result?>(null) }
+    var selfTestRunning by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        selfTestRunning = true
+        selfTest = app.nbult.lite.parser.pdf.SchoolSelfTest.run(context)
+        selfTestRunning = false
+    }
 
     var sandboxText by remember { mutableStateOf("") }
     var result by remember { mutableStateOf<ParseResult?>(null) }
@@ -298,6 +307,34 @@ fun DebugScreen(onBack: () -> Unit) {
                 }
             }
 
+            DebugCard("规则自检") {
+                val r = selfTest
+                when {
+                    selfTestRunning -> Text("正在自检…", style = MaterialTheme.typography.bodySmall)
+                    r == null -> Text("未运行", style = MaterialTheme.typography.bodySmall)
+                    !r.ran -> Text("该校未提供自检样例（${r.schoolId}）", style = MaterialTheme.typography.bodySmall)
+                    r.ok -> Text(
+                        "通过 · ${r.actual} 条（期望 ≥${r.expected}）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    else -> Column {
+                        Text(
+                            "失败 · ${r.actual} 条（期望 ≥${r.expected}）",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        if (r.missing.isNotEmpty()) Text("缺少课名：${r.missing.joinToString("、")}", style = MaterialTheme.typography.bodySmall)
+                        if (r.forbidden.isNotEmpty()) Text("不该出现：${r.forbidden.joinToString("、")}", style = MaterialTheme.typography.bodySmall)
+                        if (r.detail.isNotEmpty()) Text(r.detail, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Text(
+                    "资源包里的 selftest.json 决定这项；改坏规则会在这里变红。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             DebugCard("环境") {
                 Text("包名：${context.packageName}", style = MaterialTheme.typography.labelSmall)
                 Text("构建：${app.nbult.lite.BuildConfig.BUILD_KIND}（${app.nbult.lite.BuildConfig.VERSION_NAME}）", style = MaterialTheme.typography.labelSmall)

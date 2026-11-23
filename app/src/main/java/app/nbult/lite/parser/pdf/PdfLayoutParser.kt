@@ -363,7 +363,7 @@ internal object PdfLayoutParser {
             // 匹配不上时把原文打出来：否则只会看到"少了几门课"，无从下手
             AppLog.log("Parse", "未匹配：周$dayOfWeek «${cellText.take(80)}»")
         }
-        val chunks = if (params.multiCourse) splitByCourseAnchors(cellText) else listOf(cellText)
+        val chunks = if (params.multiCourse) splitByCourseAnchors(cellText, params.tuning.roomTailChars) else listOf(cellText)
         return chunks.mapNotNull { chunk ->
             regex.find(chunk)?.let { m -> toSlot(m, chunk, dayOfWeek, params) }
         }
@@ -382,7 +382,7 @@ internal object PdfLayoutParser {
      *
      * 这样不依赖分隔符，也不怕地点是中文（「模拟法庭」）。
      */
-    private fun splitByCourseAnchors(cellText: String): List<String> {
+    private fun splitByCourseAnchors(cellText: String, roomTail: String): List<String> {
         val markers = SECTION_MARKER.findAll(cellText).toList()
         if (markers.size <= 1) return listOf(cellText)
 
@@ -408,7 +408,7 @@ internal object PdfLayoutParser {
             if (c.isDigit() || c in 'a'..'z' || c in 'A'..'Z') break
             // 房间后缀（楼/室/庭/场/馆）属于**上一门课**，继续往前吃会把
             // "号楼模拟法庭" 拼进下一门的课名里
-            if (c in params.tuning.roomTailChars) break
+            if (c in roomTail) break
             i--
         }
         while (i < code.range.first && text[i].isWhitespace()) i++

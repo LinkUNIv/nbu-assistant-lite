@@ -1,7 +1,7 @@
 {
-  "version": 202611221520,
-  "updatedAt": "2026-11-22T15:38:49+08:00",
-  "notes": "中南民大：按课号分组（配合 0.38.26）",
+  "version": 202611230955,
+  "updatedAt": "2026-11-23T10:23:41+08:00",
+  "notes": "中南民大：配合 0.38.28（页眉裁剪）",
   "minAppVersion": 3823,
   "files": [
     {
@@ -42,7 +42,7 @@
     },
     {
       "path": "schools/scmzu/rules.json",
-      "sha256": "8fc1e698cbbec00b9b37789208893e4115a89c4de9b8ccdff7e419f3e37c7baf"
+      "sha256": "49636972418a7aad2e729b8dca32804973cfbbd61059e134ef09e8b270a603e2"
     },
     {
       "path": "schools/xtu/calendar.json",

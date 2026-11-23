@@ -1,12 +1,12 @@
 {
-  "versionCode": 3829,
-  "versionName": "0.38.29",
+  "versionCode": 3830,
+  "versionName": "0.38.30",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.29-Preview/nbu-assistant-lite-0.38.29-Preview.apk",
-  "sha256": "f6c78fb89e616073e610a992784111d5aaa91d6f40c17918e49956b5a9dc514e",
-  "size": 26542489,
-  "notes": "**修正课表字段细节**\n\n- 体育场馆这类没有门牌号的地点，不再被算进教师姓名。\n- 地点末尾粘连的周次残片（如 `15号楼155121-3`）会被剪掉。",
-  "generatedAt": 1795406525343,
-  "tag": "v0.38.29-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.38.30-Preview/nbu-assistant-lite-0.38.30-Preview.apk",
+  "sha256": "556adc4ddc35603ae4b33345ef8bcea13e690c7d50380175fc7f4c02b42c400c",
+  "size": 26542613,
+  "notes": "**增加规则自检，提高应用效率**\n\n- 新增规则自检：用资源包里的脱敏样例跑一遍课表解析，结果在「设置 → 调试 → 规则自检」显示，通过时显示条数，失败时列出缺少与不该出现的课名。\n- 修复地点尾部粘连。",
+  "generatedAt": 1795419616572,
+  "tag": "v0.38.30-Preview"
 }

@@ -1,7 +1,7 @@
 {
-  "version": 202611231458,
-  "updatedAt": "2026-11-23T14:33:44+08:00",
-  "notes": "中南民大：校历补事件节点与官方日历图",
+  "version": 202611231520,
+  "updatedAt": "2026-11-23T15:04:33+08:00",
+  "notes": "中南民大：新增规则自检样例（脱敏夹具 + 期望 18 条）",
   "minAppVersion": 3823,
   "files": [
     {
@@ -11,6 +11,10 @@
     {
       "path": "calendar/nbu_calendar.json",
       "sha256": "f1bd8758515d4a92f299833dac26e47d4811ddfad44cc46075171aa890e4f4ee"
+    },
+    {
+      "path": "fixtures/scmzu.tsv",
+      "sha256": "03b8bd06368add454503c84aa903c17cc5e9d18d9e57372ef330dae3da52dfa2"
     },
     {
       "path": "news/sources.json",
@@ -55,6 +59,10 @@
     {
       "path": "schools/scmzu/rules.json",
       "sha256": "b2494e64ce8e9606be22e498bbac348374e2f2dbf7323ce96304a16b428d76f9"
+    },
+    {
+      "path": "schools/scmzu/selftest.json",
+      "sha256": "2d6ff382f007ce45b97e9176587a65a2a1d90dfbae6f07320f6ec38fe93b5226"
     },
     {
       "path": "schools/xtu/calendar.json",

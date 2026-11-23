@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "version": "2026.11.15",
+  "updatedAt": "2026-11-15",
+  "notice": "只收录已确认可用的公开地址，其余入口待补。",
+  "categories": [
+    "学习"
+  ],
+  "entries": [
+    {
+      "id": "C1",
+      "title": "学校官网",
+      "subtitle": "csmzxy.edu.cn",
+      "url": "https://www.csmzxy.edu.cn/",
+      "category": "学习"
+    },
+    {
+      "id": "C2",
+      "title": "校历",
+      "subtitle": "党政办 · 服务指南（PDF）",
+      "url": "https://dzb.csmzxy.edu.cn/fwzn/xl.htm",
+      "category": "学习"
+    }
+  ]
+}

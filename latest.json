@@ -1,7 +1,7 @@
 {
-  "version": 202611231435,
-  "updatedAt": "2026-11-23T14:21:09+08:00",
-  "notes": "中南民大：作息 + 资讯源（4 栏）+ 校园入口",
+  "version": 202611231445,
+  "updatedAt": "2026-11-23T14:26:03+08:00",
+  "notes": "中南民大：改用官方校历（8/31 开学，两学期各 20 周）",
   "minAppVersion": 3823,
   "files": [
     {
@@ -42,7 +42,7 @@
     },
     {
       "path": "schools/scmzu/calendar.json",
-      "sha256": "d8f0cbc4be248a35da10edb45cb4ad8cf62477f664a3f32d7690d98bc11a703f"
+      "sha256": "36077df369b0b17a76e40d1ba127edd9877297e4b1d8250750997e325ea8e0a5"
     },
     {
       "path": "schools/scmzu/news.json",

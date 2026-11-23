@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "version": "2026.11.23",
+  "updatedAt": "2026-11-23",
+  "notice": "入口取自官网首页与常见子站，若打不开请反馈。",
+  "categories": [
+    "学习",
+    "生活",
+    "服务"
+  ],
+  "entries": [
+    {
+      "id": "M1",
+      "title": "新闻网",
+      "subtitle": "民大要闻、南湖快讯",
+      "url": "https://www.scuec.edu.cn/xww",
+      "category": "学习"
+    },
+    {
+      "id": "M2",
+      "title": "通知公告",
+      "subtitle": "官网公告栏",
+      "url": "https://www.scuec.edu.cn/sylm/tzgg.htm",
+      "category": "学习"
+    },
+    {
+      "id": "M3",
+      "title": "教务处",
+      "subtitle": "jwc.scuec.edu.cn",
+      "url": "https://jwc.scuec.edu.cn",
+      "category": "学习"
+    },
+    {
+      "id": "M4",
+      "title": "图书馆",
+      "subtitle": "借阅、座位、数据库",
+      "url": "https://lib.scuec.edu.cn",
+      "category": "学习"
+    },
+    {
+      "id": "M5",
+      "title": "就业信息网",
+      "subtitle": "招聘与实习",
+      "url": "https://job.scuec.edu.cn",
+      "category": "服务"
+    }
+  ]
+}

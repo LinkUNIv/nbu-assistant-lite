@@ -47,8 +47,32 @@ internal object PdfLayoutParser {
         val text = raw.trim()
         if (text.isEmpty()) return text
         val hit = ROOM_PATTERN.find(text)?.value?.trim()
-        return if (hit.isNullOrEmpty()) text else hit
+        val room = if (hit.isNullOrEmpty()) text else hit
+        // 「15号楼155121-3」：后面的 `-3` 是下一行的周次被粘上来，房间号本身是 15512
+        return TRAILING_RANGE.find(room)?.let { m ->
+            m.groups["num"]?.value ?: room
+        } ?: room
     }
+
+    /**
+     * 场馆类地点没有门牌号，正则会把「体育场馆南湖田径场」整个算进教师。
+     * 这里按场馆关键词把地点切出来：`桂裕龙体育场馆南湖田径场` → 教师 `桂裕龙`、地点 `体育场馆南湖田径场`。
+     */
+    private fun splitTeacherRoom(teacher: String, room: String): Pair<String, String> {
+        val roomClean = extractRoom(room)
+        if (roomClean.any { it.isDigit() }) return teacher to roomClean
+        // 场馆类：`桂裕龙体育场馆南湖田径场` → 教师 `桂裕龙`、地点 `体育场馆南湖田径场`
+        val combined = teacher + roomClean
+        val idx = VENUE_WORDS.map { combined.indexOf(it) }.filter { it > 0 }.minOrNull()
+        return if (idx == null) teacher to roomClean
+        else combined.substring(0, idx).trim() to combined.substring(idx).trim()
+    }
+
+    /** 场馆关键词。顺序有意义：`体育场馆` 要在 `场馆` 之前命中，否则会把「体育」切成教师。 */
+    private val VENUE_WORDS = listOf("体育场馆", "体育馆", "场馆", "田径场", "教室")
+
+    /** 末尾粘上的周次残片，如 `155121-3` 里的 `-3`（只在前段已有 4 位以上数字时剪掉）。 */
+    private val TRAILING_RANGE = Regex("""^(?<num>\d+\s*号楼\s*[A-Za-z]?\d{4,})-\d{1,2}$""")
 
     /** 地点：`15号楼15609`、`体育场馆南湖田径场`、`S160211` 这几种写法。 */
     private val ROOM_PATTERN = Regex(
@@ -487,13 +511,18 @@ internal object PdfLayoutParser {
         val weeks = m.groups["weeks"]?.value.orEmpty()
         if (name.isEmpty() || start == null || end == null) return null
         val mask = app.nbult.lite.parser.WeekParser.mask(weeks, params.weekSyntax) ?: return null
+        val (teacherValue, roomValue) = splitTeacherRoom(
+            m.groups["teacher"]?.value.orEmpty().trim(),
+            m.groups["room"]?.value.orEmpty()
+        )
 
         return ParsedSlot(
             name = name,
-            teacher = m.groups["teacher"]?.value?.trim().orEmpty(),
             // 房间号只取像房间的那一段：单元格尾部的周次/噪声会被并进来
-            // （实测「15号楼155121-3」「10号楼10302李雄平」）
-            room = extractRoom(m.groups["room"]?.value.orEmpty()),
+            // （实测「15号楼155121-3」「10号楼10302李雄平」）。
+            // 场馆类地点没有门牌号，还要把地点从教师尾部切出来。
+            room = roomValue,
+            teacher = teacherValue,
             dayOfWeek = dayOfWeek,
             startSection = start,
             endSection = end,

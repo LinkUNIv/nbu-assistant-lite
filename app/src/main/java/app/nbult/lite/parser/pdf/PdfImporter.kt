@@ -34,6 +34,7 @@ internal class PdfImporter(
         AppLog.log(
             "Parse",
             "路由：规则ocr=${pdf.ocr} cellSource=${pdf.cellSource} multiCourse=${pdf.multiCourse} " +
+                "groupByCourseCode=${pdf.groupByCourseCode} rowGap=${pdf.rowGapPt} " +
                 "文字层片段=${fragments.size}"
         )
         if (fragments.isEmpty()) {
@@ -61,6 +62,7 @@ internal class PdfImporter(
                 multiCourse = pdf.multiCourse,
                 noiseDrop = pdf.noiseDrop,
                 namePrefixMerge = pdf.namePrefixMerge,
+                groupByCourseCode = pdf.groupByCourseCode,
                 weekSyntax = rules?.weekSyntax ?: app.nbult.lite.parser.WeekSyntax()
             ),
             rules = pdfRules

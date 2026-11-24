@@ -1,6 +1,7 @@
 package app.nbult.lite.parser.pdf
 
 import android.content.Context
+import app.nbult.lite.parser.ParsedSlot
 import app.nbult.lite.util.AppLog
 import org.json.JSONArray
 import org.json.JSONObject
@@ -16,7 +17,7 @@ import java.io.File
  * 隐私：片段里含教师姓名与教室，所以只在用户主动点击导出时才落盘，且文件写在
  * `cacheDir/exports/`，随应用缓存清理，不参与备份。
  */
-object DiagSnapshotStore {
+internal object DiagSnapshotStore {
 
     data class Snapshot(
         val takenAt: Long,

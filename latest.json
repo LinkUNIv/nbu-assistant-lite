@@ -1,7 +1,7 @@
 {
-  "version": 202611232210,
-  "updatedAt": "2026-11-23T22:30:09+08:00",
-  "notes": "中南民大：参数外置 tuning 段（配合 0.39.0）",
+  "version": 202611241130,
+  "updatedAt": "2026-11-24T11:29:59+08:00",
+  "notes": "中南民大：tuning 十项参数（配合 0.39.1）",
   "minAppVersion": 3823,
   "files": [
     {
@@ -58,7 +58,7 @@
     },
     {
       "path": "schools/scmzu/rules.json",
-      "sha256": "dd67bb27656a33de1c4612a63775560d517f8a7233ed6e8774f55bccab3f6d52"
+      "sha256": "fd56077cca494f2ccbd6f5d26e9d3b6c17d4ff3f96458aebb2aa6908f1ffe514"
     },
     {
       "path": "schools/scmzu/selftest.json",

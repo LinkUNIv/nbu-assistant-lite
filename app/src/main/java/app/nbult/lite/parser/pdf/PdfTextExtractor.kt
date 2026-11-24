@@ -20,7 +20,7 @@ internal class PdfTextExtractor(context: Context) {
         PDFBoxResourceLoader.init(context.applicationContext)
     }
 
-    fun extract(bytes: ByteArray): List<TextFragment> {
+    fun extract(bytes: ByteArray, wordGapRatio: Float = 0.35f): List<TextFragment> {
         val fragments = mutableListOf<TextFragment>()
         PDDocument.load(bytes).use { document ->
             for (page in 0 until document.numberOfPages) {
@@ -57,7 +57,7 @@ internal class PdfTextExtractor(context: Context) {
                             val glyph = position.unicode ?: ""
                             if (glyph.isBlank()) continue
                             // 词间距：按字号的比例判断，避免中文字距被误切
-                            val gapLimit = (position.fontSizeInPt * 0.35f).coerceIn(2f, 12f)
+                            val gapLimit = (position.fontSizeInPt * wordGapRatio).coerceIn(2f, 12f)
                             val gap = if (prevEnd.isNaN()) 0f else position.xDirAdj - prevEnd
                             if (buffer.isNotEmpty() && gap > gapLimit) flush()
                             if (buffer.isEmpty()) {

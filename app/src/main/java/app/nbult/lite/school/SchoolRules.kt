@@ -202,7 +202,13 @@ internal data class SchoolRules(
                             lineTolerance = t.optDouble("lineTolerance", 3.5).toFloat(),
                             roomTailChars = t.optString("roomTailChars", "楼室庭场馆"),
                             sectionMarker = t.optString("sectionMarker", PdfTuning().sectionMarker),
-                            courseCode = t.optString("courseCode", PdfTuning().courseCode)
+                            courseCode = t.optString("courseCode", PdfTuning().courseCode),
+                            roomPattern = t.optString("roomPattern", PdfTuning().roomPattern),
+                            gluedWeek = t.optString("gluedWeek", PdfTuning().gluedWeek),
+                            trailingRange = t.optString("trailingRange", PdfTuning().trailingRange),
+                            sectionTimePrefix = t.optString("sectionTimePrefix", PdfTuning().sectionTimePrefix),
+                            sectionOnly = t.optString("sectionOnly", PdfTuning().sectionOnly),
+                            wordGapRatio = t.optDouble("wordGapRatio", 0.35).toFloat()
                         )
                     } ?: PdfTuning()
                 )
@@ -322,7 +328,19 @@ internal data class PdfTuning(
     /** `(第n-m节)` 锚点。 */
     val sectionMarker: String = "\\(\\s*(?:第)?\\s*\\d+\\s*(?:[-—~]\\s*\\d+\\s*)?节\\s*\\)",
     /** 课号 `[01]`。 */
-    val courseCode: String = "\\[[^\\]]{1,8}\\]"
+    val courseCode: String = "\\[[^\\]]{1,8}\\]",
+    /** 地点三种写法：`15号楼15609` / `体育场馆…` / `S160211`。 */
+    val roomPattern: String = "\\d+\\s*号楼\\s*[A-Za-z]?[\\d\\-]*|[^\\s，,]{0,6}(?:场馆|教室)[^\\s，,]{0,10}|S\\d{4,}",
+    /** 地点尾部粘上的 `1-3`（下一行周次）。 */
+    val gluedWeek: String = "^(?<num>\\d+\\s*号楼\\s*[A-Za-z]?\\d{5})\\d-\\d{1,2}$",
+    /** 地点尾部粘上的 `-3`。 */
+    val trailingRange: String = "^(?<num>\\d+\\s*号楼\\s*[A-Za-z]?\\d{4,})-\\d{1,2}$",
+    /** 行首的节次/时间前缀。 */
+    val sectionTimePrefix: String = "^\\s*(?:\\(?\\d{1,2}:\\d{2}\\s*[-~—]\\s*\\d{1,2}:\\d{2}\\)?|第?\\s*\\d+\\s*[-~—]?\\s*\\d*\\s*节)",
+    /** 整段都是节次列内容。 */
+    val sectionOnly: String = "^\\s*(?:\\(?\\d{1,2}:\\d{2}[^)]*\\)?|第?\\s*\\d+\\s*[-~—]?\\s*\\d*\\s*节)\\s*$",
+    /** 取词时的词间距 = 字号 × 该比例。 */
+    val wordGapRatio: Float = 0.35f
 )
 
 /** 模块开关。关掉的模块在界面上不出现，路由也拦住。 */

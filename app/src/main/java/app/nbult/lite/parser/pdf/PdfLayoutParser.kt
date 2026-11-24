@@ -46,12 +46,13 @@ internal object PdfLayoutParser {
     private fun extractRoom(raw: String): String {
         val text = raw.trim()
         if (text.isEmpty()) return text
-        val hit = ROOM_PATTERN.find(text)?.value?.trim()
+        val tuning = tuningLocal.get()
+        val hit = Regex(tuning.roomPattern).find(text)?.value?.trim()
         val room = if (hit.isNullOrEmpty()) text else hit
         // 「15号楼15512」后紧跟下一行的「1-3周」：先按"5 位房号 + 1 位数字 + -N"整段剪掉
-        GLUED_WEEK.find(room)?.let { return it.groups["num"]?.value ?: room }
+        Regex(tuning.gluedWeek).find(room)?.let { return it.groups["num"]?.value ?: room }
         // 「15号楼155121-3」：后面的 `-3` 是下一行的周次被粘上来，房间号本身是 15512
-        return TRAILING_RANGE.find(room)?.let { m ->
+        return Regex(tuning.trailingRange).find(room)?.let { m ->
             m.groups["num"]?.value ?: room
         } ?: room
     }
@@ -86,6 +87,15 @@ internal object PdfLayoutParser {
 
     private val SECTION_ONLY =
         Regex("""^\s*(?:\(?\d{1,2}:\d{2}[^)]*\)?|第?\s*\d+\s*[-~—]?\s*\d*\s*节)\s*$""")
+
+    /**
+     * 当前线程生效的细参数。
+     *
+     * 这些辅助函数（extractRoom / clipToTableLeft）没有 `params`，逐个加参数会把
+     * 调用链改得很长；而解析始终在单线程内完成，用 ThreadLocal 传一次即可。
+     * **parse 入口必须先 set**，否则用的是默认值。
+     */
+    private val tuningLocal = ThreadLocal.withInitial { app.nbult.lite.school.PdfTuning() }
 
     /** 判定「两个片段是否在同一视觉行」的 y 容差。 */
     private const val LINE_TOLERANCE = 3.5f
@@ -246,10 +256,11 @@ internal object PdfLayoutParser {
         // 早先按几何位置一刀切，把湘潭、民政那些起点略偏左的正文也裁了，测试立刻挂掉。
         if (f.x >= left - 1f) return f
         val trimmed = f.text.trimStart()
-        val prefix = SECTION_TIME_PREFIX.find(trimmed)
+        val tuning = tuningLocal.get()
+        val prefix = Regex(tuning.sectionTimePrefix).find(trimmed)
         if (prefix == null) {
             // 整段都是节次列内容（没有课程名）→ 丢弃；否则原样保留
-            return if (SECTION_ONLY.matches(trimmed)) null else f
+            return if (Regex(tuning.sectionOnly).matches(trimmed)) null else f
         }
         val rest = trimmed.substring(prefix.range.last + 1).trim()
         if (rest.isEmpty()) return null

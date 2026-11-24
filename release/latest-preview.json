@@ -1,12 +1,12 @@
 {
-  "versionCode": 3900,
-  "versionName": "0.39.0",
+  "versionCode": 3901,
+  "versionName": "0.39.1",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.39.0-Preview/nbu-assistant-lite-0.39.0-Preview.apk",
-  "sha256": "17eadf3cb194aa63805b64e329dd03ac0ebc3571f423f8c984a360fba9aa70e7",
-  "size": 26542681,
-  "notes": "**进一步提高资源包效用，提高运行效率**\n\n- 行距容差、房间后缀字表、节次锚点、课号模式改为由资源包下发，默认值与原来一致。",
-  "generatedAt": 1795443489248,
-  "tag": "v0.39.0-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.39.1-Preview/nbu-assistant-lite-0.39.1-Preview.apk",
+  "sha256": "a67f979b981f9b1e3e956252966453d9818f72d6a78003d7a3cc60d53d833a0a",
+  "size": 26542777,
+  "notes": "**进一步外置解析参数，地点规则也能由资源包调整**\n\n- 地点匹配、房号尾数、行首时间前缀、取词词距改为由资源包下发，默认值与原来一致。\n- 调试面板新增「导出诊断快照」，便于调试维护。",
+  "generatedAt": 1795490692379,
+  "tag": "v0.39.1-Preview"
 }

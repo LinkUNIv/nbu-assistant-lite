@@ -59,6 +59,7 @@ fun DebugScreen(onBack: () -> Unit) {
     // 规则可能来自资源包，改了没人编译拦住，只能靠它自己说"还能跑"。
     var selfTest by remember { mutableStateOf<app.nbult.lite.parser.pdf.SchoolSelfTest.Result?>(null) }
     var selfTestRunning by remember { mutableStateOf(false) }
+    var diagPath by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         selfTestRunning = true
         selfTest = app.nbult.lite.parser.pdf.SchoolSelfTest.run(context)
@@ -334,6 +335,17 @@ fun DebugScreen(onBack: () -> Unit) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = {
+                        diagPath = app.nbult.lite.parser.pdf.DiagSnapshotStore.export(context)?.absolutePath
+                    }) { Text("导出诊断快照") }
+                    Text(
+                        diagPath?.substringAfterLast('/') ?: "含最近一次导入的片段与解析结果",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             DebugCard("环境") {
                 Text("包名：${context.packageName}", style = MaterialTheme.typography.labelSmall)

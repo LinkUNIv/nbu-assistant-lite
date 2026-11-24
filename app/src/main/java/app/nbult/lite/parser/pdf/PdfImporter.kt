@@ -69,6 +69,11 @@ internal class PdfImporter(
             ),
             rules = pdfRules
         )
+        DiagSnapshotStore.record(
+            schoolId = rules?.id ?: "unknown",
+            fragments = fragments,
+            slots = result.slots
+        )
         if (result.slots.isEmpty()) {
             throw ParseException("未识别的表格结构：没有取到任何课程")
         }

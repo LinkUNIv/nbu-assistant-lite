@@ -1,7 +1,7 @@
 {
-  "version": 202611241130,
-  "updatedAt": "2026-11-24T11:29:59+08:00",
-  "notes": "中南民大：tuning 十项参数（配合 0.39.1）",
+  "version": 202611251600,
+  "updatedAt": "2026-11-25T15:40:51+08:00",
+  "notes": "湘大自检样例 + 学校排序字段（pinyin/pinned）",
   "minAppVersion": 3823,
   "files": [
     {
@@ -17,6 +17,10 @@
       "sha256": "03b8bd06368add454503c84aa903c17cc5e9d18d9e57372ef330dae3da52dfa2"
     },
     {
+      "path": "fixtures/xtu.tsv",
+      "sha256": "4a7ef4b0f1c53db321baa803cb508c580c23ae5b6853bef1c3962308bdb37227"
+    },
+    {
       "path": "news/sources.json",
       "sha256": "03cef7a06326d106dc408b09ae5cb8e712e32bf3dffe90975d9d46913c013b60"
     },
@@ -26,7 +30,7 @@
     },
     {
       "path": "schools/index.json",
-      "sha256": "8d288dc42ded18f1a7ed6a5fdb1da72b2ba4240a900db3256a3a9b3b40b979d5"
+      "sha256": "3123d7938edc1656b18365659197c82cd6e3aa26bffd341c19fd6c23fc411b5c"
     },
     {
       "path": "schools/csmy/calendar.json",
@@ -79,6 +83,10 @@
     {
       "path": "schools/xtu/rules.json",
       "sha256": "22e35545febb39625f01f97234bbe246e51dea9c3c8692222827a1585a177104"
+    },
+    {
+      "path": "schools/xtu/selftest.json",
+      "sha256": "600e7f9959b67241b8c311e45f93b41203a9216e3534129b9d00f975b932e5c4"
     }
   ]
 }

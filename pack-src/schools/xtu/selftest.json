@@ -1,0 +1,11 @@
+{
+  "fixture": "fixtures/xtu.tsv",
+  "expectSlots": 26,
+  "mustContain": [
+    "课程1"
+  ],
+  "mustNotContain": [
+    "号楼",
+    "学年第一学期"
+  ]
+}

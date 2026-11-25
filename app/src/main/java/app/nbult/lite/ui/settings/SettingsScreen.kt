@@ -843,58 +843,40 @@ private fun SchoolCard() {
     val current = app.nbult.lite.school.SchoolPreference.schoolId(context)
     val entries = remember { app.nbult.lite.school.SchoolCatalog.entries(context) }
     val currentName = entries.firstOrNull { it.id == current }?.name ?: current
-    var picking by remember { mutableStateOf(false) }
-
+    // 学校列表常驻：不再塞进弹窗，省一次点击，也便于新增学校后立刻看到
     SettingCard(title = "学校") {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(currentName, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            Text(
-                text = "切换",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { picking = true }
-            )
-        }
-    }
-
-    if (picking) {
-        AlertDialog(
-            onDismissRequest = { picking = false },
-            title = { Text("选择学校") },
-            text = {
-                Column {
-                    entries.forEach { entry ->
+        Column {
+            entries.forEach { entry ->
+                val selected = entry.id == current
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !selected) {
+                            if (selected) return@clickable
+                            val ok = container.switchSchool(entry.id)
+                            if (!ok) {
+                                app.nbult.lite.util.AppLog.log("School", "切换 ${entry.id} 失败：偏好未写入")
+                            }
+                        }
+                        .padding(vertical = 10.dp)
+                ) {
+                    Text(
+                        text = entry.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (selected) {
                         Text(
-                            text = entry.name + if (entry.id == current) "（当前）" else "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (entry.id == current) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = entry.id != current) {
-                                    picking = false
-                                    if (entry.id != current) {
-                                        // 不重启：容器里的学校上下文整体替换，界面随 tick 重建
-                                        val ok = container.switchSchool(entry.id)
-                                        if (!ok) {
-                                            app.nbult.lite.util.AppLog.log(
-                                                "School",
-                                                "切换 ${entry.id} 失败：偏好未写入"
-                                            )
-                                        }
-                                    }
-                                }
-                                .padding(vertical = 10.dp)
+                            text = "当前",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { picking = false }) { Text("关闭") }
             }
-        )
+        }
     }
+
 }

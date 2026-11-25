@@ -18,6 +18,10 @@ internal object SchoolCatalog {
         val id: String,
         val name: String,
         val builtin: Boolean,
+        /** 拼音排序键，来自 `index.json`；缺省用 id。 */
+        val pinyin: String = id,
+        /** 置顶（默认学校）：宁波大学常驻第一位。 */
+        val pinned: Boolean = false,
         val rulesPath: String
     )
 
@@ -40,9 +44,13 @@ internal object SchoolCatalog {
                 id = id,
                 name = item.optString("name", id),
                 builtin = item.optBoolean("builtin", false),
+                pinyin = item.optString("pinyin", id),
+                pinned = item.optBoolean("pinned", false),
                 rulesPath = item.optString("rules", "schools/$id/rules.json")
             )
         }
+            // 宁波大学置顶，其余按拼音首字母升序；后续新增学校只需在 index.json 写 pinyin
+            .sortedWith(compareByDescending<Entry> { it.pinned }.thenBy { it.pinyin })
     }.getOrElse {
         AppLog.log("School", "读取学校清单失败：${it.message}")
         emptyList()

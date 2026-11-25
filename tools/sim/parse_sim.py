@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import io, re
-from sim import load_words, merge_to_lines
+from load_fragments import load_words, merge_to_lines
 import json
 
 RULES = json.load(io.open(r"C:/Users/LinkUniverse/WorkBuddy/风华宁大优化版本/nbu-assistant-lite/pack-src/schools/scmzu/rules.json", encoding="utf-8"))["importer"]["pdf"]

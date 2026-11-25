@@ -6,7 +6,8 @@
 """
 import io, re, sys
 
-TSV = r"C:/tmp/scmzu/exact.tsv"
+import os
+TSV = os.environ.get("SIM_TSV", r"C:////tmp////scmzu////exact.tsv")
 CHAR = 9.4
 
 def load_words():

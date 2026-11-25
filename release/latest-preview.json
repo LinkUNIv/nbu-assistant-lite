@@ -1,12 +1,12 @@
 {
-  "versionCode": 3901,
-  "versionName": "0.39.1",
+  "versionCode": 3902,
+  "versionName": "0.39.2",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.39.1-Preview/nbu-assistant-lite-0.39.1-Preview.apk",
-  "sha256": "a67f979b981f9b1e3e956252966453d9818f72d6a78003d7a3cc60d53d833a0a",
-  "size": 26542777,
-  "notes": "**进一步外置解析参数，地点规则也能由资源包调整**\n\n- 地点匹配、房号尾数、行首时间前缀、取词词距改为由资源包下发，默认值与原来一致。\n- 调试面板新增「导出诊断快照」，便于调试维护。",
-  "generatedAt": 1795490692379,
-  "tag": "v0.39.1-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.39.2-Preview/nbu-assistant-lite-0.39.2-Preview.apk",
+  "sha256": "0199ef488bfd03c460de77f5995cc038344788846b28243e397b2677e62166b3",
+  "size": 26542917,
+  "notes": "**学校列表常驻，自检扩到湘大**\n\n- 设置里的学校改为常驻列表，无需先点开弹窗；宁波大学置顶，其余按拼音首字母排序，新增学校只需在清单里写 `pinyin`。\n- 自检样例新增湘潭大学，调试面板可看到两校的通过情况。",
+  "generatedAt": 1795592383194,
+  "tag": "v0.39.2-Preview"
 }

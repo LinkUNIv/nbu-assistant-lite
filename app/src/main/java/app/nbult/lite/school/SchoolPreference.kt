@@ -8,13 +8,13 @@ import android.content.Context
  * 用 SharedPreferences 而不是 DataStore，是因为容器在启动时要**同步**拿到学校 id
  * 才能决定加载哪份规则；DataStore 只能异步读，首次读会拿到默认值。
  *
- * 隐藏入口解锁状态也记在这里：解锁一次就够，不必每次重启再点五下。
+ * 0.39.3 起「连点版本号 5 次解锁学校」的隐藏入口已删除（`KEY_UNLOCKED` 一并移除）：
+ * 关于页直接显示「当前学校 + 切换」。旧版本写在盘上的 `unlocked` 键没人再读，留着无害。
  */
 internal object SchoolPreference {
 
     private const val FILE = "school"
     private const val KEY_ID = "schoolId"
-    private const val KEY_UNLOCKED = "unlocked"
     private const val KEY_PERIOD_PRESET = "periodPreset"
     private const val KEY_DEFAULT_PRESET = "defaultPreset"
 
@@ -60,12 +60,6 @@ internal object SchoolPreference {
      */
     fun setSchoolId(context: Context, id: String): Boolean =
         prefs(context).edit().putString(KEY_ID, id).commit()
-
-    fun isUnlocked(context: Context): Boolean = prefs(context).getBoolean(KEY_UNLOCKED, false)
-
-    fun unlock(context: Context) {
-        prefs(context).edit().putBoolean(KEY_UNLOCKED, true).commit()
-    }
 
     /**
      * 切换学校后容器里的规则、校历都是旧的，必须重建进程才对得上。

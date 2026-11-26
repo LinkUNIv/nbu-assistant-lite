@@ -73,7 +73,7 @@ app/src/main/assets/schools/  # APK 内置，仅此一份，作为「包还没�
 ## 切换学校
 
 ```
-设置 → 版本行连点 5 次 → 出现「学校」卡 → 选校
+设置 →「关于」页「学校」一行 → 点「切换」→ 弹窗选校
   ↓
 AppContainer.switchSchool(id)
   ├─ SchoolPreference.setSchoolId()（commit 同步写，见踩坑）

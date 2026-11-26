@@ -440,23 +440,8 @@ SettingCard(title = "工作日志") {
 
             if (section == "about") {
             val badges = rememberUpdateBadges()
-            val context = LocalContext.current
-            var unlocked by remember { mutableStateOf(app.nbult.lite.school.SchoolPreference.isUnlocked(context)) }
 SettingCard(title = "版本") {
-            // 隐藏入口：连点版本行 5 次解锁「学校」。不做成明面选项，
-            // 是因为绝大多数用户只属于一所学校，多一个开关只会增加疑问
-            var taps by remember { mutableStateOf(0) }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clickable {
-                    taps += 1
-                    if (taps >= 5) {
-                        taps = 0
-                        app.nbult.lite.school.SchoolPreference.unlock(context)
-                        unlocked = true
-                    }
-                }
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("宁大助手 Lite", style = MaterialTheme.typography.bodyLarge)
                     Text(
@@ -470,9 +455,10 @@ SettingCard(title = "版本") {
             VersionEntry(badge = false)
             UpdatePopupEntry()
         }
-        if (unlocked) {
-            SchoolCard()
-        }
+        // 学校卡常驻：不再需要连点版本号解锁。绝大多数用户只属于一所学校，
+        // 所以这里只显示「当前哪所 + 切换」，四所学校不铺在页面上 —— 铺开等于
+        // 把「误触切走课表」变成一次普通点击，而切校是即时生效、无二次确认的。
+        SchoolCard()
 SettingCard(title = "资源") {
             PackEntry()
         }
@@ -827,10 +813,15 @@ private fun sectionTitle(section: String): String = when (section) {
 }
 
 /**
- * 学校切换（隐藏入口解锁后出现）。
+ * 学校切换。
  *
  * 切换由 `AppContainer.switchSchool()` 完成：规则、作息、白名单、资讯源一起换掉，
  * 界面靠 `schoolTick` 重建，**不需要重启**。这里只负责选校。
+ *
+ * 为什么只显示「当前学校 + 切换」而不把学校铺在页面上：0.39.2 试过常驻列表，
+ * 四所学校平铺在「关于」页，点错一行即切 —— 切校即时生效且没有二次确认，
+ * 而课表按学期存放、切过去看到的是另一套，用户会以为课表丢了。收回到弹窗里，
+ * 多一次点击，换掉的是每天都能误触的那个按钮。
  *
  * 副标题一行已按 0.38.3 的发布文案删除：切换本来就即时生效，不必再写一遍；
  * 「默认学校」也不再标 —— 名称本身已经足够。
@@ -843,40 +834,58 @@ private fun SchoolCard() {
     val current = app.nbult.lite.school.SchoolPreference.schoolId(context)
     val entries = remember { app.nbult.lite.school.SchoolCatalog.entries(context) }
     val currentName = entries.firstOrNull { it.id == current }?.name ?: current
-    // 学校列表常驻：不再塞进弹窗，省一次点击，也便于新增学校后立刻看到
+    var picking by remember { mutableStateOf(false) }
+
     SettingCard(title = "学校") {
-        Column {
-            entries.forEach { entry ->
-                val selected = entry.id == current
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = !selected) {
-                            if (selected) return@clickable
-                            val ok = container.switchSchool(entry.id)
-                            if (!ok) {
-                                app.nbult.lite.util.AppLog.log("School", "切换 ${entry.id} 失败：偏好未写入")
-                            }
-                        }
-                        .padding(vertical = 10.dp)
-                ) {
-                    Text(
-                        text = entry.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (selected) {
-                        Text(
-                            text = "当前",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(currentName, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Text(
+                text = "切换",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { picking = true }
+            )
         }
     }
 
+    if (picking) {
+        AlertDialog(
+            onDismissRequest = { picking = false },
+            title = { Text("选择学校") },
+            text = {
+                Column {
+                    entries.forEach { entry ->
+                        Text(
+                            text = entry.name + if (entry.id == current) "（当前）" else "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (entry.id == current) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = entry.id != current) {
+                                    picking = false
+                                    if (entry.id != current) {
+                                        // 不重启：容器里的学校上下文整体替换，界面随 tick 重建
+                                        val ok = container.switchSchool(entry.id)
+                                        if (!ok) {
+                                            app.nbult.lite.util.AppLog.log(
+                                                "School",
+                                                "切换 ${entry.id} 失败：偏好未写入"
+                                            )
+                                        }
+                                    }
+                                }
+                                .padding(vertical = 10.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { picking = false }) { Text("关闭") }
+            }
+        )
+    }
 }

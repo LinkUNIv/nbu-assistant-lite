@@ -60,20 +60,25 @@
 
 ---
 
-# 一、0.39.4 资源包可维护性收尾（P0）
+# 一、0.39.4 资源包可依赖性 + 宁大 PDF（代码完成，待发版）
 
-- [ ] **保留两版 + 面板回退**：`ResourcePackStore.purgeOldVersions` 从 keep=1 改"当前 + 上一版"；
-      新增 `rollbackToPrevious()`（切 `state.version`，不删新版目录）；
-      调试面板显示"可回退：vXXX" + 二次确认
-      - `[日志]` 连发两版后设备上留两个目录；回退后 `state.version` 回旧版；再检查一次回到新版
-- [ ] **诊断快照补 `unmatched`**：`PdfLayoutParser.toSlots` 改收 `RowBlock`（4 个调用点），
-      失败原文进 `DiagSnapshotStore`，导出 JSON 增 `unmatched` 数组
-      - `[日志]` 导出 JSON 的 `unmatched` 条数与日志"未匹配"行数一致
-- [ ] **自检扩到宁大**：`tools/gen-selftest.py` 生成 `pack-src/fixtures/nbu.tsv` +
-      `schools/nbu/selftest.json`（**资源包改动，不发 APK**）
-      - 缺输入：湘大、民政的真实 PDF（`csmy` 仍无自检）
-      - `[日志]` 调试面板三校均显示"通过 · N 条"
-- [ ] **发包时未知字段提示**：`publish-pack.sh` 检测到新字段就提示"是否抬 `minAppVersion`/`schema`"
+**已完成**
+
+- [x] **保留两版 + 面板回退**：`purgeOldVersions` 改「当前 + 上一版」；新增
+      `pickPreviousVersion`（纯函数，有单测）与 `rollbackToPrevious`；调试面板显示可回退版本。
+      回退时把被放弃的版本记进 `failedVersion`，否则 1 小时后自动检查会把用户拉回坏包。
+- [x] **诊断快照补 `unmatched`**：`ParseResult` 增 `unmatched`，`toSlots` 收 `RowBlock` 级上下文，
+      导出 JSON 带 `unmatchedCount` 与 `unmatched` 数组。
+- [x] **宁大 PDF 适配**：内置规则补 `cellRegex` + `multiCourse`；修「裸星期角标算一列」的错位；
+      新增 `tuning.courseStartMarker`（按 `【理论】/【实验】/【上机】` 切一格多课）；
+      导入时去重续页重复时段；夹具 `fixtures/nbu.tsv` + `schools/nbu/selftest.json`。
+- 不做：发包时未知字段提示（理由见「已决」）。
+
+**剩下的只有发版**
+
+- [ ] 构建 Preview APK → push → CI → `mktag.py v0.39.4-Preview` → 验收 Release → 归档
+- [ ] 另发一次资源包：`fixtures/nbu.tsv` 与 `schools/nbu/selftest.json` 走包通道，
+      **不发包的话调试面板看不到宁大自检**
 
 ---
 
@@ -209,6 +214,7 @@
 | 项 | 理由 |
 |---|---|
 | 包内下发脚本 / DEX / 表达式求值 | 远程代码执行面；**声明化 ≠ 可执行化** |
+| 发包时扫描"未知字段" | 要维护一份随代码变动的字段白名单，误报多于真报；真正的风险（结构变了旧版读不懂）已由 `schema` 拦住 |
 | 清单顶层字段白名单（未知即拒） | 等于每加一个参数都要抬门槛，参数热更失效；用 `schema` 只拦结构变更 |
 | 系统通知推送更新 | 渠道关闭、免打扰、权限被拒一串分支 |
 | 「本次更新内容」独立入口 | 与更新日志页重复 |

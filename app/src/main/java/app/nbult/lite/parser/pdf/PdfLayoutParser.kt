@@ -5,6 +5,7 @@ import app.nbult.lite.parser.FieldExtractor
 import app.nbult.lite.parser.ParseSource
 import app.nbult.lite.parser.ParsedSlot
 import app.nbult.lite.parser.ParseResult
+import app.nbult.lite.parser.UnmatchedCell
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.floor
@@ -97,6 +98,18 @@ internal object PdfLayoutParser {
      */
     private val tuningLocal = ThreadLocal.withInitial { app.nbult.lite.school.PdfTuning() }
 
+    /**
+     * 是不是"列锚"片段。
+     *
+     * 必须排除与锚点**完全相等**的那一格：宁大模板左上角有一个单独的「星期」，
+     * 它只是表头角标，不是某一列。把它算进来会让锚点整体多一个，
+     * 于是所有课都右移一天（周一被记成周二）—— 而且看上去"解析成功"，最难发现。
+     */
+    private fun TextFragment.isColumnAnchor(anchor: String): Boolean {
+        val text = this.text.trim()
+        return text.startsWith(anchor) && text != anchor
+    }
+
     /** 判定「两个片段是否在同一视觉行」的 y 容差。 */
     private const val LINE_TOLERANCE = 3.5f
 
@@ -109,9 +122,11 @@ internal object PdfLayoutParser {
         rules: List<PdfRule> = emptyList()
     ): ParseResult {
         if (fragments.isEmpty()) return ParseResult.EMPTY
+        // 收集"取到了却没解析成课"的格子：导出快照后能直接看出问题在哪一格
+        val unmatched = mutableListOf<UnmatchedCell>()
         // 有表格线且声明了 lines：按网格切，不再依赖"表头 + 半列宽"的假设
         if (params.cellSource == "lines" && rules.isNotEmpty()) {
-            parseByRules(fragments, rules, params)?.let { return it }
+            parseByRules(fragments, rules, params, unmatched)?.let { return it }
         }
         val cells = mutableListOf<ParsedSlot>()
         val warnings = mutableListOf<String>()
@@ -122,7 +137,7 @@ internal object PdfLayoutParser {
         var headerY = Float.POSITIVE_INFINITY
 
         fragments.groupBy { it.page }.toSortedMap().forEach { (page, items) ->
-            val header = items.filter { it.text.trim().startsWith(params.columnAnchor) }
+            val header = items.filter { it.isColumnAnchor(params.columnAnchor) }
             if (header.size >= 2) {
                 val sortedHeader = header.sortedBy { it.x }
                 anchors = sortedHeader.map { it.x }
@@ -173,14 +188,14 @@ internal object PdfLayoutParser {
                     mergeByCourseCode(
                         clusterRows(columnItems, params.rowGapPt, params.tuning.lineTolerance),
                         Regex(params.tuning.courseCode)
-                    ).forEach { text ->
-                        cells.addAll(toSlots(text, column + 1, params))
+                    ).forEach { row ->
+                        cells.addAll(toSlots(row.text, column + 1, params, page, row.y, unmatched))
                     }
                     return@forEach
                 }
                 if (!params.namePrefixMerge) {
                     clusterRows(columnItems, params.rowGapPt, params.tuning.lineTolerance).forEach { block ->
-                        cells.addAll(toSlots(block.text, column + 1, params))
+                        cells.addAll(toSlots(block.text, column + 1, params, page, block.y, unmatched))
                     }
                     return@forEach
                 }
@@ -207,14 +222,14 @@ internal object PdfLayoutParser {
                         parts.forEach { append(it) }
                         append(blocks[i].text)
                     }
-                    cells.addAll(toSlots(text, column + 1, params))
+                    cells.addAll(toSlots(text, column + 1, params, page, blocks[i].y, unmatched))
                     i++
                 }
             }
         }
 
-        if (cells.isEmpty()) return ParseResult(ParseSource.UNKNOWN, emptyList(), warnings)
-        return ParseResult(ParseSource.PDF_TABLE, cells, warnings)
+        if (cells.isEmpty()) return ParseResult(ParseSource.UNKNOWN, emptyList(), warnings, unmatched)
+        return ParseResult(ParseSource.PDF_TABLE, cells, warnings, unmatched)
     }
 
     /**
@@ -340,21 +355,24 @@ internal object PdfLayoutParser {
     private fun mergeByCourseCode(
         blocks: List<RowBlock>,
         codeRegex: Regex = COURSE_CODE
-    ): List<String> {
-        val out = mutableListOf<String>()
+    ): List<RowBlock> {
+        val out = mutableListOf<RowBlock>()
         val buffer = StringBuilder()
+        var startY = 0f
         var started = false
         blocks.forEach { block ->
             val hasCode = codeRegex.containsMatchIn(block.text)
             if (hasCode && started) {
-                out += buffer.toString()
+                out += RowBlock(startY, buffer.toString())
                 buffer.clear()
             }
+            // 新一门课的起点：y 取这门课第一块的坐标，未匹配时靠它定位
+            if (buffer.isEmpty()) startY = block.y
             buffer.append(block.text)
             if (hasCode) started = true
         }
-        if (buffer.isNotEmpty()) out += buffer.toString()
-        return out.filter { it.isNotBlank() }
+        if (buffer.isNotEmpty()) out += RowBlock(startY, buffer.toString())
+        return out.filter { it.text.isNotBlank() }
     }
 
     /**
@@ -364,7 +382,14 @@ internal object PdfLayoutParser {
      * 用 `find` 只会取到第一门，第二门静默消失 —— 用户不会知道课表少了一节课。
      * 所以这里改成遍历**全部**匹配；对只有一门课的模板，行为与之前完全一致。
      */
-    private fun toSlots(rawCellText: String, dayOfWeek: Int, params: PdfTableParams): List<ParsedSlot> {
+    private fun toSlots(
+        rawCellText: String,
+        dayOfWeek: Int,
+        params: PdfTableParams,
+        page: Int,
+        blockY: Float,
+        unmatched: MutableList<UnmatchedCell>
+    ): List<ParsedSlot> {
         // 归一化必须在正则之前：OCR 会把「号棱」认成「号楼」、把「—」当成连字符，
         // 这些字符肉眼几乎看不出差别，但正则一条都匹配不上
         val cellText = app.nbult.lite.parser.TextNormalizer.normalizeTimetable(rawCellText)
@@ -373,11 +398,24 @@ internal object PdfLayoutParser {
         if (!regex.containsMatchIn(cellText)) {
             // 匹配不上时把原文打出来：否则只会看到"少了几门课"，无从下手
             AppLog.log("Parse", "未匹配：周$dayOfWeek «${cellText.take(80)}»")
+            unmatched.add(UnmatchedCell(page, dayOfWeek, blockY, cellText.take(200)))
+            return emptyList()
         }
-        val chunks = if (params.multiCourse) splitByCourseAnchors(cellText, params.tuning.roomTailChars) else listOf(cellText)
-        return chunks.mapNotNull { chunk ->
+        val chunks = if (params.multiCourse) {
+            splitByCourseAnchors(cellText, params.tuning.roomTailChars, params.tuning.courseStartMarker)
+        } else {
+            listOf(cellText)
+        }
+        val slots = chunks.mapNotNull { chunk ->
             regex.find(chunk)?.let { m -> toSlot(m, chunk, dayOfWeek, params) }
         }
+        // 正则命中了却一个都没成课（周次解析失败、字段缺失）：同样要落进快照，
+        // 否则"这一格看起来有课、导进来却不见了"仍然只能靠猜
+        if (slots.isEmpty()) {
+            AppLog.log("Parse", "未成课：周$dayOfWeek «${cellText.take(80)}»")
+            unmatched.add(UnmatchedCell(page, dayOfWeek, blockY, cellText.take(200)))
+        }
+        return slots
     }
 
     /**
@@ -393,7 +431,21 @@ internal object PdfLayoutParser {
      *
      * 这样不依赖分隔符，也不怕地点是中文（「模拟法庭」）。
      */
-    private fun splitByCourseAnchors(cellText: String, roomTail: String): List<String> {
+    private fun splitByCourseAnchors(
+        cellText: String,
+        roomTail: String,
+        startMarker: String? = null
+    ): List<String> {
+        // 模板自己给了"课的起点"就用它：宁大那种「…,3-4节,」没有括号，
+        // 按「(n-m节)」回溯压根找不到锚点，只能靠课类型前缀切
+        if (!startMarker.isNullOrBlank()) {
+            val starts = runCatching { Regex(startMarker).findAll(cellText).map { it.range.first }.toList() }
+                .getOrDefault(emptyList())
+            if (starts.size <= 1) return listOf(cellText)
+            return starts.mapIndexed { i, start ->
+                cellText.substring(start, starts.getOrNull(i + 1) ?: cellText.length)
+            }.filter { it.isNotBlank() }
+        }
         val markers = SECTION_MARKER.findAll(cellText).toList()
         if (markers.size <= 1) return listOf(cellText)
 
@@ -439,7 +491,8 @@ internal object PdfLayoutParser {
     private fun parseByRules(
         fragments: List<TextFragment>,
         rules: List<PdfRule>,
-        params: PdfTableParams
+        params: PdfTableParams,
+        unmatched: MutableList<UnmatchedCell>
     ): ParseResult? {
         val usable = rules.filter { it.thickness <= MAX_RULE_THICKNESS && it.length >= MIN_RULE_LENGTH }
         if (usable.isEmpty()) return null
@@ -486,7 +539,7 @@ internal object PdfLayoutParser {
             if (best >= 0) bucket[best].add(f)
         }
 
-        val anchors = fragments.filter { it.text.trim().startsWith(params.columnAnchor) }.sortedBy { it.x }
+        val anchors = fragments.filter { it.isColumnAnchor(params.columnAnchor) }.sortedBy { it.x }
         if (anchors.size < 2) return null
 
         val cells = mutableListOf<ParsedSlot>()
@@ -497,11 +550,12 @@ internal object PdfLayoutParser {
             if (!text.contains("周")) continue          // 节次列、表头、备注行都没有「周」
             val cx = (lefts[i] + rights[i]) / 2f
             val dayIndex = anchors.indices.minByOrNull { abs(anchors[it].x - cx) } ?: continue
-            cells.addAll(toSlots(text, dayIndex + 1, params))
+            val cellPage = inside.firstOrNull()?.page ?: 0
+            cells.addAll(toSlots(text, dayIndex + 1, params, cellPage, tops[i], unmatched))
         }
         if (cells.isEmpty()) return null
         AppLog.log("Parse", "按表格线解析：${xs.size - 1} 列 × ${ys.size - 1} 行 → ${cells.size} 个时段")
-        return ParseResult(ParseSource.PDF_TABLE, cells, emptyList())
+        return ParseResult(ParseSource.PDF_TABLE, cells, emptyList(), unmatched)
     }
 
     /** 估算一行文字宽度：中文 12pt、其它 6pt。长文本的起点常在格左边界之外，必须算宽度。 */

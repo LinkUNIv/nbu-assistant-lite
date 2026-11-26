@@ -2,6 +2,7 @@ package app.nbult.lite.parser.pdf
 
 import android.content.Context
 import app.nbult.lite.parser.ParsedSlot
+import app.nbult.lite.parser.UnmatchedCell
 import app.nbult.lite.util.AppLog
 import org.json.JSONArray
 import org.json.JSONObject
@@ -23,14 +24,20 @@ internal object DiagSnapshotStore {
         val takenAt: Long,
         val schoolId: String,
         val fragments: List<TextFragment>,
-        val slots: List<ParsedSlot>
+        val slots: List<ParsedSlot>,
+        val unmatched: List<UnmatchedCell>
     )
 
     @Volatile
     private var last: Snapshot? = null
 
-    fun record(schoolId: String, fragments: List<TextFragment>, slots: List<ParsedSlot>) {
-        last = Snapshot(System.currentTimeMillis(), schoolId, fragments, slots)
+    fun record(
+        schoolId: String,
+        fragments: List<TextFragment>,
+        slots: List<ParsedSlot>,
+        unmatched: List<UnmatchedCell> = emptyList()
+    ) {
+        last = Snapshot(System.currentTimeMillis(), schoolId, fragments, slots, unmatched)
     }
 
     fun hasData(): Boolean = last != null
@@ -66,16 +73,33 @@ internal object DiagSnapshotStore {
                     .put("confidence", s.confidence.toDouble())
             )
         }
+        // 未匹配的格子排在 slots 之后：看 JSON 的人先看结果，再看"哪几格没进来"
+        val unmatched = JSONArray()
+        snapshot.unmatched.forEach { u ->
+            unmatched.put(
+                JSONObject()
+                    .put("page", u.page)
+                    .put("day", u.dayOfWeek)
+                    .put("y", u.y.toDouble())
+                    .put("text", u.text)
+            )
+        }
         val root = JSONObject()
             .put("takenAt", snapshot.takenAt)
             .put("schoolId", snapshot.schoolId)
             .put("fragmentCount", snapshot.fragments.size)
             .put("slotCount", snapshot.slots.size)
+            .put("unmatchedCount", snapshot.unmatched.size)
             .put("fragments", fragments)
             .put("slots", slots)
+            .put("unmatched", unmatched)
 
         file.writeText(root.toString(2))
-        AppLog.log("Diag", "诊断快照已导出：${file.name}（${snapshot.fragments.size} 片段 / ${snapshot.slots.size} 时段）")
+        AppLog.log(
+            "Diag",
+            "诊断快照已导出：${file.name}（${snapshot.fragments.size} 片段 / " +
+                "${snapshot.slots.size} 时段 / ${snapshot.unmatched.size} 未匹配）"
+        )
         return file
     }
 }

@@ -33,3 +33,16 @@ internal fun packSchemaDecision(
 ): PackSchemaDecision =
     if (packSchema > supported) PackSchemaDecision.TooNew(packSchema, supported)
     else PackSchemaDecision.Compatible
+
+/**
+ * 从已落地的版本里挑出「可回退的那一版」。
+ *
+ * 规则只有一条：**比当前版小的最大者**。不能简单取"目录里第二大的" —— 目录可能因为
+ * 上次清理失败而多留几个，此时第二大的不一定小于当前版（回退过又升回去就会这样）。
+ * 纯数据入口：不碰 File / Context，便于单测。
+ *
+ * @param current 当前生效的版本（0 表示还在用内置资源，没有可回退的）
+ * @param available 设备上已有的版本目录
+ */
+internal fun pickPreviousVersion(current: Long, available: List<Long>): Long? =
+    available.filter { it in 1 until current }.maxOrNull()

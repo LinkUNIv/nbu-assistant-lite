@@ -69,23 +69,36 @@ internal class PdfImporter(
             ),
             rules = pdfRules
         )
+        // 续页会把同一门课再画一遍（宁大样本第 2 页整页只有一门课，与第 1 页末尾重复），
+        // 不去重会在课表里叠两张一模一样的卡。键里带上教师与地点：同一天同一节的两门课
+        // （例如两个实验室）不会被误并。
+        val deduped = result.slots.distinctBy {
+            listOf(
+                it.name, it.dayOfWeek, it.startSection, it.endSection,
+                it.weekMask, it.teacher, it.room
+            )
+        }
+        if (deduped.size != result.slots.size) {
+            AppLog.log("Parse", "去掉重复时段 ${result.slots.size - deduped.size} 条（续页重复绘制）")
+        }
         DiagSnapshotStore.record(
             schoolId = rules?.id ?: "unknown",
             fragments = fragments,
-            slots = result.slots
+            slots = deduped,
+            unmatched = result.unmatched
         )
-        if (result.slots.isEmpty()) {
+        if (deduped.isEmpty()) {
             throw ParseException("未识别的表格结构：没有取到任何课程")
         }
         // 逐条落日志：出问题时用户只要导出日志，就能看出是哪一格错了，
         // 不必再去猜"周一为什么是空的"
-        result.slots.take(24).forEach {
+        deduped.take(24).forEach {
             AppLog.log(
                 "Parse",
                 "时段：周${it.dayOfWeek} ${it.startSection}-${it.endSection}节 " +
                     "${it.name} | 周次位图=${it.weekMask.toString(2)} | 教师=${it.teacher} | 地点=${it.room}"
             )
         }
-        return result
+        return result.copy(slots = deduped)
     }
 }

@@ -72,7 +72,12 @@
     "pdf": {
       "columnAnchor": "星期",
       "rowGapPt": 14.0,
-      "headerPerPage": true
+      "headerPerPage": true,
+      "multiCourse": true,
+      "cellRegex": "^(?:【(?<category>[^】]*)】)?(?<name>[0-9A-Za-z]{5,12}-[^\\[［]+?)\\s*[\\[［](?<code>[^\\]］]{1,8})[\\]］]\\s*(?<teacher>[^,，]*?(?:[,，][^,，]*?)*?)(?<weeks>(?:[1-9]|1[0-9]|20)[-—~]\\d{1,2}周(?:[（(][单双][)）])?),星期(?<day>\\d),(?<s1>\\d+)-(?<s2>\\d+)节[,，]?(?<room>.*)$",
+      "tuning": {
+        "courseStartMarker": "【(?:理论|实验|上机|实训|实践)】"
+      }
     }
   },
   "capabilities": {

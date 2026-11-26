@@ -226,11 +226,54 @@ object ResourcePackStore {
     }
 
     private fun purgeOldVersions(context: Context, keep: Long) {
-        root(context).listFiles()?.forEach { file ->
-            if (file.isDirectory && file.name != keep.toString()) {
+        val dirs = root(context).listFiles()?.filter { it.isDirectory } ?: return
+        // 留当前版 + 上一版：新包出问题时才有东西可退。再往前的一律删，避免磁盘无限长
+        val previous = pickPreviousVersion(keep, dirs.mapNotNull { it.name.toLongOrNull() })
+        dirs.forEach { file ->
+            val version = file.name.toLongOrNull() ?: return@forEach
+            if (version != keep && version != previous) {
                 runCatching { file.deleteRecursively() }
             }
         }
+    }
+
+    /** 设备上已落地的版本号，供调试面板与回退判定使用。 */
+    fun availableVersions(context: Context): List<Long> =
+        root(context).listFiles()?.filter { it.isDirectory }
+            ?.mapNotNull { it.name.toLongOrNull() }
+            ?.sortedDescending()
+            .orEmpty()
+
+    /** 可回退的那一版；没有则 null（还在用内置资源，或只有一版）。 */
+    fun previousVersion(context: Context): Long? =
+        pickPreviousVersion(state(context).version, availableVersions(context))
+
+    /**
+     * 回退到上一版。
+     *
+     * **必须同时把被放弃的版本记进 `failedVersion`**：否则下次自动检查（1 小时窗口）
+     * 会看到远端版本更高，把用户又拉回那个坏包 —— 用户会以为按钮没生效。
+     * 记成"内容不合格"复用现有的 24 小时重试窗口，手动检查仍可强制放行。
+     *
+     * 返回回退后的版本；没有可回退的返回 null。
+     */
+    fun rollbackToPrevious(context: Context, reason: String = "手动回退"): Long? {
+        val current = state(context)
+        val target = pickPreviousVersion(current.version, availableVersions(context)) ?: return null
+        val now = System.currentTimeMillis()
+        writeState(
+            context,
+            current.copy(
+                version = target,
+                source = "remote",
+                appliedAt = now,
+                notes = "已回退：$reason"
+            )
+        )
+        markFailed(context, current.version, reason, now)
+        revisionsFlow.value += 1
+        AppLog.log("Pack", "已回退到 v$target（放弃 v${current.version}）")
+        return target
     }
 
     /** 哈希实现收敛在 [app.nbult.lite.util.Digests]，这里只保留入口。 */

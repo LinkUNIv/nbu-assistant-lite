@@ -50,4 +50,27 @@ class PackCompatibilityTest {
         // 差一版是最容易被"顺手放行"的情况，专门钉一下
         assertTrue(packSchemaDecision(4, supported = 3) is PackSchemaDecision.TooNew)
     }
+
+    @Test
+    fun `回退目标取比当前小的最大者`() {
+        // 设备上可能因清理失败留着多个目录，不能简单取"第二大的"
+        assertEquals(202611251600L, pickPreviousVersion(202611260900L, listOf(202611251600L, 202611260900L)))
+        assertEquals(
+            202611251600L,
+            pickPreviousVersion(202611260900L, listOf(202611242000L, 202611251600L, 202611260900L))
+        )
+    }
+
+    @Test
+    fun `回退过又升回去时不会把当前版当成上一版`() {
+        // 回退到旧版后目录里仍留着那个"更新的坏版本"，它不能成为回退目标
+        val available = listOf(202611242000L, 202611260900L)
+        assertEquals(202611242000L, pickPreviousVersion(202611251600L, available))
+    }
+
+    @Test
+    fun `还在用内置资源时没有可回退的版本`() {
+        assertEquals(null, pickPreviousVersion(0L, listOf(202611251600L)))
+        assertEquals(null, pickPreviousVersion(202611251600L, listOf(202611251600L)))
+    }
 }

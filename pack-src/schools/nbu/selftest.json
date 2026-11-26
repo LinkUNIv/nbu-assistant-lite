@@ -1,0 +1,13 @@
+{
+  "fixture": "fixtures/nbu.tsv",
+  "expectSlots": 18,
+  "mustContain": [
+    "概率统计A",
+    "模拟电子技术",
+    "物理光学",
+    "毛泽东思想"
+  ],
+  "mustNotContain": [
+    "学年第一学期"
+  ]
+}

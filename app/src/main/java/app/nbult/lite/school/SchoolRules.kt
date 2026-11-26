@@ -208,7 +208,9 @@ internal data class SchoolRules(
                             trailingRange = t.optString("trailingRange", PdfTuning().trailingRange),
                             sectionTimePrefix = t.optString("sectionTimePrefix", PdfTuning().sectionTimePrefix),
                             sectionOnly = t.optString("sectionOnly", PdfTuning().sectionOnly),
-                            wordGapRatio = t.optDouble("wordGapRatio", 0.35).toFloat()
+                            wordGapRatio = t.optDouble("wordGapRatio", 0.35).toFloat(),
+                            courseStartMarker = t.optString("courseStartMarker")
+                                .takeIf { v -> v.isNotBlank() }
                         )
                     } ?: PdfTuning()
                 )
@@ -340,7 +342,15 @@ internal data class PdfTuning(
     /** 整段都是节次列内容。 */
     val sectionOnly: String = "^\\s*(?:\\(?\\d{1,2}:\\d{2}[^)]*\\)?|第?\\s*\\d+\\s*[-~—]?\\s*\\d*\\s*节)\\s*$",
     /** 取词时的词间距 = 字号 × 该比例。 */
-    val wordGapRatio: Float = 0.35f
+    val wordGapRatio: Float = 0.35f,
+    /**
+     * 一格多课时，用哪个标记切分（正则）。
+     *
+     * 为空时沿用老逻辑：以「(n-m节)」为锚点回溯课程起点。宁大这类模板的格子里
+     * 写的是「…,3-4节,」而不是「(3-4节)」，回溯不成立，只能靠课类型前缀
+     * （`【理论】/【实验】/【上机】/【实训】`）切。
+     */
+    val courseStartMarker: String? = null
 )
 
 /** 模块开关。关掉的模块在界面上不出现，路由也拦住。 */

@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -271,6 +272,51 @@ fun DebugScreen(onBack: () -> Unit) {
                         text = "v${formatPackVersion(packState.failedVersion)} 应用失败，已跳过",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error
+                    )
+                }
+                // 回退只在调试面板露出：它是维护动作（新包内容坏了先止损），
+                // 普通用户看到「退回上一版」只会困惑，也不该让他们替我们判断包的好坏
+                val rollbackTo = ResourcePackStore.previousVersion(context)
+                var confirmRollback by remember { mutableStateOf(false) }
+                if (rollbackTo != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "可回退：v${formatPackVersion(rollbackTo)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { confirmRollback = true }) { Text("回退上一版") }
+                    }
+                }
+                if (confirmRollback && rollbackTo != null) {
+                    AlertDialog(
+                        onDismissRequest = { confirmRollback = false },
+                        title = { Text("回退资源包？") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("回到 v${formatPackVersion(rollbackTo)}，当前这版会被记为「有问题」，24 小时内不再自动重试。")
+                                Text(
+                                    text = "回退不解决内容问题，只是先让应用回到能用的状态。",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                confirmRollback = false
+                                val target = ResourcePackStore.rollbackToPrevious(context)
+                                packState = ResourcePackStore.state(context)
+                                packLog = if (target != null) {
+                                    "已回退到 v${formatPackVersion(target)}"
+                                } else {
+                                    "没有可回退的版本"
+                                }
+                            }) { Text("回退") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { confirmRollback = false }) { Text("取消") }
+                        }
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

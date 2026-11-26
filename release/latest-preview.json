@@ -1,12 +1,12 @@
 {
-  "versionCode": 3904,
-  "versionName": "0.39.4",
+  "versionCode": 3905,
+  "versionName": "0.39.5",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.39.4-Preview/nbu-assistant-lite-0.39.4-Preview.apk",
-  "sha256": "933c5deb9a8788a38a274715c084e303a0297675826c67af71584269f2c0adf9",
-  "size": 26543625,
-  "notes": "**宁大 PDF 课表可直接导入，资源包可以回退**\n\n- 宁大教务导出的 PDF 课表现在能直接导入（此前只支持 Excel 与 Word）。\n- 同一门课在续页重复出现时不再叠成两张卡。\n- 调试面板的资源包新增「回退上一版」，退回去的那一版会被记为有问题，24 小时内不再自动重试。\n- 诊断快照新增「未解析的格子」，导出后能直接看到哪一格没认出来。\n- 检查更新不再因为手上的清单超过 7 天就绕去 GitHub API，网络不畅时少等一轮。",
-  "generatedAt": 1795672065346,
-  "tag": "v0.39.4-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.39.5-Preview/nbu-assistant-lite-0.39.5-Preview.apk",
+  "sha256": "88ced0dafd7d88d3bbec09b5359693e45a5c7288301c4123aadc1270155c2fef",
+  "size": 26543881,
+  "notes": "**提醒多了个自检页，提前量可以选**\n\n- 设置里新增「提醒自检」：通知权限、通知渠道、精确闹钟、电池优化、自启动五项逐条标出状态，缺哪项点哪项。\n- 顶部一句话结论：当前能不能正常提醒；能改的开关一键跳转，改不了的（自启动）说明白。\n- 课前提醒的提前量可选 10 / 20 / 30 分钟，默认 30；第二条提醒在第一档的一半时到（30→15，与原行为一致）。",
+  "generatedAt": 1795683091010,
+  "tag": "v0.39.5-Preview"
 }

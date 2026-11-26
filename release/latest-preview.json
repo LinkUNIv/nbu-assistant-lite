@@ -1,12 +1,12 @@
 {
-  "versionCode": 3903,
-  "versionName": "0.39.3",
+  "versionCode": 3904,
+  "versionName": "0.39.4",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.39.3-Preview/nbu-assistant-lite-0.39.3-Preview.apk",
-  "sha256": "714d60acdfc294c33ece3ef1f6e36a31000ceaca85847d4da25e7ab5ef0930c0",
-  "size": 26543161,
-  "notes": "**学校切换UI回退，资源包加上结构门槛**\n\n- 「关于」页直接显示「学校」一行：左边当前学校，右边「切换」；点开是原来的选择弹窗，当前项标（当前）且不可点。\n- 删除版本行连点 5 次的隐藏入口，进入关于页就能看到，不必再点五下。\n- 关于页的归属与资讯来源改为按当前学校显示；没有点名系统的学校不再出现「统一身份认证」那句。\n- 学校清单随资源包即时刷新。\n- 资源包新增结构版本。\n- 发布资源包时，结构版本变化后就把最低 App 版本抬到当版。",
-  "generatedAt": 1795660210089,
-  "tag": "v0.39.3-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.39.4-Preview/nbu-assistant-lite-0.39.4-Preview.apk",
+  "sha256": "933c5deb9a8788a38a274715c084e303a0297675826c67af71584269f2c0adf9",
+  "size": 26543625,
+  "notes": "**宁大 PDF 课表可直接导入，资源包可以回退**\n\n- 宁大教务导出的 PDF 课表现在能直接导入（此前只支持 Excel 与 Word）。\n- 同一门课在续页重复出现时不再叠成两张卡。\n- 调试面板的资源包新增「回退上一版」，退回去的那一版会被记为有问题，24 小时内不再自动重试。\n- 诊断快照新增「未解析的格子」，导出后能直接看到哪一格没认出来。\n- 检查更新不再因为手上的清单超过 7 天就绕去 GitHub API，网络不畅时少等一轮。",
+  "generatedAt": 1795672065346,
+  "tag": "v0.39.4-Preview"
 }

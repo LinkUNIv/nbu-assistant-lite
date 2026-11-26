@@ -187,6 +187,7 @@ tools/archive-release.sh debug -f      # → dist/archive/v<版本>-Debug/（-f 
 ```json
 {
   "version": 202610311135,
+  "schema": 1,
   "updatedAt": "2026-10-31T11:35:53+08:00",
   "notes": "这次改了什么，会显示在调试面板里",
   "minAppVersion": 3400,
@@ -194,10 +195,14 @@ tools/archive-release.sh debug -f      # → dist/archive/v<版本>-Debug/（-f 
 }
 ```
 
-四条不能改的规则：
+五条不能改的规则：
 
 - **版本号只升不降**。`yyyyMMddHHmm`，客户端拒绝比本地旧的包
-- **`minAppVersion` 是硬门槛**。包里用了旧版读不懂的结构就抬高它，旧版整体跳过，不做部分应用
+- **`schema` 是结构版本，只在结构变时 +1**。App 只认到自己支持的那一版，超了整包跳过。
+  新增可选参数**不动**它 —— 那是"内容热更"赖以成立的前提
+- **`minAppVersion` 是 App 版本门槛**。包里用了某个新功能就抬高它，旧版整体跳过，不做部分应用。
+  `publish-pack.sh` 会在 `schema` 变大时**自动**把它抬到当版 `versionCode`；显式传
+  `PACK_MIN_APP=` 可以覆盖，但那等于主动选择"向下兼容"，脚本会打警告
 - **读取一律走 `ResourcePackStore.readText()`**。直接 `context.assets.open()` 会绕开资源包，
   远程更新对该文件就无效了
 - **入口链接与资讯配置单独设卡**（`PackGuards`）。只允许内置域名 + **包内各校 rules 声明的

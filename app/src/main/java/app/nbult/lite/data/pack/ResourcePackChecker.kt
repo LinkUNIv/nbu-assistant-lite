@@ -105,6 +105,27 @@ object ResourcePackChecker {
                 return@runCatching PackCheckResult.UpToDate
             }
 
+            // 结构闸门：包声明了自己需要哪一版结构。App 读不懂就整包跳过 ——
+            // 资源包只向上兼容，旧版不该"用缺省值凑合跑"。判定放在 minAppVersion 之前：
+            // 结构不兼容时，谈"需要哪个 App 版本"没有意义。
+            when (val decision = packSchemaDecision(manifest.schema)) {
+                is PackSchemaDecision.TooNew -> {
+                    ResourcePackStore.markChecked(context, now)
+                    settings.setPackPending(manifest.version)
+                    AppLog.log(
+                        "Pack",
+                        "跳过 v${manifest.version}：包结构 ${decision.packSchema}，" +
+                            "当前 App 支持到 ${decision.supported}"
+                    )
+                    return@runCatching PackCheckResult.StructureTooNew(
+                        decision.packSchema,
+                        decision.supported
+                    )
+                }
+
+                PackSchemaDecision.Compatible -> Unit
+            }
+
             // 资源不向下兼容：整体跳过，不做部分应用。只记日志，不串到版本更新界面
             if (manifest.minAppVersion > BuildConfig.VERSION_CODE) {
                 ResourcePackStore.markChecked(context, now)

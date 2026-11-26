@@ -338,6 +338,9 @@ internal fun PackEntry() {
                         PackCheckResult.UpToDate -> "已是最新"
                         PackCheckResult.Skipped -> "该版本此前失败过，已跳过"
                         is PackCheckResult.Blocked -> "需要应用更新到 ${result.minAppVersion} 以上才能使用"
+                        // 结构不兼容与"App 版本不够"不是一回事：更新 App 才能读新结构
+                        is PackCheckResult.StructureTooNew ->
+                            "资源包结构已更新，请更新应用后再检查"
                         // 网络类失败只给一句能行动的话，细节进日志
                         is PackCheckResult.Failed ->
                             if (result.retryable) "检查失败，请检查网络后重试" else "失败：${result.reason}"

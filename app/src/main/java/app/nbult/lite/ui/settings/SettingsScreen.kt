@@ -462,9 +462,33 @@ SettingCard(title = "版本") {
 SettingCard(title = "资源") {
             PackEntry()
         }
+            // 归属与资讯来源必须按**当前学校**渲染。写死「宁波大学」等于在湘潭用户面前
+            // 自称宁大工具；更糟的是「点名与账号功能」那句 —— 三所外校的
+            // capabilities.attendance 全是 false，那段描述对它们根本不成立。
+            val schoolId = container.schoolContext.id
+            val context = LocalContext.current
+            val packRev by app.nbult.lite.data.pack.ResourcePackStore.revisions.collectAsStateWithLifecycle()
+            val schoolName = remember(schoolId, packRev) {
+                app.nbult.lite.school.SchoolCatalog.entries(context)
+                    .firstOrNull { it.id == schoolId }?.name
+                    ?: "所在学校"
+            }
+            val hasAttendance = container.schoolRules?.capabilities?.attendance != false
+            val notice = buildString {
+                append("宁大助手 Lite 是非官方第三方工具，与")
+                append(schoolName)
+                append("无隶属关系。课表与资讯离线可用、不需要登录；")
+                if (hasAttendance) {
+                    append("点名与账号功能需要使用学校统一身份认证，登录仅在本机浏览器内完成，")
+                    append("凭据不经过本应用服务器，且默认不保存。")
+                }
+                append("资讯内容来自")
+                append(schoolName)
+                append("公开发布内容，仅展示标题、摘要与原文链接，版权归原作者与学校所有。")
+            }
 SettingCard(title = "文档") {
             Text(
-                text = "宁大助手 Lite 是非官方第三方工具，与宁波大学无隶属关系。课表与资讯离线可用、不需要登录；点名与账号功能需要使用学校统一身份认证，登录仅在本机浏览器内完成，凭据不经过本应用服务器，且默认不保存。资讯内容来自宁波大学新闻网公开发布内容，仅展示标题、摘要与原文链接，版权归原作者与学校所有。",
+                text = notice,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -832,23 +856,47 @@ private fun SchoolCard() {
     // CompositionLocal 只能在 @Composable 作用域读，点击回调里读会编译不过
     val container = app.nbult.lite.ui.LocalAppContainer.current
     val current = app.nbult.lite.school.SchoolPreference.schoolId(context)
-    val entries = remember { app.nbult.lite.school.SchoolCatalog.entries(context) }
-    val currentName = entries.firstOrNull { it.id == current }?.name ?: current
+    // 以包版本为 key：资源包新增一所学校后，不离开这一页也应该在弹窗里看到。
+    // 无 key 的 remember 会在内存里留一份「包更新碰不到」的副本，破坏「包即真相」。
+    val packRev by app.nbult.lite.data.pack.ResourcePackStore.revisions.collectAsStateWithLifecycle()
+    val entries = remember(packRev) { app.nbult.lite.school.SchoolCatalog.entries(context) }
+    // 找不到当前学校 = 清单读不出来（包缺文件 / 坏了）。此处不能拿 id 顶替：
+    // 界面上出现一个「xtu」，用户既看不懂，也无从判断是自己选错了还是包坏了
+    val currentName = entries.firstOrNull { it.id == current }?.name
     var picking by remember { mutableStateOf(false) }
 
     SettingCard(title = "学校") {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(currentName, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Text(
-                text = "切换",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { picking = true }
+                text = currentName ?: "学校列表不可用",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (currentName == null) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                modifier = Modifier.weight(1f)
+            )
+            // 清单为空时不给「切换」—— 点开只会是一个空弹窗
+            if (currentName != null) {
+                Text(
+                    text = "切换",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { picking = true }
+                )
+            }
+        }
+        if (currentName == null) {
+            Text(
+                text = "请检查资源包是否完整：回到上面的「资源」重新检查一次。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 
-    if (picking) {
+    if (picking && entries.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { picking = false },
             title = { Text("选择学校") },

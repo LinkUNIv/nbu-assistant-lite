@@ -284,6 +284,8 @@ fun DebugScreen(onBack: () -> Unit) {
                                 PackCheckResult.UpToDate -> "已是最新"
                                 PackCheckResult.Skipped -> "该版本此前失败过，已跳过"
                                 is PackCheckResult.Blocked -> "需要 App ${result.minAppVersion} 及以上"
+                                is PackCheckResult.StructureTooNew ->
+                                    "包结构 v${result.packSchema}，本 App 只支持到 v${result.supported}，请更新 App"
                                 is PackCheckResult.Failed -> "失败：${result.reason}"
                             }
                         }

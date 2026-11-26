@@ -103,8 +103,19 @@
 | 1 | 读取层走 `ResourcePackStore.readText`，不许 `assets.open` 直读 | ✅ `SchoolCatalog`、`PortalCatalog`、`CalendarRepository`、`NewsSources` 全部走 store（`PackGuards` 里读内置清单用于**校验**，属例外） |
 | 2 | `publish-pack.sh` 覆盖整棵数据目录 | ✅ 用 `find . -type f` 打全量清单 |
 | 3 | 守卫按**后缀**匹配路径与域名 | ✅ `PackGuards.validateByPath` 全部 `endsWith`，`schools/<id>/news.json` 不再漏检 |
-| 4 | 新字段一律可选、缺省等于旧行为；读不懂的结构整包跳过 | ✅ `minAppVersion` + 规则字段全部带默认值 |
+| 4 | **新增参数**一律可选、缺省等于旧行为；**改变结构或语义**必须抬门槛，旧版整包跳过 | ✅ 规则字段全部带默认值；0.39.3 起 `schema` 由 App 自动判定 |
 | 5 | 包坏了退回内置，且拉黑该版本 | ✅ `failedVersion` + 24 小时重试窗口 |
+
+**第 4 条要分两种改动看**（0.39.3 补，之前文档把两者揉成一句，读起来像"新字段都该向下兼容"）：
+
+- **新增可选参数**：有默认值、旧行为等价 → 不抬门槛，旧 App 照常吃内容。这是"内容热更"的价值所在。
+- **改变结构或语义**：目录布局变、字段含义变、必填变可选的**反面** → 必须抬门槛，旧版整包跳过。
+
+门槛有两个：`schema`（结构版本，App 自己判定，结构一变就 +1）与 `minAppVersion`（App 版本，
+靠人判断）。`publish-pack.sh` 会在 `schema` 变大时自动把 `minAppVersion` 抬到当版。
+
+**`schema` 的局限**：已装机的 0.39.2 及更早版本不认识这个字段，照样会应用。历史欠账收不回来，
+机制只从 0.39.3 起生效；第一次带 `schema` 的包若要拦老版本，仍须同时抬 `minAppVersion`。
 
 **一条例外值得记**：公告（`announcements.json`）走的是**逐条丢弃**而不是整包原子——
 公告是附加信息，一条写错不该把校历作息一起拒掉。这是全局唯一允许部分失效的数据类型。

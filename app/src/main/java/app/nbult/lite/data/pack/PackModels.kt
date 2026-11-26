@@ -14,16 +14,35 @@ data class PackFile(val path: String, val sha256: String)
  *
  * `minAppVersion` 对应 `versionCode`：包里如果用了旧版 App 读不懂的结构，
  * 就把这个值抬上去，旧版会整体跳过，而不是应用一半。
+ *
+ * `schema` 是**结构版本**，与 `minAppVersion` 分工不同：
+ * - `minAppVersion` 管"这个包用了哪些新功能"，要人判断；
+ * - `schema` 管"包的结构本身变没变"，结构一变就 +1，App 只认到自己支持的那一版。
+ *
+ * 老包没有这个字段，按 [SCHEMA_UNVERSIONED] 处理 —— 与"第一版结构"同义。
  */
 data class PackManifest(
     val version: Long,
     val updatedAt: String,
     val notes: String,
     val minAppVersion: Int,
-    val files: List<PackFile>
+    val files: List<PackFile>,
+    /** 结构版本，缺省 1。见 [SUPPORTED_SCHEMA]。 */
+    val schema: Int = SCHEMA_UNVERSIONED
 ) {
 
     companion object {
+
+        /** 第一版结构。没有 `schema` 字段的老包等同于它。 */
+        const val SCHEMA_UNVERSIONED = 1
+
+        /**
+         * 本 App 能读到的最高结构版本。
+         *
+         * 改动清单或目录结构（不是加可选参数）时，把它 +1，并在发布脚本里抬 `schema`。
+         * 判定见 [packSchemaDecision]：这是唯一的结构闸门。
+         */
+        const val SUPPORTED_SCHEMA = SCHEMA_UNVERSIONED
 
         /**
          * 解析清单。任何一个字段不合格就整体作废 —— 资源包的失败必须是响亮的，
@@ -45,12 +64,17 @@ data class PackManifest(
             val version = root.optLong("version", 0L)
             if (version <= 0L) return null
 
+            // 显式写了 0 或负数属于"坏字段"，整体作废；缺省才是 1
+            val schema = root.optInt("schema", SCHEMA_UNVERSIONED)
+            if (schema < 1) return null
+
             PackManifest(
                 version = version,
                 updatedAt = root.optString("updatedAt"),
                 notes = root.optString("notes"),
                 minAppVersion = root.optInt("minAppVersion", 0),
-                files = files
+                files = files,
+                schema = schema
             )
         }.getOrNull()
 
@@ -115,6 +139,14 @@ sealed interface PackCheckResult {
 
     /** 包要求的 App 版本高于当前，整体跳过；只记日志，不串到版本更新界面。 */
     data class Blocked(val minAppVersion: Int) : PackCheckResult
+
+    /**
+     * 包的结构版本超出本 App 能读的范围，整体跳过。
+     *
+     * 与 [Blocked] 分开：两者的处置都是"更新 App 再说"，但原因不同 —— 前者是包用了新功能，
+     * 后者是包的结构变了。混成一个会让日志和用户提示都失去线索。
+     */
+    data class StructureTooNew(val packSchema: Int, val supported: Int) : PackCheckResult
 
     /** 该版本此前失败过，且还没到重试时间。 */
     data object Skipped : PackCheckResult

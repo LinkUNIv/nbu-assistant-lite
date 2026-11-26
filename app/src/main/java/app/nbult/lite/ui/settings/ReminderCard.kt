@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -146,6 +147,33 @@ fun ReminderCard() {
                     }
                 }
             )
+
+            // 提前量：第一档可选 10/20/30，第二档取一半（30→15，与老行为一致）。
+            // 只改这一处，调度与通知文案都跟着走 —— 文案里的分钟数是按真实剩余时间算的
+            val leadMinutes by settings.reminderLeadMinutes.collectAsStateWithLifecycle(
+                initialValue = app.nbult.lite.domain.ReminderPlanner.DEFAULT_LEAD_MINUTES
+            )
+            Text("课前提醒", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = "第一条在开课前 $leadMinutes 分钟，第二条在开课前 ${leadMinutes / 2} 分钟",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(10, 20, 30).forEach { minutes ->
+                    FilterChip(
+                        selected = leadMinutes == minutes,
+                        enabled = enabled,
+                        onClick = {
+                            scope.launch {
+                                settings.setReminderLeadMinutes(minutes)
+                                ClassReminderScheduler.rescheduleNow(context)
+                            }
+                        },
+                        label = { Text("$minutes 分钟") }
+                    )
+                }
+            }
         }
 
         if (!notificationsOk) {
@@ -156,15 +184,7 @@ fun ReminderCard() {
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(onClick = {
-                    runCatching {
-                        context.startActivity(
-                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            }
-                        )
-                    }
-                }) { Text("去开启") }
+                TextButton(onClick = { ReminderIntents.openNotificationSettings(context) }) { Text("去开启") }
             }
         }
 
@@ -176,18 +196,7 @@ fun ReminderCard() {
                     color = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(onClick = {
-                    if (Build.VERSION.SDK_INT >= 31) {
-                        runCatching {
-                            context.startActivity(
-                                Intent(
-                                    Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                                    Uri.parse("package:${context.packageName}")
-                                )
-                            )
-                        }
-                    }
-                }) { Text("去允许") }
+                TextButton(onClick = { ReminderIntents.requestExactAlarm(context) }) { Text("去允许") }
             }
         }
 
@@ -202,7 +211,7 @@ fun ReminderCard() {
                 ReminderNotifier.showTest(context)
                 channelState = ReminderNotifier.channelState(context)
             }) { Text("发送测试通知") }
-            TextButton(onClick = { openChannelSettings(context) }) { Text("通知样式设置") }
+            TextButton(onClick = { ReminderIntents.openChannelSettings(context) }) { Text("通知样式设置") }
         }
         // 自启动 / 电池策略不在这里了 —— 挪进下面独立的「允许后台运行」卡片，
         // 与实时动态那张卡里的同类开关合并，避免同一个诉求分散在两个地方
@@ -215,39 +224,6 @@ private fun canScheduleExact(context: android.content.Context): Boolean =
     } else {
         true
     }
-
-/** 直达「上课提醒」这个渠道的设置页：静默/悬浮/声音都是在这里改的，应用内改不了。 */
-private fun openChannelSettings(context: android.content.Context) {
-    val channelIntent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
-        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-        putExtra(Settings.EXTRA_CHANNEL_ID, ReminderNotifier.CHANNEL_REMINDER)
-    }
-    val appIntent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-    }
-    if (Build.VERSION.SDK_INT >= 26) {
-        runCatching { context.startActivity(channelIntent) }
-            .onFailure { runCatching { context.startActivity(appIntent) } }
-    } else {
-        runCatching { context.startActivity(appIntent) }
-    }
-}
-
-/** 先试小米的自启动页，进不去就退到应用详情 —— 各机型入口差异太大，不能硬跳。 */
-private fun openAutoStartSettings(context: android.content.Context) {
-    val miui = Intent().setComponent(
-        ComponentName(
-            "com.miui.securitycenter",
-            "com.miui.permcenter.autostart.AutoStartManagementActivity"
-        )
-    )
-    val fallback = Intent(
-        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-        Uri.parse("package:${context.packageName}")
-    )
-    runCatching { context.startActivity(miui) }
-        .onFailure { runCatching { context.startActivity(fallback) } }
-}
 
 /**
  * 实时动态的状态与跳转。
@@ -322,12 +298,12 @@ fun BackgroundRunCard() {
         PermissionRow(
             title = "自启动设置",
             subtitle = "允许应用开机自启、不被清理（小米 / 红米等在权限中心）",
-            onClick = { openAutoStartSettings(context) }
+            onClick = { ReminderIntents.openAutoStartSettings(context) }
         )
         PermissionRow(
             title = "电池策略设置",
             subtitle = "加入电池优化白名单，避免闹钟被当作后台活动掐掉",
-            onClick = { openBatterySettings(context) }
+            onClick = { ReminderIntents.openBatterySettings(context) }
         )
     }
 }
@@ -369,12 +345,3 @@ private fun openPromotionSettings(context: android.content.Context) {
     }
 }
 
-/** 电池优化白名单：直接弹系统对话框；弹不出来就退到自启动页。 */
-private fun openBatterySettings(context: android.content.Context) {
-    val request = Intent(
-        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-        Uri.parse("package:${context.packageName}")
-    )
-    runCatching { context.startActivity(request) }
-        .onFailure { openAutoStartSettings(context) }
-}

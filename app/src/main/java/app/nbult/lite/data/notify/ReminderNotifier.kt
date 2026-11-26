@@ -27,7 +27,7 @@ import java.util.Locale
  */
 object ReminderNotifier {
 
-    /** 允许的最大提前量。课前的两档是 30 / 15 分钟，留足延迟余量后仍超过这个数就是排错了。 */
+    /** 允许的最大提前量。第一档最多 30 分钟，留足延迟余量后仍超过这个数就是排错了。 */
     private const val MAX_LEAD_MINUTES = 90
 
 
@@ -114,8 +114,8 @@ object ReminderNotifier {
     fun showFromAlarm(context: Context, intent: Intent) {
         val kind = intent.getStringExtra(ClassReminderScheduler.EXTRA_KIND) ?: return
         // 只有课前两档会发通知；上课/下课这两个时刻交给常驻通知
-        if (kind != ClassReminderScheduler.KIND_LEAD_30 &&
-            kind != ClassReminderScheduler.KIND_LEAD_15
+        if (kind != ClassReminderScheduler.KIND_LEAD_FIRST &&
+            kind != ClassReminderScheduler.KIND_LEAD_SECOND
         ) {
             return
         }

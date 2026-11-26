@@ -50,8 +50,9 @@ object ClassReminderScheduler {
     /** 预定触发时刻。触发时与实际时间相减，就能看出是系统延迟投递还是我们自己排错。 */
     const val EXTRA_PLANNED_AT = "planned_at"
 
-    const val KIND_LEAD_30 = "lead30"
-    const val KIND_LEAD_15 = "lead15"
+    /** 课前第一档 / 第二档。具体提前多久由设置决定（第一档 10/20/30，第二档取一半）。 */
+    const val KIND_LEAD_FIRST = "lead_first"
+    const val KIND_LEAD_SECOND = "lead_second"
     const val KIND_START = "class_start"
     const val KIND_END = "class_end"
 
@@ -162,10 +163,14 @@ object ClassReminderScheduler {
             return
         }
 
-        // 四类时刻：T-30 / T-15 / 上课 / 下课。取"还没过去"里最早的那个。
+        // 四类时刻：第一档 / 第二档 / 上课 / 下课。取"还没过去"里最早的那个。
+        // 提前量来自设置（10/20/30），第二档取一半 —— 默认 30/15 与老行为一致
+        val leadMinutes = container.settings.reminderLeadMinutes.first()
+        val leadFirst = ReminderPlanner.leadMillis(leadMinutes)
+        val leadSecond = ReminderPlanner.leadMillis(leadMinutes / 2)
         val candidates = listOf(
-            next.startAt - ReminderPlanner.LEAD_30 to KIND_LEAD_30,
-            next.startAt - ReminderPlanner.LEAD_15 to KIND_LEAD_15,
+            next.startAt - leadFirst to KIND_LEAD_FIRST,
+            next.startAt - leadSecond to KIND_LEAD_SECOND,
             next.startAt to KIND_START,
             next.endAt to KIND_END
         ).filter { it.first > now + 1_000L }.sortedBy { it.first }

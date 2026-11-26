@@ -41,11 +41,15 @@ object ReminderPlanner {
 
     val ZONE: ZoneId = ZoneId.of("Asia/Shanghai")
 
-    /** 开课前 30 分钟。 */
-    const val LEAD_30 = 30 * 60_000L
+    /**
+     * 第一档提醒的提前分钟数：用户可配 10 / 20 / 30（默认 30）。
+     *
+     * 第二档固定取它的一半（30→15、20→10、10→5）：默认值与 0.39.4 的行为完全一致，
+     * 老用户不会突然少一条提醒。
+     */
+    const val DEFAULT_LEAD_MINUTES = 30
 
-    /** 开课前 15 分钟。 */
-    const val LEAD_15 = 15 * 60_000L
+    fun leadMillis(minutes: Int): Long = minutes.coerceIn(5, 60) * 60_000L
 
     private const val LOOK_AHEAD_DAYS = 21
 

@@ -264,6 +264,17 @@ SettingCard(title = "学期设置") {
         LiveUpdateStateCard()
 
         BackgroundRunCard()
+
+        // 自检单独一页：五项开关分布在四五个系统页面里，塞进上面任何一张卡都会撑爆
+        LinkRow(
+            title = "提醒自检",
+            subtitle = "逐条检查通知权限、渠道、精确闹钟、电池与自启动",
+            onClick = { onNavigateSection("reminderhealth") }
+        )
+            }
+
+            if (section == "reminderhealth") {
+        ReminderHealthSection()
             }
 
             if (section == "term") {
@@ -831,6 +842,7 @@ private fun SettingsSectionHeader(title: String, onBack: () -> Unit) {
 private fun sectionTitle(section: String): String = when (section) {
     "term" -> "学期与作息"
     "reminder" -> "上课提醒"
+    "reminderhealth" -> "提醒自检"
     "more" -> "数据与日志"
     "about" -> "关于"
     else -> "设置"

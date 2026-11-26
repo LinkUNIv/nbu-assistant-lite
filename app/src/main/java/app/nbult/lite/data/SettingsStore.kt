@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -25,6 +26,7 @@ class SettingsStore(private val context: Context) {
     private val keyTermManual = booleanPreferencesKey("term_manual")
     private val keyMotionBlur = booleanPreferencesKey("motion_blur")
     private val keyClassReminder = booleanPreferencesKey("class_reminder")
+    private val keyReminderLead = intPreferencesKey("reminder_lead_minutes")
     private val keyClassLive = booleanPreferencesKey("class_live")
     private val keyTodayShowInactive = booleanPreferencesKey("today_show_inactive")
     private val keyTodayExpanded = booleanPreferencesKey("today_expanded")
@@ -129,6 +131,17 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.data
             .map { it[keyClassReminder] ?: false }
             .onEach { lastKnownClassReminder = it }
+
+    /** 课前第一档提醒的提前分钟数（10/20/30）。第二档在调度时取一半。 */
+    val reminderLeadMinutes: Flow<Int> =
+        context.settingsDataStore.data.map {
+            (it[keyReminderLead] ?: app.nbult.lite.domain.ReminderPlanner.DEFAULT_LEAD_MINUTES)
+                .coerceIn(5, 60)
+        }
+
+    suspend fun setReminderLeadMinutes(minutes: Int) {
+        context.settingsDataStore.edit { it[keyReminderLead] = minutes.coerceIn(5, 60) }
+    }
 
     suspend fun setClassReminder(enabled: Boolean) {
         context.settingsDataStore.edit { it[keyClassReminder] = enabled }

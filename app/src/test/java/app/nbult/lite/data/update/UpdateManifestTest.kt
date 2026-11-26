@@ -63,3 +63,43 @@ class UpdateManifestTest {
         assertTrue(AppUpdateChecker.evaluateManifest(data(versionCode = 99999, apkUrl = "")) is UpdateState.Failed)
     }
 }
+
+/**
+ * 静态清单的结论够不够用。
+ *
+ * 盯的是"最近没发版反而最慢"这件事：清单过期后旧逻辑直接弃用它去走 API，
+ * 而 API 恰恰是校园网下最不稳的那条路。判定要保证"报着新版就用"，其余照旧。
+ */
+class UpdateStaticVerdictTest {
+
+    private val available = UpdateState.Available(
+        UpdateInfo(
+            versionCode = 9999,
+            versionName = "9.9.9",
+            apkUrl = "https://example.com/a.apk",
+            sha256 = "abc123",
+            notes = "测试"
+        )
+    )
+
+    @Test
+    fun `清单报着新版时直接用_过期也信`() {
+        assertEquals(false, AppUpdateChecker.needsApiCrossCheck(stale = true, state = available, fromCache = false))
+        assertEquals(false, AppUpdateChecker.needsApiCrossCheck(stale = false, state = available, fromCache = true))
+    }
+
+    @Test
+    fun `过期且说已最新时必须问 API`() {
+        assertEquals(true, AppUpdateChecker.needsApiCrossCheck(stale = true, state = UpdateState.UpToDate, fromCache = false))
+    }
+
+    @Test
+    fun `jsDelivr 说已最新要交叉核对`() {
+        assertEquals(true, AppUpdateChecker.needsApiCrossCheck(stale = false, state = UpdateState.UpToDate, fromCache = true))
+    }
+
+    @Test
+    fun `raw 且未过期说已最新时不必再问`() {
+        assertEquals(false, AppUpdateChecker.needsApiCrossCheck(stale = false, state = UpdateState.UpToDate, fromCache = false))
+    }
+}

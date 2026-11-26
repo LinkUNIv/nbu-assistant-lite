@@ -1,3 +1,11 @@
+    /**
+     * 写「已校验」标记。
+     *
+     * 只有带这个标记的文件才会被认作可安装 —— 光看文件存在与大小是不够的：
+     * 半截包同样「存在且非空」。标记里记下大小，读取时能便宜地挡掉明显不符的文件。
+     */
+    // 读的顺序：raw 优先，jsDelivr 兜底 —— 后者对分支有十几小时缓存，新包发布后它还在发旧的
+    // raw 是实时的，只是偶尔连不上。
 package app.nbult.lite.data.update
 
 import android.content.Context
@@ -114,27 +122,31 @@ object AppUpdateChecker {
     suspend fun check(): UpdateState = withContext(Dispatchers.IO) {
         runCatching {
             val static = readStaticManifest()
-            if (static != null && !isStale(static.json)) {
-                val from = if (static.sourceIndex == 0) "raw" else "jsDelivr"
-                AppLog.log("Update", "清单来自静态镜像 v${static.json.optInt("versionCode")}（$from）")
+            if (static != null) {
+                val stale = isStale(static.json)
                 val evaluated = evaluateManifest(static.json)
-                // jsDelivr 缓存能吃十几小时：它说"已最新"恰恰是最需要怀疑的结论。
-                // 这时候多打一次 API 交叉核对，宁可慢一秒，也不能让用户永远看不到新版本。
-                if (evaluated is UpdateState.UpToDate && static.sourceIndex > 0) {
-                    val cross = legacyCheck()
-                    if (cross is UpdateState.Available) {
-                        AppLog.log("Update", "缓存清单说已最新，API 交叉核对发现 ${cross.info.versionName}")
-                        return@withContext cross
-                    }
-                    AppLog.log("Update", "缓存清单已最新，API 核对一致")
+                val fromCache = static.sourceIndex > 0
+                if (!needsApiCrossCheck(stale, evaluated, fromCache)) {
+                    val from = if (fromCache) "jsDelivr" else "raw"
+                    AppLog.log(
+                        "Update",
+                        "清单来自静态镜像 v${static.json.optInt("versionCode")}（$from${if (stale) "，已过期仍可信" else ""}）"
+                    )
+                    return@withContext evaluated
                 }
+                // 只有「说不清」时才多打一次 API：清单过期且说已最新，或 jsDelivr 缓存说已最新。
+                // 这两个组合都可能是假阴性，宁可慢一秒，也不能让用户一直看不到新版本。
+                val cross = legacyCheck()
+                if (cross is UpdateState.Available) {
+                    AppLog.log("Update", "静态清单未能确认，API 核对发现 ${cross.info.versionName}")
+                    return@withContext cross
+                }
+                AppLog.log("Update", "API 核对未发现新版，沿用静态清单结论")
+                // API 也失败时不要把它变成「检查失败」：手上的清单比一句报错有用
                 return@withContext evaluated
             }
+            // 静态清单完全读不到，才只走 API
             val legacy = legacyCheck()
-            if (legacy is UpdateState.Failed && static != null) {
-                AppLog.log("Update", "API 链路失败，改用过期静态清单（v${static.json.optInt("versionCode")}）")
-                return@withContext evaluateManifest(static.json)
-            }
             // 两轮镜像 + API 都失败，才把原因告诉用户，并说清下一步
             if (legacy is UpdateState.Failed) friendlyFailure(legacy.message) else legacy
         }.getOrElse {
@@ -259,6 +271,25 @@ object AppUpdateChecker {
         )
     }
 
+    /**
+     * 静态清单的结论够不够用，还是得再问一次 API。
+     *
+     * 四种组合，只有两种需要复核：
+     * - 清单**报着新版**：直接用，过期也信 —— 这时绕 API 只会让"最近没发版"的时期最慢；
+     * - 清单说已最新、且**没过期**、且来源是 raw：这是实时数据，可信；
+     * - 清单说已最新但**过期**了：可能真的又发了新版，必须问；
+     * - 清单说已最新、来源是 jsDelivr：它对这个分支有十几小时缓存，同样必须问。
+     *
+     * 纯数据判定，便于单测（`UpdateState` 不碰 `org.json`）。
+     */
+    internal fun needsApiCrossCheck(stale: Boolean, state: UpdateState, fromCache: Boolean): Boolean =
+        when {
+            state is UpdateState.Available -> false
+            stale -> true
+            fromCache -> true
+            else -> false
+        }
+
     /** 清单的可比较字段。解析只在 [evaluateManifest] 的 JSON 重载里做一次。 */
     internal data class ManifestData(
         val versionCode: Int,
@@ -270,12 +301,6 @@ object AppUpdateChecker {
         val size: Long
     )
 
-    /**
-     * 读静态清单：raw 优先，jsDelivr 兜底。
-     *
-     * 顺序不能反 —— jsDelivr 对分支内容有长缓存（实测十几小时），新包发布后它还在发旧的；
-     * raw 是实时的，只是偶尔连不上。
-     */
     /**
      * 读到的清单 + 来源下标（0=raw，1=jsDelivr）。
      *
@@ -316,12 +341,6 @@ object AppUpdateChecker {
     }
 
     /**
-     * 下载到缓存目录并校验 sha256。
-     *
-     * 校验不通过就删掉文件并抛错：半截的包交给系统安装器只会得到一个含义不明的失败，
-     * 不如在下载阶段就把原因说清楚。
-     */
-    /**
      * 下载并校验 APK。
      *
      * GitHub 的下载链路会中途断（实测 `Connection reset`），而一次断开就作废整个更新 —
@@ -340,7 +359,8 @@ object AppUpdateChecker {
             } catch (t: Throwable) {
                 lastError = t
                 val done = runCatching {
-                    File(context.cacheDir, "update/nbu-lite-${info.versionCode}.apk").length()
+                    // 与 downloadOnce 同一套命名：这里再拼一遍字符串，改名时必然漏一处
+                    File(File(context.cacheDir, "update"), apkName(info.versionCode)).length()
                 }.getOrDefault(0L)
                 AppLog.log(
                     "Update",
@@ -415,12 +435,6 @@ object AppUpdateChecker {
         return target
     }
 
-    /**
-     * 写「已校验」标记。
-     *
-     * 只有带这个标记的文件才会被认作可安装 —— 光看文件存在与大小是不够的：
-     * 半截包同样「存在且非空」。标记里记下大小，读取时能便宜地挡掉明显不符的文件。
-     */
     /**
      * 文件是否真的可用：大小与标记一致，且 sha256 与标记里记的一致。
      *

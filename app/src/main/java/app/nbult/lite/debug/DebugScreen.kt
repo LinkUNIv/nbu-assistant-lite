@@ -276,7 +276,8 @@ fun DebugScreen(onBack: () -> Unit) {
                 }
                 // 回退只在调试面板露出：它是维护动作（新包内容坏了先止损），
                 // 普通用户看到「退回上一版」只会困惑，也不该让他们替我们判断包的好坏
-                val rollbackTo = ResourcePackStore.previousVersion(context)
+                // 只在包状态变化时重算：直接写在组合里会每次重组都列一遍目录、读一次 state.json
+                val rollbackTo = remember(packState) { ResourcePackStore.previousVersion(context) }
                 var confirmRollback by remember { mutableStateOf(false) }
                 if (rollbackTo != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

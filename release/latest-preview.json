@@ -1,12 +1,12 @@
 {
-  "versionCode": 3902,
-  "versionName": "0.39.2",
+  "versionCode": 3903,
+  "versionName": "0.39.3",
   "applicationId": "app.nbult.lite.preview",
   "channel": "preview",
-  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.39.2-Preview/nbu-assistant-lite-0.39.2-Preview.apk",
-  "sha256": "0199ef488bfd03c460de77f5995cc038344788846b28243e397b2677e62166b3",
-  "size": 26542917,
-  "notes": "**学校列表常驻，自检扩到湘大**\n\n- 设置里的学校改为常驻列表，无需先点开弹窗；宁波大学置顶，其余按拼音首字母排序，新增学校只需在清单里写 `pinyin`。\n- 自检样例新增湘潭大学，调试面板可看到两校的通过情况。",
-  "generatedAt": 1795592383194,
-  "tag": "v0.39.2-Preview"
+  "apkUrl": "https://github.com/LinkUNIv/nbu-assistant-lite/releases/download/v0.39.3-Preview/nbu-assistant-lite-0.39.3-Preview.apk",
+  "sha256": "714d60acdfc294c33ece3ef1f6e36a31000ceaca85847d4da25e7ab5ef0930c0",
+  "size": 26543161,
+  "notes": "**学校切换UI回退，资源包加上结构门槛**\n\n- 「关于」页直接显示「学校」一行：左边当前学校，右边「切换」；点开是原来的选择弹窗，当前项标（当前）且不可点。\n- 删除版本行连点 5 次的隐藏入口，进入关于页就能看到，不必再点五下。\n- 关于页的归属与资讯来源改为按当前学校显示；没有点名系统的学校不再出现「统一身份认证」那句。\n- 学校清单随资源包即时刷新。\n- 资源包新增结构版本。\n- 发布资源包时，结构版本变化后就把最低 App 版本抬到当版。",
+  "generatedAt": 1795660210089,
+  "tag": "v0.39.3-Preview"
 }
